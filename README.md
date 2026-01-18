@@ -1,0 +1,525 @@
+# Image-Based Recipe Recommendation Service
+
+A production-quality GenAI system that transforms ingredient images into structured recipe recommendations using modern orchestration patterns (AgentOS, Agno Agent, MCP).
+
+## Overview
+
+This service demonstrates best practices in system design by leveraging **AgentOS** as the complete runtime backbone, **Agno Agent** as the intelligent orchestrator, and **Gemini Vision API** for ingredient detection from images.
+
+### Key Capabilities
+
+- 📸 **Image-Based Ingredient Detection** - Upload ingredient photos, automatically extract ingredients using Gemini vision API
+- 🍳 **Recipe Recommendations** - Get personalized recipes based on detected ingredients and preferences
+- 💬 **Conversational Memory** - Multi-turn conversations with automatic preference tracking (dietary restrictions, cuisines, meal types)
+- 🎯 **Domain-Focused** - Specialized for recipes only, with guardrails preventing off-topic requests
+- 🔄 **Session Management** - Persistent conversation history and user preferences across sessions
+- 📊 **Structured Output** - All responses validated with Pydantic schemas
+
+### Architecture Overview
+
+```mermaid
+graph TD
+    A["User Request<br/>(Image or Text)"] --> B["Pre-Hook<br/>Ingredient Detection"]
+    B --> C["Agno Agent<br/>Orchestrator"]
+    C --> D["Spoonacular MCP<br/>Recipe Search"]
+    D --> E["Recipe Response<br/>with Preferences"]
+    
+    C -.->|Session Memory| F["SQLite/PostgreSQL<br/>Database"]
+    F -.->|Load History| C
+    
+    style A fill:#e1f5ff
+    style B fill:#fff3e0
+    style C fill:#f3e5f5
+    style D fill:#e8f5e9
+    style E fill:#e1f5ff
+    style F fill:#f5f5f5
+```
+
+## Quick Start
+
+### Prerequisites
+- Python 3.8+
+- API Keys:
+  - [Google Gemini API Key](https://ai.google.dev/docs) (for vision/ingredient detection)
+  - [Spoonacular API Key](https://spoonacular.com/food-api) (for recipe search)
+
+### Setup
+
+```bash
+# 1. Clone and initialize
+git clone <repo-url>
+cd recipe-agent
+
+# 2. Setup dependencies and environment
+make setup
+
+# 3. Edit .env with your API keys
+# Required:
+#   GEMINI_API_KEY=your_key_here
+#   SPOONACULAR_API_KEY=your_key_here
+nano .env
+
+# 4. Start the application
+make dev
+```
+
+The service will start at:
+- **Web UI (AGUI)**: http://localhost:7777
+- **REST API**: http://localhost:7777/api/agents/chat
+- **OpenAPI Docs**: http://localhost:7777/docs
+
+## Tech Stack
+
+| Component | Technology | Purpose |
+|-----------|-----------|---------|
+| **Runtime** | AgentOS | Complete application backend (REST API, Web UI, orchestration) |
+| **Orchestrator** | Agno Agent | Stateful agent with memory, retries, and tool routing |
+| **Vision API** | Gemini 1.5 Flash | Ingredient detection from images |
+| **Recipe Search** | Spoonacular MCP | 50K+ verified recipes via external service |
+| **Database** | SQLite (dev) / PostgreSQL (prod) | Session storage and memory |
+| **Validation** | Pydantic v2 | Input/output schema validation |
+| **Testing** | pytest | Unit and integration testing |
+
+## Setup Instructions
+
+### 1. Install Dependencies
+
+```bash
+make setup
+```
+
+This will:
+- Install all Python dependencies from `requirements.txt`
+- Create `.env` file from `.env.example` (if not already present)
+- Display instructions for adding API keys
+
+### 2. Configure Environment
+
+Edit `.env` and add your API keys:
+
+```bash
+# Required - Get from Google Cloud Console
+GEMINI_API_KEY=your_gemini_key_here
+
+# Required - Get from spoonacular.com/food-api
+SPOONACULAR_API_KEY=your_spoonacular_key_here
+
+# Optional - Defaults shown
+GEMINI_MODEL=gemini-1.5-flash
+PORT=7777
+MAX_HISTORY=3
+MAX_IMAGE_SIZE_MB=5
+MIN_INGREDIENT_CONFIDENCE=0.7
+LOG_LEVEL=INFO
+LOG_TYPE=text
+# DATABASE_URL=postgresql://user:pass@localhost:5432/recipe_service
+```
+
+### 3. Start Development Server
+
+```bash
+make dev
+```
+
+The application will start with full logging and hot-reload support.
+
+## Development Workflow
+
+### Start Server
+
+```bash
+make dev     # Development mode with output
+make run     # Production mode
+```
+
+**Access Points:**
+- **Interactive Web UI**: http://localhost:7777 (ChatGPT-like interface)
+- **REST API**: http://localhost:7777/api/agents/chat
+- **API Documentation**: http://localhost:7777/docs (Swagger UI)
+
+### Run Tests
+
+```bash
+make test    # Unit tests (fast, isolated)
+make eval    # Integration tests (requires API keys)
+```
+
+### Clean Cache
+
+```bash
+make clean   # Remove __pycache__, .pyc, pytest cache
+```
+
+## Usage Examples
+
+### Web UI (Interactive)
+
+1. Navigate to http://localhost:7777
+2. Upload an ingredient image or type ingredients
+3. Set preferences (dietary restrictions, cuisines)
+4. View recipe recommendations with full details
+
+### REST API (Programmatic)
+
+#### Example 1: Text Ingredients → Recipes
+
+```bash
+curl -X POST http://localhost:7777/api/agents/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "I have tomatoes, basil, and mozzarella. Show me recipes.",
+    "session_id": "user-123"
+  }'
+```
+
+**Response:**
+```json
+{
+  "session_id": "user-123",
+  "run_id": "run-456",
+  "response": "Great! Here are some Italian recipes using your ingredients...",
+  "ingredients": ["tomatoes", "basil", "mozzarella"],
+  "recipes": [
+    {
+      "title": "Caprese Salad",
+      "ingredients": ["tomatoes", "mozzarella", "basil", "olive oil"],
+      "instructions": ["Slice tomatoes...", "Layer with mozzarella..."],
+      "prep_time_min": 10,
+      "cook_time_min": 0,
+      "source_url": "https://spoonacular.com/recipes/..."
+    }
+  ],
+  "metadata": {
+    "tools_called": ["search_recipes", "get_recipe_information_bulk"],
+    "model": "gemini-1.5-flash",
+    "response_time_ms": 2340
+  }
+}
+```
+
+#### Example 2: Multi-Turn Conversation with Preferences
+
+```bash
+# Turn 1: Express dietary preference
+curl -X POST http://localhost:7777/api/agents/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "I am vegetarian and love Italian food",
+    "session_id": "user-123"
+  }'
+
+# Turn 2: Follow-up without repeating preferences
+curl -X POST http://localhost:7777/api/agents/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "I have potatoes and garlic. What can I make?",
+    "session_id": "user-123"
+  }'
+```
+
+Agent remembers: vegetarian + Italian preferences from Turn 1, applies them in Turn 2.
+
+#### Example 3: Image Upload (Base64)
+
+```bash
+# Encode image to base64
+IMAGE_BASE64=$(base64 -i path/to/image.jpg)
+
+curl -X POST http://localhost:7777/api/agents/chat \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"image_base64\": \"${IMAGE_BASE64}\",
+    \"message\": \"What recipes can I make with these ingredients?\",
+    \"session_id\": \"user-123\"
+  }"
+```
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `GEMINI_API_KEY` | string | **required** | Google Gemini API key (vision model) |
+| `SPOONACULAR_API_KEY` | string | **required** | Spoonacular recipe API key |
+| `GEMINI_MODEL` | string | `gemini-1.5-flash` | Vision model to use |
+| `PORT` | int | `7777` | Server port |
+| `MAX_HISTORY` | int | `3` | Conversation turns to keep in memory |
+| `MAX_IMAGE_SIZE_MB` | int | `5` | Maximum image upload size |
+| `MIN_INGREDIENT_CONFIDENCE` | float | `0.7` | Confidence threshold for detected ingredients (0.0-1.0) |
+| `LOG_LEVEL` | string | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
+| `LOG_TYPE` | string | `text` | Log format (text, json) |
+| `DATABASE_URL` | string | *optional* | PostgreSQL connection (uses SQLite if not set) |
+
+### Database Configuration
+
+**Development (Default):**
+```bash
+# Uses SQLite automatically
+# Database file: agno.db (created on first run)
+```
+
+**Production (PostgreSQL):**
+```bash
+DATABASE_URL=postgresql://user:password@localhost:5432/recipe_service
+```
+
+## Architecture
+
+### Data Flow
+
+1. **Request** → User sends message and/or image
+2. **Pre-Hook** → Images processed through Gemini vision API to extract ingredients
+3. **Agent** → Agno Agent routes to recipe tools with extracted ingredients + preferences
+4. **Recipe Search** → Spoonacular MCP called to find matching recipes
+5. **Response** → Agent synthesizes human-friendly response with recipe details
+
+### Session Management
+
+- Each conversation has a unique `session_id`
+- Agent automatically maintains chat history (last N turns, configurable)
+- User preferences extracted and persisted per session
+- Preferences applied to subsequent requests without re-stating
+- Sessions survive application restarts (stored in database)
+
+### Key Design Decisions
+
+**Pre-Hook Pattern for Image Processing:**
+- Images processed BEFORE agent executes (not as a tool call)
+- Eliminates extra LLM round-trip
+- Keeps ingredients as text (not raw bytes) in chat history
+- Faster responses overall
+
+**Two-Step Recipe Process:**
+- Search recipes with ingredients + filters
+- Get detailed recipe information (instructions, times, etc.)
+- Prevents hallucination by grounding all info in Spoonacular data
+
+**System Instructions Over Code:**
+- Agent behavior defined in system instructions (not hard-coded)
+- Domain boundaries, preference extraction, tool usage defined declaratively
+- Easy to modify behavior without code changes
+
+## API Reference
+
+### POST /api/agents/chat
+
+Send a message and get recipe recommendations.
+
+**Request Body:**
+```json
+{
+  "message": "string (required) - User message",
+  "image_base64": "string (optional) - Base64-encoded image",
+  "image_url": "string (optional) - URL to ingredient image",
+  "session_id": "string (optional) - Conversation identifier",
+  "diet": "string (optional) - Dietary preference (vegetarian, vegan, etc.)",
+  "intolerances": "string (optional) - Comma-separated intolerances (gluten, dairy, etc.)",
+  "cuisine": "string (optional) - Preferred cuisine (italian, mexican, etc.)",
+  "meal_type": "string (optional) - Meal type (main course, dessert, etc.)"
+}
+```
+
+**Response (Success - 200):**
+```json
+{
+  "session_id": "string - Unique conversation ID",
+  "run_id": "string - Unique request ID",
+  "response": "string - Natural language response",
+  "ingredients": ["string"] - Detected/provided ingredients,
+  "recipes": [
+    {
+      "title": "string - Recipe name",
+      "description": "string - Brief description",
+      "ingredients": ["string"] - Ingredient list",
+      "instructions": ["string"] - Step-by-step instructions",
+      "prep_time_min": "int - Preparation time in minutes",
+      "cook_time_min": "int - Cooking time in minutes",
+      "source_url": "string - Link to full recipe"
+    }
+  ],
+  "preferences": {
+    "diet": "string",
+    "cuisine": "string",
+    "meal_type": "string",
+    "intolerances": "string"
+  },
+  "metadata": {
+    "tools_called": ["string"] - Which tools were invoked",
+    "model": "string - Model used",
+    "response_time_ms": "int - Milliseconds to complete"
+  }
+}
+```
+
+**Error Responses:**
+- `400 Bad Request` - Malformed JSON, missing required fields
+- `413 Payload Too Large` - Image exceeds MAX_IMAGE_SIZE_MB
+- `422 Unprocessable Entity` - Off-topic request (guardrail), or other business logic error
+- `500 Internal Server Error` - Unexpected system error
+
+## Testing
+
+### Unit Tests (Fast, Isolated)
+
+```bash
+make test
+```
+
+Tests:
+- Configuration loading and validation
+- Pydantic model validation
+- Schema serialization/deserialization
+
+### Integration Tests (Real APIs)
+
+```bash
+make eval
+```
+
+Tests:
+- End-to-end ingredient detection (requires GEMINI_API_KEY)
+- Recipe recommendation flows (requires SPOONACULAR_API_KEY)
+- Multi-turn conversations with session memory
+- Preference persistence
+- Guardrail behavior
+- Error handling
+
+**Note:** Integration tests require valid API keys and internet connection.
+
+## Troubleshooting
+
+### "Spoonacular MCP unreachable" on startup
+
+**Problem:** Application fails to start with MCP connection error.
+
+**Solution:**
+1. Verify internet connection
+2. Check SPOONACULAR_API_KEY is valid
+3. Test API key: `curl "https://api.spoonacular.com/recipes/info?ids=1&apiKey=YOUR_KEY"`
+4. If valid, MCP may be temporarily unavailable; try again
+
+### "API key invalid" errors during requests
+
+**Problem:** Requests fail with authentication errors.
+
+**Solution:**
+1. Verify `.env` file has correct keys (no extra spaces)
+2. Regenerate API keys from their respective consoles
+3. Check key hasn't expired or been revoked
+4. Restart application after updating keys
+
+### "Image too large" error
+
+**Problem:** Image upload fails with 413 error.
+
+**Solution:**
+1. Check image size: `ls -lh path/to/image.jpg`
+2. Resize if needed: `convert image.jpg -resize 1024x1024 image-resized.jpg`
+3. Adjust threshold if needed: Set `MAX_IMAGE_SIZE_MB=10` in `.env`
+4. Restart application
+
+### "No ingredients detected" despite uploading image
+
+**Problem:** Image uploaded but no ingredients extracted.
+
+**Solution:**
+1. Verify image shows clear, recognizable food items
+2. Try increasing confidence threshold: Lower `MIN_INGREDIENT_CONFIDENCE` in `.env`
+3. Try different image format (JPEG vs PNG)
+4. Check image is not too dark, blurry, or obscured
+
+### Port already in use
+
+**Problem:** "Address already in use" error on startup.
+
+**Solution:**
+1. Change port: `PORT=8888 make dev`
+2. Or kill process using port: `lsof -ti:7777 | xargs kill -9`
+
+### Database errors
+
+**Problem:** SQLite or PostgreSQL connection errors.
+
+**Solution:**
+1. For SQLite: Delete `agno.db` and restart (fresh database)
+2. For PostgreSQL: Verify DATABASE_URL is correct
+3. Check database server is running
+4. Ensure database user has create/read/write permissions
+
+## Project Structure
+
+```
+recipe-agent/
+├── app.py                 # AgentOS application entry point
+├── config.py             # Environment configuration
+├── models.py             # Pydantic schemas (RecipeRequest, RecipeResponse, etc.)
+├── ingredients.py        # Ingredient detection pre-hook
+├── logger.py             # Structured logging infrastructure
+├── requirements.txt      # Python dependencies
+├── .env.example          # Configuration template
+├── Makefile              # Development commands
+├── README.md             # This file
+│
+├── tests/
+│   ├── unit/             # Unit tests (isolated, no external APIs)
+│   │   ├── test_config.py
+│   │   └── test_models.py
+│   └── integration/      # Integration tests (real APIs)
+│       ├── test_e2e.py
+│       └── test_api.py
+│
+├── images/               # Sample test images
+│   ├── sample_vegetables.jpg
+│   ├── sample_fruits.jpg
+│   └── sample_pantry.jpg
+│
+└── .docs/               # Documentation
+    ├── PRD.md           # Product requirements
+    ├── DESIGN.md        # Technical design
+    └── IMPLEMENTATION_PLAN.md  # Task breakdown
+```
+
+## Development Guidelines
+
+### Code Quality
+
+- **Type Hints**: All functions have type annotations
+- **Docstrings**: All public functions documented
+- **Error Handling**: Graceful error messages, no stack traces in API responses
+- **Logging**: Structured logging with no sensitive data (keys, images)
+- **Testing**: Unit tests for all new code, integration tests for flows
+
+### Adding New Features
+
+**To add a new recipe tool:**
+1. Create MCPTools instance with new command
+2. Update system instructions to explain when to use it
+3. Add integration test for new tool
+4. Update README with new capability
+
+**To modify agent behavior:**
+1. Edit system instructions in `app.py`
+2. No code logic needed (instructions guide behavior)
+3. Test with different user inputs
+4. Update README if behavior changes significantly
+
+**To add new preferences:**
+1. Update RecipeRequest model in `models.py`
+2. Update system instructions to extract new preference
+3. Preference automatically tracked per session
+4. Add test case for new preference
+
+## References
+
+- [PRD.md](.docs/PRD.md) - Complete functional requirements
+- [DESIGN.md](.docs/DESIGN.md) - Technical architecture and decisions
+- [IMPLEMENTATION_PLAN.md](.docs/IMPLEMENTATION_PLAN.md) - Task breakdown
+
+## License
+
+This is a code challenge project demonstrating production-quality GenAI system design.
+
+---
+
+**Questions or Issues?** See [Troubleshooting](#troubleshooting) section above.
