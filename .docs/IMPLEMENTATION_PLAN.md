@@ -295,6 +295,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
    - `preferences: dict[str, str]` (tracked preferences: diet, cuisine, etc.)
    - `session_id: Optional[str] = None` (unique conversation identifier)
    - `run_id: Optional[str] = None` (unique interaction identifier)
+   - `execution_time_ms: int` (total execution time in milliseconds)
 
 5. Define `IngredientDetectionOutput` model (tool output):
    - `ingredients: List[str]` (detected ingredient names)
