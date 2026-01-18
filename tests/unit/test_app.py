@@ -34,15 +34,14 @@ class TestAgentConfiguration:
     """Tests for Agno Agent configuration."""
 
     def test_agent_module_syntax_valid(self):
-        """Test that app module has no syntax errors."""
-        # Read app.py and check basic syntax
+        """Test that agent module has no syntax errors."""
         import ast
-        with open("app.py", "r") as f:
+        with open("agent.py", "r") as f:
             code = f.read()
         try:
             ast.parse(code)
         except SyntaxError as e:
-            pytest.fail(f"app.py has syntax errors: {e}")
+            pytest.fail(f"agent.py has syntax errors: {e}")
 
     def test_database_sqlite_when_no_database_url(self):
         """Test SQLite is used when DATABASE_URL is not set."""
@@ -51,14 +50,16 @@ class TestAgentConfiguration:
             # We're testing the logic, not creating actual DB
             assert config.DATABASE_URL is None or config.DATABASE_URL == ""
 
-    def test_agent_system_instructions_defined(self):
-        """Test that system instructions are defined in app module."""
-        # Read app.py and verify SYSTEM_INSTRUCTIONS is defined
-        with open("app.py", "r") as f:
+    def test_factory_function_defined(self):
+        """Test that initialize_recipe_agent factory function is defined in agent.py."""
+        import ast
+        with open("agent.py", "r") as f:
             code = f.read()
-        assert "SYSTEM_INSTRUCTIONS = " in code
-        assert "recipe" in code.lower()
-        assert "ingredient" in code.lower()
+        tree = ast.parse(code)
+        
+        # Find function definition
+        functions = [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
+        assert "initialize_recipe_agent" in functions
 
 
 class TestImageDetectionMode:
@@ -139,14 +140,18 @@ class TestSystemInstructionsContent:
     """Tests for system instructions content."""
 
     def _read_system_instructions(self):
-        """Helper to read SYSTEM_INSTRUCTIONS from app.py file."""
-        import re
-        with open("app.py", "r") as f:
+        """Helper to read SYSTEM_INSTRUCTIONS from prompts.py file."""
+        import ast
+        with open("prompts.py", "r") as f:
             code = f.read()
         # Extract SYSTEM_INSTRUCTIONS string
-        match = re.search(r'SYSTEM_INSTRUCTIONS = """(.+?)"""', code, re.DOTALL)
-        if match:
-            return match.group(1)
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name) and target.id == "SYSTEM_INSTRUCTIONS":
+                        if isinstance(node.value, ast.Constant):
+                            return node.value.value
         return ""
 
     def test_system_instructions_cover_core_responsibilities(self):
@@ -232,8 +237,8 @@ class TestAgentMetadata:
     """Tests for agent metadata configuration."""
 
     def test_agent_configuration_in_code(self):
-        """Test agent has proper configuration in code."""
-        with open("app.py", "r") as f:
+        """Test agent has proper configuration in agent.py."""
+        with open("agent.py", "r") as f:
             code = f.read()
         
         # Verify agent initialization with proper settings
