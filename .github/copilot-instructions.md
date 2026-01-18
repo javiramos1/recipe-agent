@@ -18,6 +18,7 @@
 11. **Commit and push after each task**: `git add -A`, `git commit -m "Task [N]: description"`, `git push origin main`
 12. **Follow Do's & Don'ts strictly** (see below)
 13. **Always update this file status section** after completing each task
+14. **Always use makefile commands** for setup, dev, test, eval, run, clean. Do not use python app.py directly.
 
 **Critical Architecture Patterns:**
 11. **Pre-hook pattern**: Images processed BEFORE agent executes. Extract ingredients → append as text → clear images from input. Agent only sees ingredient text.
