@@ -198,15 +198,31 @@ def extract_ingredients_pre_hook(
     5. Clears images from input (prevents agent re-processing)
 
     Args:
-        run_input: AgentOS RunInput object containing user message and images.
-        session: Optional session object (unused, for Agno compatibility).
-        user_id: Optional user ID (unused, for Agno compatibility).
-        debug_mode: Optional debug mode flag (unused, for Agno compatibility).
+        run_input: Agno RunInput object containing user message and images.
+        session: Agno AgentSession providing current session context.
+            Automatically injected by Agno framework during pre-hook execution.
+        user_id: Optional contextual user ID for the current run.
+            Automatically injected by Agno framework if provided during agent.run().
+        debug_mode: Optional boolean indicating if debug mode is enabled.
+            Automatically injected by Agno framework based on agent configuration.
 
     Returns:
         None (modifies run_input in-place).
+
+    Note:
+        All parameters (session, user_id, debug_mode) are part of the Agno pre-hook
+        contract and are automatically injected by the Agno framework. They enable
+        future extensibility (e.g., user-specific confidence thresholds, session
+        state tracking) even if not currently used in the implementation.
     """
     try:
+        # Log pre-hook execution context
+        session_id = getattr(session, "session_id", None) if session else None
+        logger.info(
+            f"Pre-hook: extract_ingredients_pre_hook(session_id={session_id}, "
+            f"user_id={user_id}, debug_mode={debug_mode})"
+        )
+
         # Check for images in input
         images = getattr(run_input, "images", [])
         if not images:
