@@ -56,35 +56,30 @@ This project demonstrates **production-quality GenAI system design** using moder
 
 The system uses **Agno Agent** as a stateful orchestrator that manages conversation memory and tool calling. AgentOS wraps everything to provide REST API, Web UI, and infrastructure automatically.
 
-**Module Architecture (Factory Pattern):**
-
 ```
-app.py (~50 lines)
-  └─ initialize_recipe_agent() from agent.py
-     ├─ 5 Steps with logging
-     ├─ MCP init: SpoonacularMCP().initialize()
-     ├─ DB config: SQLite or PostgreSQL
-     ├─ Tools: MCP + optional ingredient tool
-     ├─ Pre-hooks: from hooks.py.get_pre_hooks()
-     └─ Agent config: system_prompt from prompts.py
-
-agent.py (150 lines)
-  ├─ imports from: config, logger, models, ingredients
-  ├─ imports from: SpoonacularMCP, prompts, hooks
-  └─ initialize_recipe_agent() factory returns Agent
-
-prompts.py (800 lines)
-  └─ SYSTEM_INSTRUCTIONS constant (pure data)
-
-hooks.py (30 lines)
-  └─ get_pre_hooks() returns list of pre-hooks
-
-Supporting modules:
-  ├─ config.py: Environment & validation
-  ├─ logger.py: Structured logging
-  ├─ models.py: Pydantic schemas
-  ├─ ingredients.py: Image processing
-  └─ mcp_tools/spoonacular.py: MCP init
+┌─────────────────────────────────────────────────────────────┐
+│  AgentOS (Complete Runtime)                                  │
+│  • Serves REST API at /api/agents/chat                       │
+│  • Serves Web UI (AGUI) at http://localhost:7777             │
+│  • Manages tool lifecycle and connections                    │
+│  • Built-in tracing and evaluations                          │
+└─────────────────────────────────────────────────────────────┘
+              ↓                                     ↓
+    ┌──────────────────────────────┐    ┌─────────────────────────┐
+    │ Agno Agent (Orchestrator)    │    │ Spoonacular Recipe MCP  │
+    │ • Chat history per session   │    │ (External Service)      │
+    │ • Preference tracking        │    │ • Search recipes        │
+    │ • Tool routing logic         │    │ • Return structured data│
+    │ • Response synthesis         │    └─────────────────────────┘
+    └──────────────────────────────┘
+         ↓
+    ┌──────────────────────────────┐
+    │ Ingredient Detection         │
+    │ (Pre-hook Pattern)           │
+    │ • Extract from image         │
+    │ • Filter by confidence       │
+    │ • Append to message          │
+    └──────────────────────────────┘
 ```
 
 **Key Design: Pre-Hook Pattern**

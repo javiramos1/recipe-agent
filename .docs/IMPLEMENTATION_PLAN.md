@@ -1150,99 +1150,106 @@ Spoonacular MCP provides these tools (agent will call them automatically):
 
 ---
 
-### Task 10: AgentOS Application Setup (app.py Main) ✅ COMPLETE
+### Task 10: AgentOS Application Setup with Factory Pattern
 
-**Objective:** Create the complete AgentOS application entry point with MPC initialization using factory pattern.
+**Objective:** Create the complete AgentOS application entry point using factory pattern for modular agent initialization.
 
 **Context:**
 - AgentOS provides REST API, Web UI, orchestration automatically
 - Single entry point: `python app.py`
-- Factory pattern separates concerns: agent.py, prompts.py, hooks.py
+- Factory pattern separates concerns into modular files: agent.py, prompts.py, hooks.py
 - MCP must be initialized BEFORE agent creation (fail-fast on startup)
-- No custom routes, no custom memory management needed
+- No custom routes or memory management needed (AgentOS handles automatically)
 
-**Completed Implementation:**
+**Requirements:**
 
-**app.py** (~50 lines) - Minimal orchestration
-```python
-from agno.os import AgentOS
-from agno.os.interfaces.agui import AGUI
-from config import config
-from logger import logger
-from agent import initialize_recipe_agent
+1. **Create agent.py** (~150 lines) - Agent Factory Function:
+   - Export `initialize_recipe_agent() -> Agent` factory function
+   - 5-step initialization process:
+     - Step 1: Initialize SpoonacularMCP with connection validation (fail-fast if unreachable)
+     - Step 2: Configure database (SQLite for dev, PostgreSQL for production via DATABASE_URL)
+     - Step 3: Register tools (Spoonacular MCP + optional ingredient detection tool based on IMAGE_DETECTION_MODE)
+     - Step 4: Register pre-hooks (from hooks.py factory)
+     - Step 5: Configure Agno Agent with all settings
+   - Return fully configured Agent instance ready for AgentOS
+   - Log each initialization step with appropriate levels
+   - Handle all errors gracefully with clear error messages
 
-# Initialize agent using factory
-logger.info("Starting Recipe Recommendation Service initialization...")
-agent = initialize_recipe_agent()
+2. **Create prompts.py** (~800 lines) - System Instructions Constant:
+   - Export `SYSTEM_INSTRUCTIONS` constant (pure data, no logic)
+   - Comprehensive behavior definition for agent covering:
+     - Core responsibilities and domain boundaries
+     - Ingredient sources (detected → user message → history)
+     - Two-step recipe process (search_recipes → get_recipe_information_bulk)
+     - Image handling (pre-hook vs tool mode)
+     - Preference extraction and persistence
+     - Tool usage guidance
+     - Edge cases and fallback strategies
+     - Critical guardrails (no hallucinations, no invented recipes)
 
-# Create AgentOS with agent and Web UI
-logger.info("Creating AgentOS instance with Web UI...")
-agent_os = AgentOS(
-    description="Recipe Recommendation Service",
-    agents=[agent],
-    interfaces=[AGUI(agent=agent)],
-)
+3. **Create hooks.py** (~30 lines) - Pre-Hooks Factory:
+   - Export `get_pre_hooks() -> List` factory function
+   - Return list of pre-hooks based on configuration:
+     - If IMAGE_DETECTION_MODE == "pre-hook": Include extract_ingredients_pre_hook
+     - Always include guardrails (PromptInjectionGuardrail)
+   - No logging side effects during factory call
 
-# Extract FastAPI app
-app = agent_os.get_app()
+4. **Update app.py** (~50 lines) - Minimal Orchestration:
+   - Import factory: `from agent import initialize_recipe_agent`
+   - Call factory: `agent = initialize_recipe_agent()`
+   - Create AgentOS instance with agent and AGUI interface
+   - Extract FastAPI app: `app = agent_os.get_app()`
+   - Serve on configured port with `reload=False` (production-ready)
+   - Log startup message with URLs for Web UI, API, and docs
+   - No MCP logic or initialization in app.py (delegated to agent.py factory)
 
-if __name__ == "__main__":
-    logger.info(f"Starting on port {config.PORT}")
-    logger.info(f"✓ Web UI: http://localhost:{config.PORT}")
-    logger.info(f"✓ API: http://localhost:{config.PORT}/api/agents/chat")
-    logger.info(f"✓ Docs: http://localhost:{config.PORT}/docs")
-    agent_os.serve(app="app:app", port=config.PORT, reload=False)
-```
+5. **Register with AgentOS:**
+   - Pass initialized agent to AgentOS constructor
+   - Register AGUI interface for Web UI
+   - Both REST API and Web UI serve same agent instance
+   - AgentOS automatically exposes: REST endpoints, Web UI, OpenAPI docs
 
-**agent.py** (~150 lines) - Factory function
-- `initialize_recipe_agent() -> Agent` factory with 5 steps
-- Step 1: MCP initialization (SpoonacularMCP with fail-fast)
-- Step 2: Database config (SQLite/PostgreSQL)
-- Step 3: Tool registration (MCP + optional ingredient tool)
-- Step 4: Pre-hook registration (from hooks.py)
-- Step 5: Agent configuration with all settings
-- Returns fully configured Agent ready for AgentOS
+**Input (Dependencies):**
+- config.py from Task 2 (configuration settings and validation)
+- logger.py from Task 2.5 (structured logging)
+- models.py from Task 3 (Pydantic schemas: RecipeRequest, RecipeResponse)
+- ingredients.py from Task 6 (extract_ingredients_pre_hook, detect_ingredients_tool functions)
+- mcp_tools/spoonacular.py from Task 8 (SpoonacularMCP class with connection validation)
+- hooks.py from Task 9 (get_pre_hooks factory)
+- All libraries from Task 1 (agno, google-generativeai, pydantic, etc.)
 
-**prompts.py** (~800 lines) - System instructions
-- `SYSTEM_INSTRUCTIONS` constant (pure data, no logic)
-- Comprehensive behavior guidance for agent
+**Output:**
+- `app.py` (~50 lines): Minimal orchestration, AgentOS entry point
+- `agent.py` (~150 lines): initialize_recipe_agent() factory function
+- `prompts.py` (~800 lines): SYSTEM_INSTRUCTIONS constant
+- `hooks.py` (~30 lines): get_pre_hooks() factory function
+- All files ready for import and use
 
-**hooks.py** (~30 lines) - Pre-hooks factory
-- `get_pre_hooks() -> List` factory function
-- Returns ingredient extraction pre-hook + guardrails
-- Configuration-driven (checks IMAGE_DETECTION_MODE)
+**Success Criteria:**
+- `python app.py` starts without errors
+- REST API accessible at http://localhost:7777/api/agents/chat
+- Web UI (AGUI) accessible at http://localhost:7777
+- OpenAPI docs at http://localhost:7777/docs
+- MCP connection validated on startup (fails application if unreachable)
+- Both REST API and Web UI serve same agent instance
+- Factory pattern maintains clean separation of concerns
+- All 140 unit tests still pass after implementation
+- No hardcoded values (all use config module)
+- Comprehensive logging throughout initialization
 
-**Success Criteria Met:**
-- ✅ `python app.py` starts without error
-- ✅ REST API accessible at http://localhost:7777/api/agents/chat
-- ✅ Web UI (AGUI) accessible at http://localhost:7777
-- ✅ OpenAPI docs at http://localhost:7777/docs
-- ✅ MCP connection validated on startup (fails if unreachable)
-- ✅ Both REST API and Web UI serve the same agent
-- ✅ Factory pattern verified compatible with AgentOS
-- ✅ All 140 unit tests passing
-
-**Architecture Pattern: Factory + Separation of Concerns**
-- app.py: Minimal orchestration (50 lines)
-- agent.py: Agent initialization logic
-- prompts.py: Behavior definition (system instructions)
-- hooks.py: Pre-hook configuration
-- config.py: Environment variables
-- logger.py: Structured logging
-- models.py: Data validation
-- ingredients.py: Image processing
-- mcp_tools/spoonacular.py: MCP initialization
-
-**Benefits:**
-- ✅ Modular: Each file has single responsibility
-- ✅ Testable: Easy to unit test each component
-- ✅ Maintainable: Changes isolated to specific files
-- ✅ Readable: Clear dependencies
-- ✅ AgentOS Compatible: No breaking changes
+**Key Constraints:**
+- app.py must be minimal (~50 lines, no logic)
+- MCP initialization must happen in agent.py, not app.py
+- All behavior defined in system instructions (prompts.py), not code
+- Pre-hooks and tools registered via factories (not hardcoded in app.py)
+- No custom API routes (AgentOS provides all endpoints automatically)
+- No custom memory management (Agno handles automatically)
+- reload=False for production readiness (not reload=True)
+- Factory functions must be idempotent and handle errors gracefully
+- All initialization logged with logger (debug/info for normal flow, warning/error for issues)
 
 ---
 
----
 
 ### Task 12: Integration Tests - End-to-End (tests/integration/test_e2e.py)
 

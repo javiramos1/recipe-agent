@@ -286,8 +286,7 @@ DATABASE_URL=postgresql://user:password@localhost:5432/recipe_service
 
 ### Key Design Decisions
 
-**Pre-Hook Pattern for Image Processing:**
-- Images processed BEFORE agent executes (not as a tool call)
+**1. Pre-Hook Pattern** (images processed BEFORE agent executes)
 - Eliminates extra LLM round-trip
 - Keeps ingredients as text (not raw bytes) in chat history
 - Faster responses overall
@@ -299,15 +298,38 @@ DATABASE_URL=postgresql://user:password@localhost:5432/recipe_service
 - Same core detection code used for both modes
 - Switch modes via environment variable only (no code changes needed)
 
-**Two-Step Recipe Process:**
-- Search recipes with ingredients + filters
-- Get detailed recipe information (instructions, times, etc.)
-- Prevents hallucination by grounding all info in Spoonacular data
+**3. Two-Step Recipe Process**
+- Search recipes (ingredients + filters) via Spoonacular MCP
+- Get full recipe details (prevents hallucination)
+- All responses grounded in actual data
 
-**System Instructions Over Code:**
-- Agent behavior defined in system instructions (not hard-coded)
-- Domain boundaries, preference extraction, tool usage defined declaratively
+**4. System Instructions Over Code**
+- Agent behavior defined declaratively (not hard-coded)
+- Domain boundaries, preference extraction in prompts.py
 - Easy to modify behavior without code changes
+
+### Module Responsibilities
+
+- **app.py**: Orchestration (minimal ~50 lines)
+- **agent.py**: Agent initialization (factory pattern)
+- **prompts.py**: Behavior definition (system instructions)
+- **hooks.py**: Pre-hook configuration (factory pattern)
+- **config.py**: Environment and validation
+- **logger.py**: Structured logging
+- **models.py**: Data validation (Pydantic)
+- **ingredients.py**: Image processing (core functions)
+- **mcp_tools/spoonacular.py**: MCP initialization
+
+### Database & Storage
+
+**Development (Default):**
+- SQLite + LanceDB (file-based, zero setup)
+- Database file: agno.db
+
+**Production (Optional):**
+- PostgreSQL + pgvector (set DATABASE_URL)
+
+
 
 ## API Reference
 
@@ -499,61 +521,6 @@ recipe-agent/
     ├── DESIGN.md          # Technical design (factory pattern, architecture)
     └── IMPLEMENTATION_PLAN.md  # Task breakdown
 ```
-
-### Architecture: Factory Pattern with Separation of Concerns
-
-**Design Principle:** Each module has a single, focused responsibility.
-
-**Core Modules:**
-- **app.py** (~50 lines): Minimal orchestration
-  - Import agent factory: `from agent import initialize_recipe_agent`
-  - Call factory: `agent = initialize_recipe_agent()`
-  - Create AgentOS: `agent_os = AgentOS(agents=[agent], interfaces=[AGUI(agent=agent)])`
-  - Serve: `agent_os.serve(app="app:app", port=config.PORT)`
-
-- **agent.py** (~150 lines): Agent factory function
-  - `initialize_recipe_agent() -> Agent` factory
-  - 5 steps: MCP init → DB config → Tools → Pre-hooks → Agent config
-  - Imports from: config, logger, models, ingredients, SpoonacularMCP, prompts, hooks
-
-- **prompts.py** (~800 lines): System instructions (pure data)
-  - `SYSTEM_INSTRUCTIONS` constant
-  - Defines agent behavior: domain, preferences, two-step recipe process, guardrails
-
-- **hooks.py** (~30 lines): Pre-hooks factory
-  - `get_pre_hooks() -> List` factory
-  - Ingredient extraction (pre-hook mode only)
-  - Prompt injection guardrail (always enabled)
-
-- **config.py**: Environment variables with defaults
-  - Load .env via python-dotenv
-  - Priority: system env > .env > defaults
-  - Validate required keys: GEMINI_API_KEY, SPOONACULAR_API_KEY
-
-- **logger.py**: Structured logging
-  - Support LOG_LEVEL (DEBUG/INFO/WARNING/ERROR)
-  - Support LOG_TYPE (text/json)
-  - Color output for text, JSON for aggregation
-
-- **models.py**: Pydantic schemas
-  - RecipeRequest, RecipeResponse, Recipe, Ingredient, IngredientDetectionOutput
-
-- **ingredients.py**: Image processing
-  - Core functions: fetch_image_bytes, validate_image, extract_ingredients_from_image
-  - Pre-hook: extract_ingredients_pre_hook(run_input, ...)
-  - Tool: detect_ingredients_tool(image_data: str)
-
-- **mcp_tools/spoonacular.py**: MCP initialization
-  - SpoonacularMCP class with connection validation
-  - Exponential backoff retries (1s → 2s → 4s)
-  - Fail-fast: Application fails if MCP unreachable
-
-**Benefits:**
-- ✅ **Modular**: Clear responsibility for each module
-- ✅ **Testable**: Easy to unit test each component
-- ✅ **Maintainable**: Changes isolated to specific files
-- ✅ **Readable**: Clear dependencies between modules
-- ✅ **Extensible**: Easy to add new tools or MCPs
 
 ## Development Guidelines
 
