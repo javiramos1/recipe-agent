@@ -339,16 +339,25 @@ if __name__ == "__main__":
 ├── models.py                 # Pydantic schemas (request/response/domain)
 ├── ingredients.py            # Ingredient detection (pre-hook/tool)
 │
-├── mcp/
-│   ├── __init__.py           # Makes mcp a package
+├── agent.py                  # Agent factory function (initialize_recipe_agent)
+├── prompts.py                # System instructions (SYSTEM_INSTRUCTIONS constant)
+├── hooks.py                  # Pre-hooks factory (get_pre_hooks)
+│
+├── mcp_tools/
+│   ├── __init__.py           # Makes mcp_tools a package
 │   └── spoonacular.py        # SpoonacularMCP class with connection validation
 │
 ├── tests/
 │   ├── unit/                 # Python unit tests (pytest)
 │   │   ├── test_models.py
-│   │   └── test_config.py
+│   │   ├── test_config.py
+│   │   ├── test_logger.py
+│   │   ├── test_ingredients.py
+│   │   ├── test_mcp.py
+│   │   └── test_app.py
 │   └── integration/          # Agno evals (integration tests)
-│       └── test_e2e.py
+│       ├── test_e2e.py
+│       └── test_api.py
 │
 ├── images/                   # Sample test images
 │   ├── sample_vegetables.jpg
@@ -366,18 +375,44 @@ if __name__ == "__main__":
 
 ### Module Responsibilities
 
-**app.py** (Single Entry Point - AgentOS Application)
-- Define Pydantic input/output schemas
-- Configure Agno Agent with:
-  - Model (Gemini with retry settings)
-  - Database (SQLite or PostgreSQL)
-  - Memory settings (history, preferences, compression)
-  - Guardrails (PII detection, prompt injection)
-  - System instructions (detailed behavior guidance)
-- Define local ingredient detection tool (@tool decorator)
-- Register external Spoonacular MCP (MCPTools)
+**app.py** (AgentOS Entry Point - Minimal Orchestration)
+- ~50 lines: Clean, focused orchestration
+- Import and call factory function: `agent = initialize_recipe_agent()`
 - Create AgentOS instance with agent and AGUI interface
-- Serve application (REST API + Web UI)
+- Extract FastAPI app: `app = agent_os.get_app()`
+- Serve application: `agent_os.serve(app="app:app", port=config.PORT)`
+- Logging for startup status and URLs
+- Single entry point: `python app.py`
+
+**agent.py** (Agent Factory Function)
+- `initialize_recipe_agent() -> Agent` factory function (~150 lines)
+- 5-step initialization with logging:
+  - Step 1: MPC initialization with fail-fast validation
+  - Step 2: Database configuration (SQLite/PostgreSQL)
+  - Step 3: Tool registration (MCP + optional ingredient tool)
+  - Step 4: Pre-hook registration (via hooks.py factory)
+  - Step 5: Agent configuration with all settings
+- Imports from: config, logger, models, ingredients, SpoonacularMCP, prompts, hooks
+- Returns fully configured Agent ready for AgentOS
+
+**prompts.py** (System Instructions)
+- `SYSTEM_INSTRUCTIONS` constant (~800 lines, pure data)
+- Comprehensive behavior guidance for agent:
+  - Core responsibilities (recipes only)
+  - Ingredient source prioritization
+  - Two-step recipe process (search → get_recipe_information_bulk)
+  - Image handling for pre-hook vs. tool mode
+  - Preference extraction and application
+  - Edge case handling and critical guardrails
+  - Response guidelines and example interactions
+
+**hooks.py** (Pre-Hooks Factory)
+- `get_pre_hooks() -> List` factory function (~30 lines)
+- Returns list of pre-hooks to register with agent:
+  - Ingredient extraction pre-hook (pre-hook mode only)
+  - Prompt injection guardrail (always enabled)
+- Configuration-driven: Checks IMAGE_DETECTION_MODE
+- Structured logging for hook registration
 
 **config.py** (Configuration)
 - Load .env file using python-dotenv
@@ -385,6 +420,7 @@ if __name__ == "__main__":
 - Provide typed Config object with defaults
 - Validate required fields (GEMINI_API_KEY, SPOONACULAR_API_KEY)
 - Export constants (MAX_HISTORY, MAX_IMAGE_SIZE_MB, MIN_INGREDIENT_CONFIDENCE)
+- Export IMAGE_DETECTION_MODE (pre-hook vs. tool)
 
 **logger.py** (Logging Configuration)
 - Configure Python logging with structured or text output
@@ -394,42 +430,51 @@ if __name__ == "__main__":
 - JSON format: Structured JSON for log aggregation and parsing
 - Export configured logger instance for import by all modules
 - Never log sensitive data (API keys, full images, passwords)
-- Log metadata for debugging (request IDs, response times, tool calls)
 
 **models.py** (Pydantic Schemas)
 - Input schema: RecipeRequest (ingredients, preferences)
 - Output schema: RecipeResponse (recipes, ingredients, metadata)
-- Domain models: Recipe, Ingredient, Preferences
-- Tool schemas: IngredientDetectionOutput
+- Domain models: Recipe, Ingredient, IngredientDetectionOutput
 
-**mcp/spoonacular.py** (MCP Initialization)
+**mcp_tools/spoonacular.py** (MCP Initialization)
 - SpoonacularMCP class with initialization logic
 - API key validation (check presence and format)
 - Connection testing with retry logic (exponential backoff: 1s → 2s → 4s)
 - MCPTools creation only after successful connection
 - Fail-fast on startup if connection cannot be established
-- Clear error messages for debugging (API key invalid, connection timeout, etc.)
 
-**tests/unit/** (Python Unit Tests)
-- Test Pydantic model validation
-- Test config loading and defaults
-- Mock-based testing (no real API calls)
-- Fast, isolated tests
+**ingredients.py** (Ingredient Detection)
+- Core helper functions (reusable for both pre-hook and tool modes)
+- Pre-hook function: `extract_ingredients_pre_hook(run_input, ...)`
+- Tool function: `detect_ingredients_tool(image_data: str)`
+- Shared core functions: fetch_image_bytes, validate_image, extract_ingredients_from_image
+- Retry logic with exponential backoff
 
-**tests/integration/** (Agno Evals)
-- End-to-end tests with real images
-- Real MCP connections required
-- Test conversation flows
-- Validate ingredient detection accuracy
-- Results stored in AgentOS eval database
+**tests/** (Test Suite - 140+ tests)
+- Unit tests: Models, config, logging, MCP, ingredients, app (fast, isolated)
+- Integration tests: E2E flows with real APIs (requires keys)
 
-### Structural Principles
+### Architectural Pattern: Factory + Separation of Concerns
 
-- **Single entry point**: app.py contains everything
-- **No custom orchestration**: Agno Agent handles logic via system instructions
-- **No custom API layer**: AgentOS provides REST endpoints automatically
-- **No custom memory**: Agno handles session storage automatically
-- **Minimal glue code**: Focus on business logic and configuration
+**Design Principle:** Each module has a single, focused responsibility.
+
+- **app.py**: Orchestration (minimal ~50 lines)
+- **agent.py**: Agent initialization (factory pattern)
+- **prompts.py**: Behavior definition (system instructions)
+- **hooks.py**: Pre-hook configuration (factory pattern)
+- **config.py**: Environment and validation
+- **logger.py**: Structured logging
+- **models.py**: Data validation (Pydantic)
+- **ingredients.py**: Image processing
+- **mcp_tools/spoonacular.py**: MCP initialization
+
+**Benefits:**
+- ✅ **Modular**: Clear purpose for each file
+- ✅ **Testable**: Easy to unit test each module
+- ✅ **Maintainable**: Changes isolated to specific files
+- ✅ **Readable**: Clear dependencies between modules
+- ✅ **Reusable**: Core functions usable in multiple contexts
+- ✅ **AgentOS Compatible**: No breaking changes to runtime behavior
 
 ---
 

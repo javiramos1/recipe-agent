@@ -460,34 +460,100 @@ Tests:
 
 ```
 recipe-agent/
-├── app.py                 # AgentOS application entry point
-├── config.py             # Environment configuration
-├── models.py             # Pydantic schemas (RecipeRequest, RecipeResponse, etc.)
-├── ingredients.py        # Ingredient detection pre-hook
-├── logger.py             # Structured logging infrastructure
-├── requirements.txt      # Python dependencies
-├── .env.example          # Configuration template
-├── Makefile              # Development commands
-├── README.md             # This file
+├── app.py                 # AgentOS entry point (~50 lines, minimal orchestration)
+├── agent.py               # Agent factory function (initialize_recipe_agent)
+├── prompts.py             # System instructions (SYSTEM_INSTRUCTIONS constant)
+├── hooks.py               # Pre-hooks factory (get_pre_hooks)
+├── config.py              # Environment configuration and validation
+├── logger.py              # Structured logging infrastructure
+├── models.py              # Pydantic schemas (RecipeRequest, RecipeResponse)
+├── ingredients.py         # Ingredient detection (core functions + pre-hook/tool)
+├── requirements.txt       # Python dependencies
+├── .env.example           # Configuration template
+├── Makefile               # Development commands (setup, dev, test, etc.)
+├── README.md              # This file
+│
+├── mcp_tools/
+│   ├── __init__.py        # Package marker
+│   └── spoonacular.py     # SpoonacularMCP class (MCP initialization with retry logic)
 │
 ├── tests/
-│   ├── unit/             # Unit tests (isolated, no external APIs)
+│   ├── unit/              # Unit tests (isolated, no external APIs)
 │   │   ├── test_config.py
-│   │   └── test_models.py
-│   └── integration/      # Integration tests (real APIs)
+│   │   ├── test_models.py
+│   │   ├── test_logger.py
+│   │   ├── test_ingredients.py
+│   │   ├── test_mcp.py
+│   │   └── test_app.py
+│   └── integration/       # Integration tests (real APIs, Agno evals)
 │       ├── test_e2e.py
 │       └── test_api.py
 │
-├── images/               # Sample test images
+├── images/                # Sample test images
 │   ├── sample_vegetables.jpg
 │   ├── sample_fruits.jpg
 │   └── sample_pantry.jpg
 │
-└── .docs/               # Documentation
-    ├── PRD.md           # Product requirements
-    ├── DESIGN.md        # Technical design
+└── .docs/                 # Documentation
+    ├── PRD.md             # Product requirements
+    ├── DESIGN.md          # Technical design (factory pattern, architecture)
     └── IMPLEMENTATION_PLAN.md  # Task breakdown
 ```
+
+### Architecture: Factory Pattern with Separation of Concerns
+
+**Design Principle:** Each module has a single, focused responsibility.
+
+**Core Modules:**
+- **app.py** (~50 lines): Minimal orchestration
+  - Import agent factory: `from agent import initialize_recipe_agent`
+  - Call factory: `agent = initialize_recipe_agent()`
+  - Create AgentOS: `agent_os = AgentOS(agents=[agent], interfaces=[AGUI(agent=agent)])`
+  - Serve: `agent_os.serve(app="app:app", port=config.PORT)`
+
+- **agent.py** (~150 lines): Agent factory function
+  - `initialize_recipe_agent() -> Agent` factory
+  - 5 steps: MCP init → DB config → Tools → Pre-hooks → Agent config
+  - Imports from: config, logger, models, ingredients, SpoonacularMCP, prompts, hooks
+
+- **prompts.py** (~800 lines): System instructions (pure data)
+  - `SYSTEM_INSTRUCTIONS` constant
+  - Defines agent behavior: domain, preferences, two-step recipe process, guardrails
+
+- **hooks.py** (~30 lines): Pre-hooks factory
+  - `get_pre_hooks() -> List` factory
+  - Ingredient extraction (pre-hook mode only)
+  - Prompt injection guardrail (always enabled)
+
+- **config.py**: Environment variables with defaults
+  - Load .env via python-dotenv
+  - Priority: system env > .env > defaults
+  - Validate required keys: GEMINI_API_KEY, SPOONACULAR_API_KEY
+
+- **logger.py**: Structured logging
+  - Support LOG_LEVEL (DEBUG/INFO/WARNING/ERROR)
+  - Support LOG_TYPE (text/json)
+  - Color output for text, JSON for aggregation
+
+- **models.py**: Pydantic schemas
+  - RecipeRequest, RecipeResponse, Recipe, Ingredient, IngredientDetectionOutput
+
+- **ingredients.py**: Image processing
+  - Core functions: fetch_image_bytes, validate_image, extract_ingredients_from_image
+  - Pre-hook: extract_ingredients_pre_hook(run_input, ...)
+  - Tool: detect_ingredients_tool(image_data: str)
+
+- **mcp_tools/spoonacular.py**: MCP initialization
+  - SpoonacularMCP class with connection validation
+  - Exponential backoff retries (1s → 2s → 4s)
+  - Fail-fast: Application fails if MCP unreachable
+
+**Benefits:**
+- ✅ **Modular**: Clear responsibility for each module
+- ✅ **Testable**: Easy to unit test each component
+- ✅ **Maintainable**: Changes isolated to specific files
+- ✅ **Readable**: Clear dependencies between modules
+- ✅ **Extensible**: Easy to add new tools or MCPs
 
 ## Development Guidelines
 

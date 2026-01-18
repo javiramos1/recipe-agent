@@ -1150,122 +1150,97 @@ Spoonacular MCP provides these tools (agent will call them automatically):
 
 ---
 
-### Task 10: AgentOS Application Setup (app.py Main)
+### Task 10: AgentOS Application Setup (app.py Main) ✅ COMPLETE
 
-**Objective:** Create the complete AgentOS application entry point with MCP initialization.
+**Objective:** Create the complete AgentOS application entry point with MPC initialization using factory pattern.
 
 **Context:**
 - AgentOS provides REST API, Web UI, orchestration automatically
 - Single entry point: `python app.py`
+- Factory pattern separates concerns: agent.py, prompts.py, hooks.py
 - MCP must be initialized BEFORE agent creation (fail-fast on startup)
 - No custom routes, no custom memory management needed
-- Serves both REST API and Web UI simultaneously
 
-**Requirements:**
+**Completed Implementation:**
 
-1. Create main app.py structure:
-   ```python
-   from agno.agent import Agent
-   from agno.os import AgentOS
-   from agno.os.interfaces.agui import AGUI
-   from config import config
-   from models import RecipeRequest, RecipeResponse
-   from ingredients import extract_ingredients_pre_hook
-   from mcp.spoonacular import SpoonacularMCP
-   from logger import logger
-   
-   # Initialize MCP FIRST (fail-fast if unreachable)
-   logger.info("Initializing Spoonacular MCP...")
-   spoonacular_mcp = SpoonacularMCP(
-       api_key=config.SPOONACULAR_API_KEY,
-       max_retries=3,
-       retry_delays=[1, 2, 4]
-   )
-   
-   try:
-       mcp_tools = spoonacular_mcp.initialize()
-       logger.info("MCP ready")
-   except Exception as e:
-       logger.error(f"MCP initialization failed: {e}")
-       raise SystemExit(1)  # Fail startup
-   
-   # Configure agent (from Task 9)
-   agent = Agent(
-       tools=[mcp_tools],  # Use initialized MCPTools
-       ...
-   )
-   
-   # Create AgentOS
-   agent_os = AgentOS(
-       agents=[agent],
-       interfaces=[AGUI(agent=agent)]
-   )
-   
-   # Get FastAPI app
-   app = agent_os.get_app()
-   
-   if __name__ == "__main__":
-       # Serve application
-       agent_os.serve(app="app:app", port=config.PORT)
-   ```
+**app.py** (~50 lines) - Minimal orchestration
+```python
+from agno.os import AgentOS
+from agno.os.interfaces.agui import AGUI
+from config import config
+from logger import logger
+from agent import initialize_recipe_agent
 
-2. AgentOS automatically provides:
-   - REST API endpoints:
-     - POST `/api/agents/chat` - send message and get response
-     - GET `/api/agents/{session_id}/history` - retrieve conversation history
-     - GET `/docs` - OpenAPI documentation (Swagger UI)
-   - Web UI (AGUI): ChatGPT-like interface at http://localhost:PORT
-   - Session management: Automatic per session_id
-   - Tool lifecycle: MCPs already initialized before AgentOS starts
-   - Error handling: Returns appropriate HTTP status codes
+# Initialize agent using factory
+logger.info("Starting Recipe Recommendation Service initialization...")
+agent = initialize_recipe_agent()
 
-3. Test startup flow:
-   - Import all modules without error
-   - MCP initializes with connection validation (fails if unreachable)
-   - Agent initialized with all configurations
-   - AgentOS instance created
-   - FastAPI app extracted
-   - Can call `python app.py` without crashing (needs valid API keys in .env)
+# Create AgentOS with agent and Web UI
+logger.info("Creating AgentOS instance with Web UI...")
+agent_os = AgentOS(
+    description="Recipe Recommendation Service",
+    agents=[agent],
+    interfaces=[AGUI(agent=agent)],
+)
 
-4. Serve method parameters:
-   - `app="app:app"` (module path to ASGI app)
-   - `port=config.PORT` (from environment or default 7777)
-   - Do NOT use `reload=True` in production (causes issues with MCP lifespan)
-   - In development, manually restart on code changes
+# Extract FastAPI app
+app = agent_os.get_app()
 
-**Input:**
-- config.py from Task 2
-- models.py from Task 3
-- ingredients.py from Task 6
-- mcp/spoonacular.py from Task 8 (SpoonacularMCP class)
-- Agent configuration from Task 9
+if __name__ == "__main__":
+    logger.info(f"Starting on port {config.PORT}")
+    logger.info(f"✓ Web UI: http://localhost:{config.PORT}")
+    logger.info(f"✓ API: http://localhost:{config.PORT}/api/agents/chat")
+    logger.info(f"✓ Docs: http://localhost:{config.PORT}/docs")
+    agent_os.serve(app="app:app", port=config.PORT, reload=False)
+```
 
-**Output:**
-- Complete app.py file (~150-200 lines)
-- Ready to run: `python app.py`
-- Serves REST API at http://localhost:7777
-- Serves Web UI (AGUI) at http://localhost:7777
+**agent.py** (~150 lines) - Factory function
+- `initialize_recipe_agent() -> Agent` factory with 5 steps
+- Step 1: MCP initialization (SpoonacularMCP with fail-fast)
+- Step 2: Database config (SQLite/PostgreSQL)
+- Step 3: Tool registration (MCP + optional ingredient tool)
+- Step 4: Pre-hook registration (from hooks.py)
+- Step 5: Agent configuration with all settings
+- Returns fully configured Agent ready for AgentOS
 
-**Success Criteria:**
-- `python app.py` starts without error (requires valid API keys in .env)
-- REST API accessible at http://localhost:7777/api/agents/chat
-- Web UI accessible at http://localhost:7777
-- OpenAPI docs at http://localhost:7777/docs
-- MCP connection validated on startup (fails if Spoonacular unreachable)
-- Both REST API and Web UI serve the same agent
+**prompts.py** (~800 lines) - System instructions
+- `SYSTEM_INSTRUCTIONS` constant (pure data, no logic)
+- Comprehensive behavior guidance for agent
 
-**Dependencies:**
-- Task 2 (config.py)
-- Task 3 (models.py)
-- Task 6 (ingredients.py)
-- Task 8 (agent configuration)
+**hooks.py** (~30 lines) - Pre-hooks factory
+- `get_pre_hooks() -> List` factory function
+- Returns ingredient extraction pre-hook + guardrails
+- Configuration-driven (checks IMAGE_DETECTION_MODE)
 
-**Key Constraints:**
-- Single entry point (python app.py only)
-- No custom FastAPI routes (AgentOS provides them)
-- No custom session management (Agno provides it)
-- Do not use reload=True with MCP tools (lifespan issues)
-- MCP startup validation is automatic (AgentOS handles it)
+**Success Criteria Met:**
+- ✅ `python app.py` starts without error
+- ✅ REST API accessible at http://localhost:7777/api/agents/chat
+- ✅ Web UI (AGUI) accessible at http://localhost:7777
+- ✅ OpenAPI docs at http://localhost:7777/docs
+- ✅ MCP connection validated on startup (fails if unreachable)
+- ✅ Both REST API and Web UI serve the same agent
+- ✅ Factory pattern verified compatible with AgentOS
+- ✅ All 140 unit tests passing
+
+**Architecture Pattern: Factory + Separation of Concerns**
+- app.py: Minimal orchestration (50 lines)
+- agent.py: Agent initialization logic
+- prompts.py: Behavior definition (system instructions)
+- hooks.py: Pre-hook configuration
+- config.py: Environment variables
+- logger.py: Structured logging
+- models.py: Data validation
+- ingredients.py: Image processing
+- mcp_tools/spoonacular.py: MCP initialization
+
+**Benefits:**
+- ✅ Modular: Each file has single responsibility
+- ✅ Testable: Easy to unit test each component
+- ✅ Maintainable: Changes isolated to specific files
+- ✅ Readable: Clear dependencies
+- ✅ AgentOS Compatible: No breaking changes
+
+---
 
 ---
 
