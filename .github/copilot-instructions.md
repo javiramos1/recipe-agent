@@ -15,6 +15,8 @@
 8. **README as final snapshot**: README.md represents current state (not rolling updates)
 9. **Async/await for I/O**: All I/O operations (API calls, file I/O, database) must be async
 10. **Never log sensitive data**: No API keys, passwords, images, or PII in logs
+11. **Commit and push after each task**: `git add -A`, `git commit -m "Task [N]: description"`, `git push origin main`
+12. **Follow Do's & Don'ts strictly** (see below)
 
 **Critical Architecture Patterns:**
 11. **Pre-hook pattern**: Images processed BEFORE agent executes. Extract ingredients → append as text → clear images from input. Agent only sees ingredient text.

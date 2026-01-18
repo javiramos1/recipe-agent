@@ -62,6 +62,8 @@ htmlcov/
 *.db
 *.sqlite
 *.sqlite3
+*.lance
+.lancedb/
 
 # Node modules (for MCP)
 node_modules/
