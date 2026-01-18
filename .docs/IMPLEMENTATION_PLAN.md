@@ -975,67 +975,90 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 
 ### Task 12: Makefile Development Commands
 
-**Objective:** Ensure Makefile targets execute all setup and development workflows.
+**Objective:** Ensure Makefile targets execute all setup and development workflows with automatic virtual environment management.
 
 **Context:**
 - Makefile already exists (from repository setup)
 - Commands needed: setup, dev, run, test, eval, clean
-- Commands should execute Python commands and pytest
-- Help message should guide users
+- Must handle Python environment isolation (venv)
+- Virtual environment automatically created if missing
+- All Python commands use venv Python executable
+- Solves "externally-managed-environment" errors on Arch Linux and other distributions
 
 **Requirements:**
 
-1. `make setup` target:
-   - Install dependencies: `pip install -r requirements.txt`
+1. Virtual Environment Management:
+   - Define variables: `VENV_DIR := .venv`, `PYTHON := $(VENV_DIR)/bin/python`, `PIP := $(VENV_DIR)/bin/pip`
+   - Create `venv-check` target: Create .venv using `python3 -m venv` if not present
+   - All Python-based targets (dev, run, test, eval) depend on `venv-check`
+
+2. `make setup` target:
+   - Depend on `venv-check` (create venv first)
+   - Upgrade pip: `$(PIP) install --upgrade pip`
+   - Install dependencies: `$(PIP) install -r requirements.txt`
    - Create .env from .env.example if not present: `[ -f .env ] || cp .env.example .env`
    - Print instructions to edit .env file
    - Print required variables: GEMINI_API_KEY, SPOONACULAR_API_KEY
 
-2. `make dev` target:
-   - Start application: `python app.py`
-   - Print message about hot-reload and Web UI URL
+3. `make dev` target:
+   - Depend on `venv-check`
+   - Start application: `$(PYTHON) app.py`
+   - Print message about Web UI URL: http://localhost:7777
 
-3. `make run` target:
-   - Start application: `python app.py`
+4. `make run` target:
+   - Depend on `venv-check`
+   - Start application: `$(PYTHON) app.py`
    - (Same as dev for this implementation)
 
-4. `make test` target:
-   - Run unit tests: `pytest tests/unit/ -v`
+5. `make test` target:
+   - Depend on `venv-check`
+   - Run unit tests: `$(PYTHON) -m pytest tests/unit/ -v --tb=short`
    - Print "Running unit tests" message
 
-5. `make eval` target:
-   - Run integration tests: `pytest tests/integration/ -v`
+6. `make eval` target:
+   - Depend on `venv-check`
+   - Run integration tests: `$(PYTHON) -m pytest tests/integration/ -v --tb=short`
    - Print "Running integration tests" message
 
-6. `make clean` target:
+7. `make clean` target:
    - Remove __pycache__ directories
-   - Remove .pyc files
+   - Remove .pyc and .pyo files
+   - Remove .pytest_cache and .coverage directories
+   - Remove .egg-info directories
    - Print "Clean complete" message
 
-7. `.PHONY` declaration:
-   - Declare all targets as phony so make doesn't look for files
+8. `.PHONY` declaration:
+   - Declare all targets as phony: setup, dev, run, test, eval, clean, help, venv-check
 
 **Input:**
 - Existing Makefile (from repository)
 
 **Output:**
-- Updated Makefile with all targets
+- Updated Makefile with venv support and all targets
 
 **Success Criteria:**
-- `make setup` installs dependencies and creates .env
-- `make dev` starts application
-- `make test` runs unit tests
-- `make eval` runs integration tests  
+- `make setup` creates .venv directory and installs all dependencies
+- Virtual environment created automatically on first use
+- `make dev` starts application using .venv Python
+- `make test` runs unit tests using .venv Python
+- `make eval` runs integration tests using .venv Python
 - `make clean` removes cache files
+- All targets use `.venv/bin/python` and `.venv/bin/pip` paths
 - Each target prints helpful messages
+- Works on Arch Linux and other systems with externally-managed-environment restrictions
+- No need for manual `python3 -m venv` command
 
 **Dependencies:**
 - All previous tasks (for targets to work)
 
 **Key Constraints:**
+- Use VENV_DIR, PYTHON, and PIP variables consistently across all targets
+- Virtual environment path: `.venv` (not customizable)
 - Do not use `reload=True` for app.py (MCP issues)
 - Include helpful messages for each target
 - Use echo statements for user guidance
+- All Python execution must use `$(PYTHON)` not bare `python`
+- All pip usage must use `$(PIP)` not bare `pip`
 
 ---
 
