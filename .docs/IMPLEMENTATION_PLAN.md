@@ -661,11 +661,157 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - Both modes reuse Task 6 core functions without modification
 - Configuration validation happens during app startup
 
+---
 
+### Task 8: Spoonacular MCP Initialization Module
+
+**Objective:** Create SpoonacularMCP initialization class with connection validation and retry logic.
+
+**Context:**
+- Spoonacular MCP is an **external Node.js service** (runs via npx)
+- Must initialize and validate connection BEFORE creating agent  
+- Fail application startup if MCP unreachable
+- Use exponential backoff for connection retries
+- Separate module (mcp/spoonacular.py) for clean separation and testability
+
+**Requirements:**
+
+1. **Create mcp/ Package:**
+   - Create `mcp/__init__.py` (empty, makes it a package)
+   - Create `mcp/spoonacular.py` with SpoonacularMCP class
+
+2. **SpoonacularMCP Class Structure:**
+
+   ```python
+   from agno.tools.mcp import MCPTools
+   import time
+   from logger import logger
+   
+   class SpoonacularMCP:
+       """Initialize and validate Spoonacular MCP connection."""
+       
+       def __init__(self, api_key: str, max_retries: int = 3, retry_delays: list[int] = None):
+           """
+           Args:
+               api_key: Spoonacular API key
+               max_retries: Maximum connection retry attempts
+               retry_delays: List of delays (seconds) for each retry [1, 2, 4]
+           """
+           self.api_key = api_key
+           self.max_retries = max_retries
+           self.retry_delays = retry_delays or [1, 2, 4]
+       
+       def initialize(self) -> MCPTools:
+           """
+           Initialize MCP with connection validation.
+           
+           Returns:
+               MCPTools instance ready to use
+               
+           Raises:
+               ValueError: If API key invalid
+               ConnectionError: If cannot connect after retries
+           """
+   ```
+
+3. **Initialization Logic (in initialize() method):**
+
+   a. **API Key Validation:**
+      - Check `self.api_key` is not None and not empty string
+      - Raise `ValueError("SPOONACULAR_API_KEY is required")` if invalid
+      - Log validation: `logger.info("Validating Spoonacular API key...")`
+
+   b. **Connection Testing with Retries:**
+      - Attempt to create MCPTools: `MCPTools(command="npx -y spoonacular-mcp", env={"SPOONACULAR_API_KEY": self.api_key})`
+      - If connection fails, retry with exponential backoff
+      - Retry loop (up to max_retries):
+        - Log retry: `logger.warning(f"Connection failed, retrying in {delay}s... (attempt {attempt}/{max_retries})")`
+        - `time.sleep(delay)`
+        - Try connection again
+      - After all retries exhausted: raise `ConnectionError("Failed to connect to Spoonacular MCP after {max_retries} attempts")`
+
+   c. **Success Return:**
+      - Log: `logger.info("Spoonacular MCP connected successfully")`
+      - Return MCPTools instance
+
+4. **Error Handling:**
+   - Catch specific exceptions:
+     - `ValueError`: Invalid API key
+     - `ConnectionError`: Cannot reach MCP server
+     - `Exception`: Any other initialization failure
+   - Log all errors with context
+   - Re-raise exceptions (caller in app.py handles startup failure)
+
+5. **Usage Pattern (in app.py later):**
+
+   ```python
+   from mcp.spoonacular import SpoonacularMCP
+   from logger import logger
+   
+   # Initialize before creating agent
+   logger.info("Initializing Spoonacular MCP...")
+   spoonacular_mcp = SpoonacularMCP(
+       api_key=config.SPOONACULAR_API_KEY,
+       max_retries=3,
+       retry_delays=[1, 2, 4]
+   )
+   
+   try:
+       mcp_tools = spoonacular_mcp.initialize()
+       logger.info("MCP ready")
+   except Exception as e:
+       logger.error(f"MCP initialization failed: {e}")
+       raise SystemExit(1)  # Fail startup
+   
+   # Use mcp_tools in agent
+   agent = Agent(tools=[mcp_tools], ...)
+   ```
+
+**Input:**
+- config.py from Task 2 (SPOONACULAR_API_KEY)
+- logger.py from Task 2.5 (structured logging)
+- agno.tools.mcp.MCPTools (from agno library)
+
+**Output:**
+- `mcp/__init__.py` (empty file)
+- `mcp/spoonacular.py` with SpoonacularMCP class
+- Ready to import: `from mcp.spoonacular import SpoonacularMCP`
+
+**Success Criteria:**
+- `SpoonacularMCP` class instantiates without error
+- `initialize()` validates API key presence
+- `initialize()` tests connection to MCP server
+- Retry logic uses exponential backoff (1s, 2s, 4s)
+- Connection failures retry up to max_retries times
+- Successful connection returns MCPTools instance
+- All failures raise appropriate exceptions with clear messages
+- All steps logged (info for success, warning for retries, error for failures)
+- Unit tests verify initialization logic (mocked MCPTools)
+
+**Dependencies:**
+- Task 2 (config.py with SPOONACULAR_API_KEY)
+- Task 2.5 (logger.py)
+- Task 1 (agno library with MCPTools)
+- System: Node.js and npm (for npx command)
+
+**Key Constraints:**
+- **Must initialize BEFORE agent creation** (not during)
+- **Fail-fast on startup**: Raise exception if connection fails after retries
+- **No silent failures**: All errors must be logged and raised
+- **Exponential backoff**: Retry delays from provided list [1, 2, 4]
+- **Clean separation**: All MCP logic in mcp/spoonacular.py, not app.py
+- **Simple and testable**: Easy to unit test with mocked MCPTools
+- **No hardcoded values**: API key, retries, delays passed as parameters- **No hardcoded values**: API key, retries, delays passed as parameters
+
+**Note on MCP Tools:**
+Spoonacular MCP provides these tools (agent will call them automatically):
+- `search_recipes`: Search by ingredients, dietary restrictions, cuisine, meal type
+- `get_recipe_information_bulk`: Get full recipe details by IDs
+- **Critical pattern**: Agent MUST call search → get_recipe_information_bulk (prevents hallucinations)
 
 ---
 
-### Task 8: Agno Agent Configuration & System Instructions
+### Task 9: Agno Agent Configuration & System Instructions
 
 **Objective:** Configure Agno Agent with all orchestration settings and detailed system instructions.
 
@@ -673,108 +819,345 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - Agno Agent is the central intelligence orchestrating tool calls
 - System instructions define agent behavior (not code)
 - Configuration includes: model, database, memory, guardrails, tools
-- Pre-hooks run before agent (ingredient detection)
-- Tools include local @tool functions and external MCPTools
+- Pre-hooks run before agent (ingredient detection in pre-hook mode)
+- Tools include: local ingredient detection tool (tool mode) OR external MCPTools (Spoonacular from Task 8)
+- Two modes supported via `IMAGE_DETECTION_MODE` config:
+  - **pre-hook mode** (default): Images processed BEFORE agent receives request
+  - **tool mode**: Images processed as a tool call DURING agent execution
 
 **Requirements:**
 
-1. Create Agno Agent instance in app.py:
+1. **Create Agno Agent instance in app.py:**
    ```python
    from agno.agent import Agent
    from agno.models.google import Gemini
    from agno.db.sqlite import SqliteDb
+   from agno.tools import tool
+   from config import config
+   from ingredients import extract_ingredients_pre_hook, detect_ingredients_tool
+   from mcp.spoonacular import SpoonacularMCP
+   
+   # Initialize MCP FIRST (fail-fast if unreachable)
+   logger.info("Initializing Spoonacular MCP...")
+   spoonacular_mcp = SpoonacularMCP(
+       api_key=config.SPOONACULAR_API_KEY,
+       timeout=10,
+       retry_delays=[1, 2, 4]
+   )
+   try:
+       mcp_tools = spoonacular_mcp.initialize()
+       logger.info("MCP ready")
+   except Exception as e:
+       logger.error(f"MCP initialization failed: {e}")
+       raise SystemExit(1)  # Fail startup
+   
+   # Build tools list based on configuration
+   tools = [mcp_tools]  # Spoonacular MCP always included
+   
+   # Add ingredient detection tool if in tool mode
+   if config.IMAGE_DETECTION_MODE == "tool":
+       # Wrap detect_ingredients_tool with @tool decorator
+       @tool
+       def detect_image_ingredients(image_data: str) -> dict:
+           """Extract ingredients from an uploaded image using Gemini vision API.
+           
+           Call this tool when a user uploads an image to detect ingredients.
+           The tool returns detected ingredients with confidence scores.
+           
+           Args:
+               image_data: Base64-encoded image string or image URL
+               
+           Returns:
+               Dict with 'ingredients' list, 'confidence_scores' dict, and 'image_description'
+           """
+           return detect_ingredients_tool(image_data)
+       
+       tools.append(detect_image_ingredients)
    
    agent = Agent(
-       model=Gemini(...),
-       db=SqliteDb(...),
-       # ... other settings
+       model=Gemini(...),  # See requirement 2 below
+       db=SqliteDb(...),   # See requirement 3 below
+       tools=tools,        # Include MCP tools and optionally ingredient tool
+       # ... other settings (see requirements 4-7 below)
    )
    ```
 
-2. Configure Gemini model with retry settings:
+2. **Configure Gemini model with retry settings:**
    - Model ID: `config.GEMINI_MODEL` (default: gemini-1.5-flash)
    - Retries: 2 (automatic retry on failures)
    - Delay between retries: 1 second (initial)
    - Exponential backoff: True (1s → 2s → 4s)
    - This handles transient API failures gracefully
+   ```python
+   model=Gemini(
+       id=config.GEMINI_MODEL,
+       api_key=config.GEMINI_API_KEY,
+   )
+   ```
 
-3. Configure database for session persistence:
+3. **Configure database for session persistence:**
    - Development: `SqliteDb(db_file="agno.db")`
    - Optional production: Check `config.DATABASE_URL`, use PostgreSQL if set
    - Database stores chat history, session metadata, preferences
    - Users can switch backends via environment variable only
+   ```python
+   from agno.db.sqlite import SqliteDb
+   from agno.db.postgres import PostgresDb
+   
+   if config.DATABASE_URL:
+       db = PostgresDb(db_url=config.DATABASE_URL)
+   else:
+       db = SqliteDb(db_file="agno.db")
+   ```
 
-4. Configure memory settings:
+4. **Configure memory settings:**
    - `add_history_to_context=True` (include chat history in agent context)
    - `num_history_runs=config.MAX_HISTORY` (keep last 3 conversation turns)
    - `enable_user_memories=True` (store preferences across sessions)
    - `enable_session_summaries=True` (auto-summarize long conversations)
    - `compress_tool_results=True` (compress after 3+ tool calls)
+   ```python
+   agent = Agent(
+       # ... model, db, tools ...
+       add_history_to_context=True,
+       num_history_runs=config.MAX_HISTORY,
+       enable_user_memories=True,
+       enable_session_summaries=True,
+       compress_tool_results=True,
+   )
+   ```
 
-5. Configure structured I/O validation:
+5. **Configure structured I/O validation:**
    - `input_schema=RecipeRequest` (validate incoming requests)
    - `output_schema=RecipeResponse` (validate agent responses)
    - AgentOS uses these for automatic validation
+   ```python
+   from models import RecipeRequest, RecipeResponse
+   
+   agent = Agent(
+       # ...
+       input_schema=RecipeRequest,
+       output_schema=RecipeResponse,
+   )
+   ```
 
-6. Register pre-hooks (run before agent executes):
-   - Ingredient detection: `extract_ingredients_pre_hook`
-   - Guardrails: PIIDetectionGuardrail(mask_pii=True) - optional
-   - Guardrails: PromptInjectionGuardrail() - optional
+6. **Register pre-hooks (run before agent executes):**
    - Pre-hooks execute in order listed
+   - **Pre-hook mode (default)**: Register ingredient detection pre-hook
+     - Extracts ingredients from images BEFORE agent processes request
+     - Images converted to text and appended to message
+     - Images cleared from input
+   - **Tool mode**: Skip ingredient extraction pre-hook (agent calls tool instead)
+   ```python
+   # Conditionally add pre-hook based on mode
+   pre_hooks = []
+   
+   if config.IMAGE_DETECTION_MODE == "pre-hook":
+       # Pre-hook extracts ingredients before agent processes request
+       pre_hooks.append(extract_ingredients_pre_hook)
+   
+   # Optional: Add guardrails
+   from agno.guardrails import PIIDetectionGuardrail, PromptInjectionGuardrail
+   
+   pre_hooks.extend([
+       PIIDetectionGuardrail(mask_pii=True),
+       PromptInjectionGuardrail(),
+   ])
+   
+   agent = Agent(
+       # ...
+       pre_hooks=pre_hooks,
+   )
+   ```
 
-7. Register tools:
-   - MCPTools: `MCPTools(command="npx -y spoonacular-mcp")`
-   - This is the ONLY tool registered (ingredient detection is pre-hook, not tool)
-   - Tool provides: search_recipes(), get_recipe_information_bulk()
+7. **Register tools (MCPTools + conditional ingredient tool):**
+   - **Pre-hook mode**: Only MCPTools (Spoonacular) registered
+   - **Tool mode**: MCPTools + ingredient detection tool registered
+   - Agent calls tools automatically based on system instructions and user requests
+   ```python
+   # See requirement 1 above for complete setup
+   tools = [mcp_tools]  # Spoonacular MCP always included
+   
+   if config.IMAGE_DETECTION_MODE == "tool":
+       @tool
+       def detect_image_ingredients(image_data: str) -> dict:
+           """Extract ingredients from uploaded image."""
+           return detect_ingredients_tool(image_data)
+       
+       tools.append(detect_image_ingredients)
+   
+   agent = Agent(
+       # ...
+       tools=tools,
+   )
+   ```
 
-8. Write detailed system instructions (longest section):
-   - Core principles: recipe-only domain, ground responses in tools
-   - Ingredient sources: [Detected Ingredients], user message, history (priority order)
-   - Tool usage: search_recipes() then get_recipe_information_bulk() (two-step)
-   - Decision flow: Check recipe-related → check ingredients → call tools → synthesize
-   - Preference extraction: Examples (vegetarian, gluten-free, italian, etc.)
-   - Edge cases: Image already processed, missing ingredients, preference changes
-   - Critical guardrail: NEVER invent recipe instructions without get_recipe_information_bulk()
+8. **Write detailed system instructions (longest section):**
+   The system instructions guide agent behavior and should include:
+   
+   **a) Core Principles:**
+   - Recipe-focused domain: Only answer recipe-related questions
+   - Ground all responses in tool outputs: No hallucinated ingredients or recipes
+   - Use tool results verbatim: Do not modify or invent recipe details
+   
+   **b) Ingredient Sources (Priority Order):**
+   - Check for `[Detected Ingredients]` in message (from pre-hook or memory)
+   - Fall back to user message if no detected ingredients
+   - Use conversation history as context for preferences
+   
+   **c) Two-Step Recipe Process (Critical):**
+   - NEVER provide full recipe instructions without calling `get_recipe_information_bulk`
+   - Step 1: Call `search_recipes` with detected ingredients and filters
+   - Step 2: Call `get_recipe_information_bulk` with returned recipe IDs to get full details
+   - This two-step process prevents hallucinations
+   
+   **d) Decision Flow:**
+   - Is user asking recipe-related question? → Proceed to check for ingredients
+   - Do we have ingredients (detected or provided)? → Call search_recipes
+   - Do we have recipe search results? → Call get_recipe_information_bulk for full details
+   - Synthesize response from tool outputs
+   
+   **e) Preference Extraction:**
+   - Extract and remember user preferences: dietary (vegetarian, gluten-free, vegan), cuisine (Italian, Asian), meal type (breakfast, dinner)
+   - Apply preferences as filters to search_recipes tool
+   - Store preferences for future conversations
+   
+   **f) Tool Behavior (Recipe Search):**
+   - `search_recipes(ingredients, diet=None, cuisine=None, type=None)`: Search for recipes
+   - Always include detected/provided ingredients in search
+   - Apply user preferences as optional filters
+   - `get_recipe_information_bulk(ids, add_recipe_information=True)`: Get full recipe details
+   - Call ONLY AFTER search_recipes returns IDs
+   - Include cooking instructions, nutritional info, time estimates
+   
+   **g) Image Handling (Based on Mode):**
+   - **Pre-hook mode**: "[Detected Ingredients]" text already in message
+     - Do NOT ask user to re-upload or describe ingredients
+     - Proceed directly with recipe search
+   - **Tool mode**: Call "detect_image_ingredients" tool when user uploads image
+     - Agent has visibility into image processing
+     - Can ask clarifying questions about detected ingredients
+   
+   **h) Edge Cases:**
+   - No ingredients detected: Ask user to provide ingredients or try different image
+   - No recipes found: Clarify what they're looking for, offer to broaden search
+   - User modifies preferences mid-conversation: Update preferences and re-search
+   - Multiple similar recipes: Show top 3-5 with key differences highlighted
+   
+   **i) Critical Guardrails:**
+   - NEVER invent ingredient lists (use detected or user-provided only)
+   - NEVER make up recipe instructions (use get_recipe_information_bulk only)
+   - NEVER claim tool was called if it wasn't (be transparent about process)
+   - If error occurs: Log it, explain to user, suggest alternative approach
+   
+   **Example System Instructions Template:**
+   ```
+   You are a professional recipe recommendation assistant. Your role is to help users discover and prepare delicious recipes based on their available ingredients and dietary preferences.
+   
+   ## Core Responsibility
+   - Recommend recipes based on detected or provided ingredients
+   - Provide complete recipe details with instructions, cooking time, and nutritional info
+   - Remember and apply user preferences (dietary, cuisine, meal type)
+   - Help users refine searches and explore variations
+   
+   ## Ingredient Sources (Use in Order)
+   1. [Detected Ingredients] in user message (from image pre-processing)
+   2. Ingredients mentioned in current message
+   3. Previous ingredients mentioned in conversation history
+   
+   ## Recipe Search Process (Two Steps Required)
+   IMPORTANT: You MUST follow this process every time:
+   
+   Step 1: Call search_recipes
+   - Input: Use detected or provided ingredients
+   - Filters: Apply user preferences (diet, cuisine, type)
+   - Extract recipe IDs from results
+   
+   Step 2: Call get_recipe_information_bulk
+   - Input: Recipe IDs from Step 1
+   - Always set add_recipe_information=True
+   - This gives you full instructions, time, and nutrition data
+   
+   NEVER provide recipe instructions without completing Step 2.
+   
+   ## Image Handling
+   [Include mode-specific instructions based on config]
+   
+   Pre-hook Mode:
+   - Images are pre-processed and ingredients appended to your message
+   - You'll see "[Detected Ingredients] ..." in the message
+   - Proceed directly with recipe search (do NOT re-process)
+   
+   Tool Mode:
+   - If user uploads an image, call detect_image_ingredients tool
+   - Review detected ingredients with the user
+   - Ask clarifying questions if needed
+   - Then proceed with recipe search
+   
+   ## Preference Management
+   - Extract preferences from user messages (e.g., "I'm vegetarian", "I like Italian food")
+   - Store preferences automatically (they persist across conversations)
+   - Always apply stored preferences when searching recipes
+   - Ask before changing preferences mid-conversation
+   
+   ## Response Guidelines
+   - Be conversational and friendly
+   - Show top 3-5 most relevant recipes
+   - Highlight key differences (calories, prep time, difficulty)
+   - Link to full recipe details
+   - Ask follow-up questions to refine search if needed
+   ```
 
 **Input:**
-- config.py from Task 2 (for settings)
+- config.py from Task 2 (for settings, IMAGE_DETECTION_MODE)
 - models.py from Task 3 (for schemas)
-- ingredients.py from Task 6 (for pre-hook function)
+- ingredients.py from Task 6 (for pre-hook and tool functions)
+- mcp/spoonacular.py from Task 8 (SpoonacularMCP class)
 
 **Output:**
-- Agno Agent instance configured in app.py
-- System instructions embedded in agent initialization
+- Agno Agent instance configured in app.py with all settings
+- System instructions embedded in agent initialization (~200-300 lines)
+- Conditional tool/pre-hook registration based on IMAGE_DETECTION_MODE
+- Proper error handling and logging
 
 **Success Criteria:**
 - Agent instance created without errors
 - `python -c "from app import agent; print(agent)"` succeeds
-- System instructions include all required sections
-- Pre-hooks registered and called in correct order
-- Tools registered with Spoonacular MCP
+- System instructions include all sections (a-i above)
+- Pre-hooks registered correctly (pre-hook mode only)
+- Ingredient tool registered correctly (tool mode only)
+- Spoonacular MCP tools registered and available
 - Input/output schemas validated
+- Both modes work end-to-end in tests
 
 **Dependencies:**
-- Task 2 (config.py)
-- Task 3 (models.py)
-- Task 6 (ingredients.py)
-- Task 1 (agno library)
+- Task 2 (config.py with IMAGE_DETECTION_MODE)
+- Task 3 (models.py for schemas)
+- Task 6 (ingredients.py with pre-hook and tool functions)
+- Task 8 (mcp/spoonacular.py with SpoonacularMCP initialization)
+- Task 1 (agno library with Agent, @tool decorator)
 
 **Key Constraints:**
-- System instructions are comprehensive and detailed (200+ lines)
-- Instructions guide agent behavior WITHOUT hardcoding logic
-- Two-step recipe process (search then get_recipe_information_bulk) enforced in instructions
-- Pre-hooks run BEFORE agent, not as tools
+- System instructions are comprehensive and detailed (200-300 lines)
+- Instructions guide agent behavior WITHOUT hardcoding orchestration logic
+- Two-step recipe process (search then get_recipe_information_bulk) MUST be enforced in instructions
+- Pre-hooks run BEFORE agent (pre-hook mode only)
+- Ingredient tool registered as @tool decorator (tool mode only)
+- Conditional logic based on IMAGE_DETECTION_MODE configuration
 - Do not implement orchestration logic in code (use instructions instead)
+- MCP must be initialized BEFORE agent creation (Task 8 provides initialized MCPTools)
+- Ingredient tool must return consistent dict format: `{"ingredients": [...], "confidence_scores": {...}, "image_description": "..."}`
 
 ---
 
-### Task 9: AgentOS Application Setup (app.py Main)
+### Task 10: AgentOS Application Setup (app.py Main)
 
-**Objective:** Create the complete AgentOS application entry point.
+**Objective:** Create the complete AgentOS application entry point with MCP initialization.
 
 **Context:**
 - AgentOS provides REST API, Web UI, orchestration automatically
 - Single entry point: `python app.py`
+- MCP must be initialized BEFORE agent creation (fail-fast on startup)
 - No custom routes, no custom memory management needed
 - Serves both REST API and Web UI simultaneously
 
@@ -788,10 +1171,29 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
    from config import config
    from models import RecipeRequest, RecipeResponse
    from ingredients import extract_ingredients_pre_hook
-   # ... other imports
+   from mcp.spoonacular import SpoonacularMCP
+   from logger import logger
    
-   # Configure agent (from Task 8)
-   agent = Agent(...)
+   # Initialize MCP FIRST (fail-fast if unreachable)
+   logger.info("Initializing Spoonacular MCP...")
+   spoonacular_mcp = SpoonacularMCP(
+       api_key=config.SPOONACULAR_API_KEY,
+       max_retries=3,
+       retry_delays=[1, 2, 4]
+   )
+   
+   try:
+       mcp_tools = spoonacular_mcp.initialize()
+       logger.info("MCP ready")
+   except Exception as e:
+       logger.error(f"MCP initialization failed: {e}")
+       raise SystemExit(1)  # Fail startup
+   
+   # Configure agent (from Task 9)
+   agent = Agent(
+       tools=[mcp_tools],  # Use initialized MCPTools
+       ...
+   )
    
    # Create AgentOS
    agent_os = AgentOS(
@@ -814,11 +1216,12 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
      - GET `/docs` - OpenAPI documentation (Swagger UI)
    - Web UI (AGUI): ChatGPT-like interface at http://localhost:PORT
    - Session management: Automatic per session_id
-   - Tool lifecycle: Validates external MCPs on startup
+   - Tool lifecycle: MCPs already initialized before AgentOS starts
    - Error handling: Returns appropriate HTTP status codes
 
 3. Test startup flow:
    - Import all modules without error
+   - MCP initializes with connection validation (fails if unreachable)
    - Agent initialized with all configurations
    - AgentOS instance created
    - FastAPI app extracted
@@ -834,7 +1237,8 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - config.py from Task 2
 - models.py from Task 3
 - ingredients.py from Task 6
-- Agent configuration from Task 8
+- mcp/spoonacular.py from Task 8 (SpoonacularMCP class)
+- Agent configuration from Task 9
 
 **Output:**
 - Complete app.py file (~150-200 lines)
@@ -865,7 +1269,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 
 ---
 
-### Task 10: Integration Tests - End-to-End (tests/integration/test_e2e.py)
+### Task 12: Integration Tests - End-to-End (tests/integration/test_e2e.py)
 
 **Objective:** Test complete request-response flows with real images and MCP connections.
 
@@ -926,7 +1330,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
    - Verify sessions are isolated
 
 **Input:**
-- app.py from Task 9 (complete application)
+- app.py from Task 11 (complete application)
 - config.py from Task 2 (for MAX_IMAGE_SIZE_MB and other thresholds)
 - models.py from Task 3 (for response validation)
 - Sample test images (create if not present)
@@ -945,7 +1349,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - Response validation against RecipeResponse schema
 
 **Dependencies:**
-- Task 9 (app.py)
+- Task 11 (app.py)
 - Task 2 (config.py)
 - Task 3 (models.py)
 - Task 1 (pytest, agno)
@@ -960,7 +1364,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 
 ---
 
-### Task 11: REST API Request/Response Testing (tests/integration/test_api.py)
+### Task 13: REST API Request/Response Testing (tests/integration/test_api.py)
 
 **Objective:** Test REST API endpoints directly using curl/httpx.
 
@@ -1018,7 +1422,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - At least 10 test functions
 
 **Dependencies:**
-- Task 9 (running app.py)
+- Task 11 (running app.py)
 - Task 3 (models.py for schema)
 
 **Key Constraints:**
@@ -1029,7 +1433,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 
 ---
 
-### Task 12: Makefile Development Commands
+### Task 14: Makefile Development Commands
 
 **Objective:** Ensure Makefile targets execute all setup and development workflows with automatic virtual environment management.
 
@@ -1118,12 +1522,12 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 
 ---
 
-### Task 13: Sample Test Images Preparation
+### Task 15: Sample Test Images Preparation
 
 **Objective:** Provide sample images for testing ingredient detection and recipe flows.
 
 **Context:**
-- Required for integration tests (Task 10)
+- Required for integration tests (Task 12)
 - Should be representative of typical user inputs
 - Multiple categories to test different ingredients
 - Should be actual image files or described for creation
@@ -1171,7 +1575,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 
 ---
 
-### Task 14: README.md Documentation
+### Task 16: README.md Documentation
 
 **Objective:** Write comprehensive README for setup, usage, and development.
 
@@ -1271,7 +1675,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 
 ---
 
-### Task 15: Final Validation & Success Criteria Testing
+### Task 17: Final Validation & Success Criteria Testing
 
 **Objective:** Comprehensive validation that implementation meets PRD requirements and success criteria.
 
@@ -1383,47 +1787,93 @@ Task 1 (Setup)
     │
 Task 1, 2, 3 completed
     ↓
-    ├→ Task 6 (Ingredient Detection Pre-Hook)
-    ├→ Task 7 (Gemini Integration / Retry Logic)
+    ├→ Task 6 (Ingredient Detection Core Functions)
+    ├→ Task 7 (Retry Logic & Tool Registration)
     │
-Task 1, 2, 3, 6 completed
+Task 1, 2, 3, 6, 7 completed
     ↓
-    ├→ Task 8 (Agno Agent Configuration)
+    ├→ Task 8 (Spoonacular MCP Integration) - CRITICAL EXTERNAL TOOL
     │
-Task 1, 2, 3, 6, 8 completed
+Task 1, 2, 3, 6, 7, 8 completed
     ↓
-    ├→ Task 9 (AgentOS Application)
+    ├→ Task 9 (Agno Agent Configuration)
     │
-Task 1, 9 completed
+Task 1, 2, 3, 6, 7, 8, 9 completed
     ↓
-    ├→ Task 10 (Integration Tests: E2E)
-    ├→ Task 11 (Integration Tests: API)
+    ├→ Task 10 (AgentOS Application)
     │
-Task 12 (Makefile) - Can run anytime
-Task 13 (Sample Images) - Can run anytime
-Task 14 (README) - Can run after Task 9
-Task 15 (Final Validation) - After all tasks complete
+Task 10 completed
+    ↓
+    ├→ Task 11 (Integration Tests: E2E)
+    ├→ Task 12 (Integration Tests: API)
+    │
+Task 13 (Makefile) - Can run anytime
+Task 14 (Sample Images) - Can run anytime
+Task 15 (README) - Can run after Task 10
+Task 16 (Final Validation) - After all tasks complete
 ```
 
 **Recommended Execution Order:**
 1. Task 1 (Setup) - Foundation
 2. Task 2 (Config) + Task 3 (Models) - Configuration and schemas
 3. Task 5 (Config Tests) + Task 4 (Model Tests) - Validate schemas/config
-4. Task 6 (Ingredient Pre-Hook) + Task 7 (Gemini Integration)
-5. Task 8 (Agent Configuration) - Orchestration setup
-6. Task 9 (AgentOS Application) - Main entry point
-7. Task 13 (Sample Images) - Test data
-8. Task 10 (E2E Tests) + Task 11 (API Tests) - Integration tests
-9. Task 12 (Makefile) - Development commands
-10. Task 14 (README) - Documentation
-11. Task 15 (Final Validation) - Comprehensive testing
+4. Task 6 (Ingredient Detection Core) + Task 7 (Retry Logic)
+5. Task 8 (Spoonacular MCP Integration) - **CRITICAL: External recipe tool**
+6. Task 9 (Agent Configuration) - Orchestration setup
+7. Task 10 (AgentOS Application) - Main entry point
+8. Task 14 (Sample Images) - Test data
+9. Task 11 (E2E Tests) + Task 12 (API Tests) - Integration tests
+10. Task 13 (Makefile) - Development commands
+11. Task 15 (README) - Documentation
+12. Task 16 (Final Validation) - Comprehensive testing
 
 **Parallelizable Tasks:**
 - Task 2 and Task 3 (independent)
 - Task 4 and Task 5 (independent, after 2 and 3)
 - Task 6 and Task 7 (mostly independent, light coupling)
-- Task 10 and Task 11 (both integration tests)
-- Task 12, Task 13 (independent)
+- Task 11 and Task 12 (both integration tests)
+- Task 13, Task 14 (independent)
+
+---
+
+## Summary of Tasks
+
+**Total Tasks: 17**
+
+**Foundation Tasks (1-5):**
+- Task 1: Project Structure & Dependencies
+- Task 2: Configuration Management (config.py)
+- Task 3: Pydantic Data Models (models.py)
+- Task 4: Unit Tests - Models
+- Task 5: Unit Tests - Configuration
+
+**Core Features (6-8):**
+- Task 6: Ingredient Detection Core Functions (ingredients.py)
+- Task 7: Ingredient Detection Retry Logic & Tool Registration
+- Task 8: **Spoonacular MCP Integration & Configuration** (NEW - CRITICAL)
+
+**Orchestration & Application (9-10):**
+- Task 9: Agno Agent Configuration & System Instructions (renumbered from 8)
+- Task 10: AgentOS Application Setup (renumbered from 9)
+
+**Testing & Validation (11-12):**
+- Task 11: Integration Tests - End-to-End (renumbered from 10)
+- Task 12: REST API Request/Response Testing (renumbered from 11)
+
+**Development & Documentation (13-16):**
+- Task 13: Makefile Development Commands (renumbered from 12)
+- Task 14: Sample Test Images Preparation (renumbered from 13)
+- Task 15: README.md Documentation (renumbered from 14)
+- Task 16: Final Validation & Success Criteria Testing (renumbered from 15)
+
+**Key Addition:**
+- **Task 8 (NEW)**: Spoonacular MCP Integration - External recipe search tool
+  - Clarifies this is external (via npx, not local code)
+  - Explains MCP server command and configuration
+  - Documents available tools (search_recipes, get_recipe_information_bulk)
+  - Describes two-step recipe pattern (search → get details)
+  - Covers startup validation requirements
+  - No mcp/ folder needed (runs externally)
 
 ---
 

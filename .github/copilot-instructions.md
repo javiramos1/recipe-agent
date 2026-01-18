@@ -22,13 +22,14 @@
 
 **Critical Architecture Patterns:**
 11. **Pre-hook pattern**: Images processed BEFORE agent executes. Extract ingredients → append as text → clear images from input. Agent only sees ingredient text.
-12. **Two-step recipe process**: NEVER generate recipe instructions without calling `get_recipe_information_bulk`. Always: search_recipes → get_recipe_information_bulk (prevents hallucinations).
-13. **Never store images**: Base64/image bytes NEVER in memory or database. Only ingredient TEXT in chat history.
-14. **System instructions define behavior, NOT code**: Orchestration logic goes in Agno system instructions, not Python code. Let Agno handle tool routing, memory, retries.
-15. **Single entry point**: Everything runs from `python app.py`. No separate servers or multiple terminals.
-16. **No custom code for**: Orchestration logic, API routes, memory management, session storage. AgentOS/Agno provide these automatically.
-17. **MCP validation at startup only**: Only external MCPTools (Spoonacular) need startup validation. Local @tool functions don't need validation.
-18. **Agno handles automatically**: Memory, retries with exponential backoff, guardrails, context compression, preference extraction. Don't implement these manually but do use Agno AI features.
+12. **MCP initialization pattern**: SpoonacularMCP class validates connection BEFORE agent creation. Exponential backoff retries (1s → 2s → 4s). Fail startup if unreachable.
+13. **Two-step recipe process**: NEVER generate recipe instructions without calling `get_recipe_information_bulk`. Always: search_recipes → get_recipe_information_bulk (prevents hallucinations).
+14. **Never store images**: Base64/image bytes NEVER in memory or database. Only ingredient TEXT in chat history.
+15. **System instructions define behavior, NOT code**: Orchestration logic goes in Agno system instructions, not Python code. Let Agno handle tool routing, memory, retries.
+16. **Single entry point**: Everything runs from `python app.py`. No separate servers or multiple terminals.
+17. **No custom code for**: Orchestration logic, API routes, memory management, session storage. AgentOS/Agno provide these automatically.
+18. **MCP validation at startup only**: External MCPTools (Spoonacular) need startup validation via SpoonacularMCP class. Local @tool functions don't need validation.
+19. **Agno handles automatically**: Memory, retries with exponential backoff, guardrails, context compression, preference extraction. Don't implement these manually but do use Agno AI features.
 
 ## Project Overview
 
@@ -38,7 +39,7 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ## Status Section
 
-**Current Status: Phase 1 complete (Tasks 1-5 + 2.5), Tasks 6-7 complete, all unit tests passing (110 tests), ready for Phase 2 (Tasks 8-9)**
+**Current Status: Phase 1 complete (Tasks 1-5 + 2.5 logger), Tasks 6-7 complete, Task 8 (MCP init) ready to implement, all unit tests passing (110 tests)**
 
 ### Phase 1: Foundational (Tasks 1-5 + Task 2.5 logger)
 - [x] Task 1 complete (date: 2026-01-18) - Project structure, dependencies, .gitignore
@@ -48,19 +49,20 @@ This is a code challenge implementing a production-quality GenAI system that tra
 - [x] Task 4 complete (date: 2026-01-18) - Unit Tests - Models (test_models.py) with 38 passing tests, all validations working
 - [x] Task 5 complete (date: 2026-01-18) - Unit Tests - Configuration (test_config.py) with 11 passing tests, env var precedence verified
 
-### Phase 2: Core Features (Tasks 6-9)
+### Phase 2: Core Features (Tasks 6-10)
 - [x] Task 6 complete (date: 2026-01-18) - Ingredient Detection Core Functions (ingredients.py) with Gemini vision API integration, flexible pre-hook and tool mode support, 51 unit tests passing
 - [x] Task 7 complete (date: 2026-01-18) - Ingredient Detection Retry Logic & Tool Registration (ingredients.py + config.py) with exponential backoff, tool decorator, and IMAGE_DETECTION_MODE configuration, 110 total unit tests passing
-- [ ] Task 8: Agno Agent Configuration & System Instructions - Pending
-- [ ] Task 9: AgentOS Application Setup - Pending
+- [ ] Task 8: Spoonacular MCP Initialization Module (mcp/spoonacular.py) - SpoonacularMCP class with connection validation and exponential backoff retries
+- [ ] Task 9: Agno Agent Configuration & System Instructions - Pending
+- [ ] Task 10: AgentOS Application Setup - Pending
 
-### Phase 3: Testing & Docs (Tasks 10-15)
-- [ ] Task 10: Integration Tests E2E - Pending
-- [ ] Task 11: REST API Testing - Pending
-- [x] Task 12 complete (date: 2026-01-18) - Makefile with all development commands
-- [ ] Task 13: Sample Test Images - Pending
-- [x] Task 14 complete (date: 2026-01-18) - Comprehensive README.md
-- [ ] Task 15: Final Validation - Pending
+### Phase 3: Testing & Docs (Tasks 11-17)
+- [ ] Task 11: Integration Tests E2E - Pending
+- [ ] Task 12: REST API Testing - Pending
+- [x] Task 13 complete (date: 2026-01-18) - Makefile with all development commands
+- [ ] Task 14: Sample Test Images - Pending
+- [x] Task 15 complete (date: 2026-01-18) - Comprehensive README.md
+- [ ] Task 16: Final Validation - Pending
 
 **Update Protocol:** After completing each task, update this status section with:
 - [x] Task [N] complete (date: YYYY-MM-DD) - Description of what was completed
@@ -90,10 +92,14 @@ Single-entry-point application (`python app.py`):
 - **AgentOS** (runtime): REST API, Web UI, MCP lifecycle management, built-in tracing
 - **Agno Agent** (orchestrator): Stateful memory, automatic retries, tool routing, guardrails
 - **Pre-hook** (ingredients.py): Vision API integration → ingredient extraction → request enrichment
-- **Spoonacular MCP** (external): Recipe search with filtering (dietary, cuisine, type)
+- **Spoonacular MCP** (mcp/spoonacular.py): Connection validation, exponential backoff retries, MCPTools initialization
+- **External Recipe API** (via npx): Recipe search with filtering (dietary, cuisine, type)
 
 **Data Flow:**
 Request → Pre-hook (image processing) → Agent (orchestration) → MCP (recipe search) → Response
+
+**MCP Initialization (Startup):**
+SpoonacularMCP.initialize() → Validate API key → Test connection (retry 1s/2s/4s) → Return MCPTools → Agent creation
 
 ## Key Principles
 
@@ -137,13 +143,18 @@ Request → Pre-hook (image processing) → Agent (orchestration) → MCP (recip
 ## Module Structure
 
 ```
-app.py              # AgentOS application (agent config, pre-hooks, orchestration)
+app.py              # AgentOS application (agent config, MCP init, orchestration)
 config.py           # Environment variables and .env loading
+logger.py           # Structured logging configuration
 models.py           # Pydantic schemas (RecipeRequest, RecipeResponse, etc)
-ingredients.py      # Pre-hook function for image → ingredient extraction
+ingredients.py      # Image detection (pre-hook/tool modes)
+
+mcp/
+├── __init__.py     # Package marker
+└── spoonacular.py  # SpoonacularMCP class (connection validation, retries)
 
 tests/
-├── unit/           # Schema validation, config loading (fast, isolated)
+├── unit/           # Schema validation, config loading, MCP init (fast, isolated)
 └── integration/    # E2E flows with real images and APIs
 
 images/             # Sample test images for verification
@@ -236,7 +247,8 @@ images/             # Sample test images for verification
 - Leverage Agno built-in features (memory, retries, guardrails)
 - Validate inputs/outputs with Pydantic schemas
 - Store ingredient text in history (not base64 images)
-- Fail startup if external MCP unreachable
+- Initialize MCP with SpoonacularMCP class before agent creation
+- Fail startup if external MCP unreachable (fail-fast pattern)
 - Filter pre-hook ingredients by confidence threshold
 - Ground responses in tool outputs (no hallucinations)
 - Test incrementally (unit → integration after each task)
@@ -255,6 +267,8 @@ images/             # Sample test images for verification
 - Store raw image bytes in memory or history
 - Skip pre-hook execution for image requests
 - Call recipe tools without ingredients
+- Initialize MCP inline in app.py (use SpoonacularMCP class)
+- Continue if MCP initialization fails (must fail startup)
 - Log sensitive image data or API keys
 - Create tracking or status documentation files
 - Update README.md after every task (only on architectural changes)

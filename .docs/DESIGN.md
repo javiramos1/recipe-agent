@@ -210,6 +210,45 @@ For this code challenge, simplicity and time-to-value matter more than semantic 
 
 ---
 
+### 3.6 Why Dedicated MCP Initialization Module
+
+The Spoonacular MCP requires **proper initialization with connection validation** before the agent starts.
+
+**Architecture: SpoonacularMCP Class (mcp/spoonacular.py)**
+
+**Design Pattern:**
+- Dedicated initialization class in `mcp/spoonacular.py`
+- Validates API key before attempting connection
+- Tests MCP connection with exponential backoff retries
+- Initializes MCPTools only after successful validation
+- Fails application startup if connection cannot be established
+
+**Initialization Flow:**
+1. **API Key Validation**: Check `SPOONACULAR_API_KEY` is present and non-empty
+2. **Connection Testing**: Attempt to connect to MCP server (via npx)
+3. **Retry Logic**: Exponential backoff (1s → 2s → 4s) for transient failures
+4. **Tool Creation**: Initialize MCPTools only after successful connection
+5. **Startup Failure**: Raise exception if connection fails after all retries
+
+**Why Dedicated Module:**
+- ✅ **Clean separation**: MCP initialization logic isolated from app.py
+- ✅ **Reusability**: Easy to add more MCPs with same pattern
+- ✅ **Testability**: Can unit test initialization logic independently
+- ✅ **Fail-fast**: Application startup fails if external dependency unreachable
+- ✅ **Explicit dependencies**: Clear that Spoonacular is required for app to run
+- ✅ **Better error messages**: Specific failure reasons (API key invalid, connection timeout, etc.)
+
+**Trade-off:**
+Adds one more file (mcp/spoonacular.py), but provides much better error handling and startup validation than inline initialization.
+
+**Why This Matters:**
+- External MCP is critical dependency (app cannot function without it)
+- Connection issues should fail startup, not first user request
+- Retry logic handles transient network issues gracefully
+- Clear error messages help developers debug setup issues quickly
+
+---
+
 ## 4. High-Level Architecture
 
 ### System Overview Diagram
@@ -298,9 +337,11 @@ if __name__ == "__main__":
 ├── config.py                 # Environment configuration (dotenv + env vars)
 ├── logger.py                 # Logging configuration (structured/text, colored output)
 ├── models.py                 # Pydantic schemas (request/response/domain)
+├── ingredients.py            # Ingredient detection (pre-hook/tool)
 │
 ├── mcp/
-│   └── (Spoonacular runs via npx, not in repo)
+│   ├── __init__.py           # Makes mcp a package
+│   └── spoonacular.py        # SpoonacularMCP class with connection validation
 │
 ├── tests/
 │   ├── unit/                 # Python unit tests (pytest)
@@ -361,6 +402,14 @@ if __name__ == "__main__":
 - Domain models: Recipe, Ingredient, Preferences
 - Tool schemas: IngredientDetectionOutput
 
+**mcp/spoonacular.py** (MCP Initialization)
+- SpoonacularMCP class with initialization logic
+- API key validation (check presence and format)
+- Connection testing with retry logic (exponential backoff: 1s → 2s → 4s)
+- MCPTools creation only after successful connection
+- Fail-fast on startup if connection cannot be established
+- Clear error messages for debugging (API key invalid, connection timeout, etc.)
+
 **tests/unit/** (Python Unit Tests)
 - Test Pydantic model validation
 - Test config loading and defaults
@@ -395,7 +444,6 @@ app.py is the **complete application** in ~150-200 lines:
 from agno.agent import Agent
 from agno.os import AgentOS
 from agno.os.interfaces.agui import AGUI
-from agno.tools.mcp import MCPTools
 from agno.tools import tool
 from agno.models.google import Gemini
 from agno.db.sqlite import SqliteDb
@@ -404,6 +452,9 @@ from pydantic import BaseModel
 from typing import List, Optional
 import base64
 from config import config
+from mcp.spoonacular import SpoonacularMCP
+from ingredients import extract_ingredients_pre_hook
+from logger import logger
 ```
 
 **2. Define Schemas**
@@ -515,7 +566,26 @@ def extract_ingredients_pre_hook(
         run_input.images = []
 ```
 
-**4. Create Agno Agent with Advanced Features**
+**4. Initialize Spoonacular MCP with Connection Validation**
+```python
+# Initialize MCP before creating agent (fail-fast if unreachable)
+logger.info("Initializing Spoonacular MCP...")
+spoonacular_mcp = SpoonacularMCP(
+    api_key=config.SPOONACULAR_API_KEY,
+    max_retries=3,
+    retry_delays=[1, 2, 4]  # Exponential backoff
+)
+
+try:
+    # This will validate API key and test connection
+    mcp_tools = spoonacular_mcp.initialize()
+    logger.info("Spoonacular MCP initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize Spoonacular MCP: {e}")
+    raise SystemExit(1)  # Fail startup
+```
+
+**5. Create Agno Agent with Advanced Features**
 ```python
 agent = Agent(
     model=Gemini(
@@ -541,13 +611,14 @@ agent = Agent(
     
     # Guardrails
     pre_hooks=[
-        PIIDetectionGuardrail(mask_pii=True),  # Mask sensitive info (parameter unverified)
+        extract_ingredients_pre_hook,          # Image detection (runs first)
+        PIIDetectionGuardrail(mask_pii=True),  # Mask sensitive info
         PromptInjectionGuardrail()             # Block prompt attacks
     ],
     
     # Tools
     tools=[
-        MCPTools(command="npx -y spoonacular-mcp")  # From npm package: spoonacular-mcp
+        mcp_tools  # Initialized MCPTools from SpoonacularMCP.initialize()
     ],
     
     # System instructions (detailed behavior guidance)
@@ -555,21 +626,20 @@ agent = Agent(
     You are a recipe recommendation agent. You ONLY answer recipe-related questions.
     
     TOOL USAGE:
-    1. extract_ingredients: Call when user provides image
-    2. search_recipes: Call when ingredients available and recipes requested
-    3. get_recipe_information_bulk: Get full details after search
+    1. search_recipes: Call when ingredients available and recipes requested
+    2. get_recipe_information_bulk: Get full details after search (REQUIRED - never invent recipes)
     
     DECISION FLOW:
     1. Check if recipe-related (refuse if not)
-    2. Determine ingredient source: user_message → image → history
+    2. Determine ingredient source: [Detected Ingredients] → user_message → history
     3. Extract preferences: diet, cuisine, meal_type, intolerances
-    4. Call tools as needed
-    5. Ground responses in tool outputs only
+    4. Call tools as needed (search → get_recipe_information_bulk)
+    5. Ground responses in tool outputs only (no hallucinations)
     """
 )
 ```
 
-**5. Create AgentOS and Serve**
+**6. Create AgentOS and Serve**
 ```python
 # Create AgentOS (handles everything)
 agent_os = AgentOS(

@@ -1,11 +1,33 @@
-"""Pre-hook for ingredient extraction from images using Gemini vision API.
+"""Ingredient extraction from images using Gemini vision API.
 
-This module provides the extract_ingredients_pre_hook function that:
-- Runs BEFORE the Agno agent processes a request
-- Extracts ingredients from uploaded images using Gemini vision API
-- Appends detected ingredients to the user message as clean text
-- Clears images from input to prevent agent re-processing
-- Handles errors gracefully without crashing
+This module provides two ways to extract ingredients from uploaded images:
+
+1. PRE-HOOK MODE (default, IMAGE_DETECTION_MODE="pre-hook"):
+   - extract_ingredients_pre_hook() runs BEFORE agent processes request
+   - Extracts ingredients from images using Gemini vision API
+   - Appends detected ingredients to user message as clean text: "[Detected Ingredients] ..."
+   - Clears images from input to prevent re-processing
+   - Handles errors gracefully without crashing
+   - Usage: agent.add_pre_hook(extract_ingredients_pre_hook)
+
+2. TOOL MODE (IMAGE_DETECTION_MODE="tool"):
+   - detect_ingredients_tool() registered as Agno @tool
+   - Agent calls tool when needed, has full visibility
+   - Returns structured dict: {"ingredients": [...], "confidence_scores": {...}, "image_description": "..."}
+   - Agent can ask clarifying questions about detected ingredients
+   - Usage: @tool
+           def detect_image_ingredients(image_data: str) -> dict:
+               return detect_ingredients_tool(image_data)
+           agent.add_tool(detect_image_ingredients)
+
+Both modes use the same core functions:
+- fetch_image_bytes(): Get image bytes from URL or directly
+- validate_image_format(): Check JPEG/PNG only
+- validate_image_size(): Check MAX_IMAGE_SIZE_MB limit
+- parse_gemini_response(): Lenient JSON parsing
+- extract_ingredients_from_image(): Call Gemini vision API
+- filter_ingredients_by_confidence(): Apply MIN_INGREDIENT_CONFIDENCE threshold
+- extract_ingredients_with_retries(): Exponential backoff retry wrapper
 """
 
 import json
@@ -343,19 +365,56 @@ def extract_ingredients_with_retries(
 
 
 def detect_ingredients_tool(image_data: str) -> dict:
-    """Tool function for ingredient detection (can be registered as @tool).
+    """Tool function for ingredient detection (register with @tool decorator).
 
-    This function is called by Agno Agent when IMAGE_DETECTION_MODE="tool".
-    It provides structured output for the agent to use in recipe recommendations.
+    This function extracts ingredients from uploaded images using Gemini vision API.
+    It's designed to be registered as an Agno @tool when IMAGE_DETECTION_MODE="tool".
+
+    IMPORTANT: This function is NOT a @tool decorator itself. It must be wrapped
+    with @tool decorator in app.py for Agno agent registration.
+
+    Function Behavior
+    =================
+    1. Accepts image_data as Base64 string or URL
+    2. Validates image format (JPEG/PNG only) and size
+    3. Calls Gemini vision API to extract ingredients
+    4. Filters results by MIN_INGREDIENT_CONFIDENCE threshold
+    5. Returns structured dict or raises ValueError
+
+    Error Handling
+    ==============
+    Raises ValueError (not caught) so agent can handle errors:
+    - Invalid image format → ValueError with explanation
+    - Image too large → ValueError with size limit
+    - No ingredients detected → ValueError with suggestion
+    - Gemini API failure → ValueError with error details
 
     Args:
         image_data: Base64-encoded image string or image URL.
+                   Examples:
+                   - "https://example.com/image.jpg" (URL)
+                   - "iVBORw0KGgoAAAANSUhEUg..." (Base64)
 
     Returns:
-        Dict with detected ingredients, confidence scores, and description.
+        Dict with three keys:
+        - "ingredients": List[str] - ingredient names in order of confidence
+        - "confidence_scores": Dict[str, float] - name → confidence (0.0-1.0)
+        - "image_description": str - human-readable summary
+
+        Example:
+        {
+            "ingredients": ["tomato", "basil", "mozzarella"],
+            "confidence_scores": {
+                "tomato": 0.95,
+                "basil": 0.88,
+                "mozzarella": 0.82
+            },
+            "image_description": "Detected ingredients: tomato (95%), basil (88%), mozzarella (82%)"
+        }
 
     Raises:
-        ValueError: If image cannot be processed.
+        ValueError: If image cannot be processed with details about the failure.
+
     """
     try:
         # Get image bytes (from base64 or URL)
