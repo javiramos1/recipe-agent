@@ -90,16 +90,62 @@ Declarative system instructions instead of imperative orchestration code. Less f
 
 ---
 
-### 3.3 Why Two Tool Patterns (Local @tool + External MCP)
+### 3.3 Flexible Ingredient Detection: Pre-Hook vs. Tool Pattern
 
-Different tools have different requirements:
+The ingredient detection system is **flexible and configurable** via `IMAGE_DETECTION_MODE`:
 
-**Local @tool Pattern (Ingredient Detection):**
-- Simple Python function in app.py
-- Decorated with `@tool` for automatic registration
-- No tool call overhead (not exposed to agent)
-- Runs before agent executes (request preprocessing)
-- Perfect for: Request preprocessing, image handling, data enrichment
+**Architecture: Shared Core Functions**
+- Core logic lives in `ingredients.py` with reusable functions:
+  - `fetch_image_bytes()`: Get image bytes from URL or directly
+  - `validate_image_format()`: Check for JPEG/PNG format
+  - `validate_image_size()`: Enforce MAX_IMAGE_SIZE_MB limit
+  - `extract_ingredients_from_image()`: Call Gemini vision API
+  - `parse_gemini_response()`: Extract JSON from response
+  - `filter_ingredients_by_confidence()`: Apply confidence threshold
+- These functions are **mode-agnostic** (work for both patterns)
+
+**Pre-Hook Mode** (Default: `IMAGE_DETECTION_MODE=pre-hook`)
+- Runs **before** agent processes request
+- Function: `extract_ingredients_pre_hook(run_input, ...)`
+- Processes images immediately
+- Appends detected ingredients to user message as text
+- Clears images to prevent re-processing
+- **Benefits:** Eliminates LLM round-trip, faster, cleaner history
+
+**Tool Mode** (Optional: `IMAGE_DETECTION_MODE=tool`)
+- Registered as `@tool` decorator in agent
+- Function: `detect_ingredients_tool(image_data: str) -> IngredientDetectionOutput`
+- Agent calls tool when needed (visible in orchestration)
+- Agent decides when/if to call based on context
+- **Benefits:** Agent has visibility, can refine/ask questions, full control
+
+**Trade-off:**  
+- Pre-hook: Faster (no extra LLM call), but less agent visibility
+- Tool: More agent flexibility, but adds one orchestration round-trip
+
+**Configuration:**
+```python
+# config.py
+IMAGE_DETECTION_MODE: str = os.getenv("IMAGE_DETECTION_MODE", "pre-hook")  # "pre-hook" or "tool"
+
+# In app.py, register based on mode:
+if config.IMAGE_DETECTION_MODE == "pre-hook":
+    agent.add_pre_hook(extract_ingredients_pre_hook)
+elif config.IMAGE_DETECTION_MODE == "tool":
+    agent.add_tool(detect_ingredients_tool)
+```
+
+**Why This Matters:**  
+- **Same code, different modes**: No duplication, easier maintenance
+- **Flexible orchestration**: Supports both patterns without rewriting
+- **Easy A/B testing**: Switch modes via environment variable
+- **Clear separation**: Shared core functions vs. orchestration wrapper
+
+---
+
+### 3.3b External MCPTools Pattern (Spoonacular Recipes)
+
+External tools have different requirements:
 
 **External MCPTools Pattern (Spoonacular Recipes):**
 - External MCP server (Node.js via npx)
@@ -108,14 +154,9 @@ Different tools have different requirements:
 - Startup validation required (fail if unreachable)
 - Perfect for: Remote APIs, external services, complex separable processes
 
-**Trade-off:**  
-Pre-hook pattern is optimal for request preprocessing (faster, simpler), while MCPTools are better for external services requiring agent-level decision-making.
-
 **Why This Matters:**  
-- Ingredient detection via pre-hook eliminates one LLM round-trip
-- No tool routing logic needed in system instructions (simpler prompts)
 - Recipe search leverages existing maintained API (no data pipeline)
-- Clear separation: API layer handles images, agent handles recipes
+- Clear separation: Image handling (pre-hook) vs. recipe orchestration (agent)
 - Extracted ingredients automatically part of chat history as text
 
 ---

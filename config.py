@@ -26,18 +26,23 @@ class Config:
         self.MAX_HISTORY: int = int(os.getenv("MAX_HISTORY", "3"))
         self.MAX_IMAGE_SIZE_MB: int = int(os.getenv("MAX_IMAGE_SIZE_MB", "5"))
         self.MIN_INGREDIENT_CONFIDENCE: float = float(os.getenv("MIN_INGREDIENT_CONFIDENCE", "0.7"))
+        self.IMAGE_DETECTION_MODE: str = os.getenv("IMAGE_DETECTION_MODE", "pre-hook")
         self.DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
 
     def validate(self) -> None:
         """Validate required configuration.
 
         Raises:
-            ValueError: If required API keys are missing.
+            ValueError: If required API keys are missing or invalid values provided.
         """
         if not self.GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY environment variable is required")
         if not self.SPOONACULAR_API_KEY:
             raise ValueError("SPOONACULAR_API_KEY environment variable is required")
+        if self.IMAGE_DETECTION_MODE not in ("pre-hook", "tool"):
+            raise ValueError(
+                f"IMAGE_DETECTION_MODE must be 'pre-hook' or 'tool', got: {self.IMAGE_DETECTION_MODE}"
+            )
 
 
 # Create module-level config instance and validate immediately

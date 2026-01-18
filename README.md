@@ -110,6 +110,7 @@ PORT=7777
 MAX_HISTORY=3
 MAX_IMAGE_SIZE_MB=5
 MIN_INGREDIENT_CONFIDENCE=0.7
+IMAGE_DETECTION_MODE=pre-hook
 LOG_LEVEL=INFO
 LOG_TYPE=text
 # DATABASE_URL=postgresql://user:pass@localhost:5432/recipe_service
@@ -247,6 +248,7 @@ curl -X POST http://localhost:7777/api/agents/chat \
 | `MAX_HISTORY` | int | `3` | Conversation turns to keep in memory |
 | `MAX_IMAGE_SIZE_MB` | int | `5` | Maximum image upload size |
 | `MIN_INGREDIENT_CONFIDENCE` | float | `0.7` | Confidence threshold for detected ingredients (0.0-1.0) |
+| `IMAGE_DETECTION_MODE` | string | `pre-hook` | Ingredient detection mode: `pre-hook` (fast, processes before agent) or `tool` (agent control) |
 | `LOG_LEVEL` | string | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
 | `LOG_TYPE` | string | `text` | Log format (text, json) |
 | `DATABASE_URL` | string | *optional* | PostgreSQL connection (uses SQLite if not set) |
@@ -289,6 +291,13 @@ DATABASE_URL=postgresql://user:password@localhost:5432/recipe_service
 - Eliminates extra LLM round-trip
 - Keeps ingredients as text (not raw bytes) in chat history
 - Faster responses overall
+- Configurable via `IMAGE_DETECTION_MODE` environment variable
+
+**Flexible Ingredient Detection (Pre-Hook vs. Tool):**
+- `IMAGE_DETECTION_MODE=pre-hook` (default): Fast, processes before agent, no extra LLM call
+- `IMAGE_DETECTION_MODE=tool`: Agent control, visible tool call, agent decides when/if to call
+- Same core detection code used for both modes
+- Switch modes via environment variable only (no code changes needed)
 
 **Two-Step Recipe Process:**
 - Search recipes with ingredients + filters

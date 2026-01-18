@@ -284,3 +284,132 @@ def extract_ingredients_pre_hook(
     except Exception as e:
         # Pre-hooks must be resilient - log but don't crash
         logger.warning(f"Ingredient extraction pre-hook failed: {e}")
+
+
+def extract_ingredients_with_retries(
+    image_bytes: bytes, max_retries: int = 3
+) -> Optional[dict]:
+    """Call Gemini vision API with exponential backoff retry logic.
+
+    Retries on transient failures (network errors, rate limits, 5xx errors).
+    Does NOT retry on permanent failures (invalid API key, malformed request).
+
+    Args:
+        image_bytes: Raw image bytes to process.
+        max_retries: Maximum number of retry attempts (default: 3).
+
+    Returns:
+        Dict with 'ingredients' and 'confidence_scores', or None if all retries failed.
+    """
+    retry_count = 0
+    delay_seconds = 1
+
+    while retry_count < max_retries:
+        try:
+            result = extract_ingredients_from_image(image_bytes)
+            if result:
+                return result
+            # If result is None but no exception, retry (might be transient API issue)
+            retry_count += 1
+            if retry_count < max_retries:
+                logger.debug(f"Retrying ingredient extraction (attempt {retry_count + 1}/{max_retries}) after {delay_seconds}s")
+                import time
+                time.sleep(delay_seconds)
+                delay_seconds *= 2  # Exponential backoff
+        except Exception as e:
+            # Check if error is transient or permanent
+            error_str = str(e).lower()
+            is_transient = any(
+                keyword in error_str
+                for keyword in ["timeout", "connection", "429", "500", "503", "502", "retryable"]
+            )
+
+            if is_transient and retry_count < max_retries - 1:
+                retry_count += 1
+                logger.debug(
+                    f"Transient error detected, retrying (attempt {retry_count + 1}/{max_retries}) "
+                    f"after {delay_seconds}s: {e}"
+                )
+                import time
+                time.sleep(delay_seconds)
+                delay_seconds *= 2
+            else:
+                # Permanent failure or last retry exhausted
+                logger.warning(f"Failed to extract ingredients after {max_retries} attempts: {e}")
+                return None
+
+    logger.warning(f"Ingredient extraction exhausted all {max_retries} retries")
+    return None
+
+
+def detect_ingredients_tool(image_data: str) -> dict:
+    """Tool function for ingredient detection (can be registered as @tool).
+
+    This function is called by Agno Agent when IMAGE_DETECTION_MODE="tool".
+    It provides structured output for the agent to use in recipe recommendations.
+
+    Args:
+        image_data: Base64-encoded image string or image URL.
+
+    Returns:
+        Dict with detected ingredients, confidence scores, and description.
+
+    Raises:
+        ValueError: If image cannot be processed.
+    """
+    try:
+        # Get image bytes (from base64 or URL)
+        image_bytes = None
+        if image_data.startswith(("http://", "https://")):
+            # URL-based image
+            image_bytes = fetch_image_bytes(image_data)
+        else:
+            # Assume base64 encoded
+            import base64
+            try:
+                image_bytes = base64.b64decode(image_data)
+            except Exception as e:
+                logger.warning(f"Failed to decode base64 image: {e}")
+                image_bytes = None
+
+        if not image_bytes:
+            raise ValueError("Could not retrieve image bytes from provided data")
+
+        # Validate format and size
+        if not validate_image_format(image_bytes):
+            raise ValueError("Invalid image format. Only JPEG and PNG are supported.")
+
+        if not validate_image_size(image_bytes):
+            raise ValueError(f"Image too large. Maximum size is {config.MAX_IMAGE_SIZE_MB}MB")
+
+        # Extract ingredients with retry logic
+        result = extract_ingredients_with_retries(image_bytes)
+        if not result:
+            raise ValueError("Failed to extract ingredients from image. Please try another image.")
+
+        # Filter by confidence
+        ingredients = filter_ingredients_by_confidence(
+            result.get("ingredients", []), result.get("confidence_scores", {})
+        )
+
+        if not ingredients:
+            raise ValueError("No ingredients detected with sufficient confidence. Please try another image.")
+
+        # Build description
+        confidence_scores = result.get("confidence_scores", {})
+        scores_text = ", ".join(
+            f"{ing} ({confidence_scores.get(ing, 0):.0%})" for ing in ingredients[:5]
+        )
+        image_description = f"Detected ingredients: {scores_text}"
+        if len(ingredients) > 5:
+            image_description += f" and {len(ingredients) - 5} more"
+
+        return {
+            "ingredients": ingredients,
+            "confidence_scores": {ing: confidence_scores.get(ing, 0) for ing in ingredients},
+            "image_description": image_description,
+        }
+
+    except Exception as e:
+        logger.error(f"Ingredient detection tool failed: {e}")
+        raise ValueError(f"Ingredient detection failed: {str(e)}")

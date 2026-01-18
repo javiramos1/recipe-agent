@@ -153,6 +153,7 @@ class TestConfigEnvironmentOverride:
             "MAX_IMAGE_SIZE_MB": "15",
             "MIN_INGREDIENT_CONFIDENCE": "0.6",
             "DATABASE_URL": "postgresql://test/db",
+            "IMAGE_DETECTION_MODE": "tool",
         }
 
         for key, value in test_values.items():
@@ -168,3 +169,48 @@ class TestConfigEnvironmentOverride:
         assert config.MAX_IMAGE_SIZE_MB == 15
         assert config.MIN_INGREDIENT_CONFIDENCE == 0.6
         assert config.DATABASE_URL == "postgresql://test/db"
+        assert config.IMAGE_DETECTION_MODE == "tool"
+
+
+class TestImageDetectionMode:
+    """Test IMAGE_DETECTION_MODE configuration."""
+
+    def test_default_image_detection_mode(self, monkeypatch):
+        """Test that IMAGE_DETECTION_MODE defaults to 'pre-hook'."""
+        monkeypatch.delenv("IMAGE_DETECTION_MODE", raising=False)
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        assert config.IMAGE_DETECTION_MODE == "pre-hook"
+
+    def test_image_detection_mode_pre_hook(self, monkeypatch):
+        """Test that 'pre-hook' mode is valid."""
+        monkeypatch.setenv("IMAGE_DETECTION_MODE", "pre-hook")
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        config.validate()  # Should not raise
+        assert config.IMAGE_DETECTION_MODE == "pre-hook"
+
+    def test_image_detection_mode_tool(self, monkeypatch):
+        """Test that 'tool' mode is valid."""
+        monkeypatch.setenv("IMAGE_DETECTION_MODE", "tool")
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        config.validate()  # Should not raise
+        assert config.IMAGE_DETECTION_MODE == "tool"
+
+    def test_image_detection_mode_invalid(self, monkeypatch):
+        """Test that invalid IMAGE_DETECTION_MODE raises ValueError."""
+        monkeypatch.setenv("IMAGE_DETECTION_MODE", "invalid-mode")
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        with pytest.raises(ValueError, match="IMAGE_DETECTION_MODE"):
+            config.validate()
+

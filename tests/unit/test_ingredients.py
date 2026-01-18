@@ -14,8 +14,10 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 
 from ingredients import (
+    detect_ingredients_tool,
     extract_ingredients_from_image,
     extract_ingredients_pre_hook,
+    extract_ingredients_with_retries,
     filter_ingredients_by_confidence,
     parse_gemini_response,
     validate_image_format,
@@ -348,3 +350,187 @@ class TestExtractIngredientsFromImage:
         result = extract_ingredients_from_image(image_bytes)
 
         assert result is None
+
+
+class TestExtractIngredientsWithRetries:
+    """Test retry logic with exponential backoff."""
+
+    @patch("ingredients.extract_ingredients_from_image")
+    def test_success_first_attempt(self, mock_extract):
+        """Should return immediately on first success."""
+        mock_extract.return_value = {
+            "ingredients": ["tomato"],
+            "confidence_scores": {"tomato": 0.95},
+        }
+
+        # PNG magic bytes
+        image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+
+        result = extract_ingredients_with_retries(image_bytes, max_retries=3)
+
+        assert result is not None
+        assert mock_extract.call_count == 1  # Only called once
+
+    @patch("ingredients.extract_ingredients_from_image")
+    @patch("time.sleep")
+    def test_retry_on_transient_failure(self, mock_sleep, mock_extract):
+        """Should retry on transient failures (network errors, timeouts)."""
+        # First two calls fail with transient error, third succeeds
+        mock_extract.side_effect = [
+            Exception("Connection timeout"),
+            Exception("503 Service Unavailable"),
+            {
+                "ingredients": ["tomato"],
+                "confidence_scores": {"tomato": 0.95},
+            },
+        ]
+
+        # PNG magic bytes
+        image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+
+        result = extract_ingredients_with_retries(image_bytes, max_retries=3)
+
+        assert result is not None
+        assert mock_extract.call_count == 3  # Called 3 times (2 failures + 1 success)
+
+    @patch("ingredients.extract_ingredients_from_image")
+    @patch("time.sleep")
+    def test_exponential_backoff(self, mock_sleep, mock_extract):
+        """Should use exponential backoff (1s, 2s, 4s)."""
+        mock_extract.side_effect = [
+            Exception("Connection timeout"),
+            Exception("Connection timeout"),
+            Exception("Connection timeout"),
+        ]
+
+        # PNG magic bytes
+        image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+
+        result = extract_ingredients_with_retries(image_bytes, max_retries=3)
+
+        assert result is None
+        # Should sleep twice (between attempts): 1s and 2s
+        assert mock_sleep.call_count == 2
+        calls = [call[0][0] for call in mock_sleep.call_args_list]
+        assert calls == [1, 2]
+
+    @patch("ingredients.extract_ingredients_from_image")
+    def test_no_retry_on_permanent_failure(self, mock_extract):
+        """Should NOT retry on permanent failures (invalid API key)."""
+        mock_extract.side_effect = Exception("Invalid API key")
+
+        # PNG magic bytes
+        image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+
+        result = extract_ingredients_with_retries(image_bytes, max_retries=3)
+
+        assert result is None
+        # Should be called only once (no retries on permanent error)
+        assert mock_extract.call_count == 1
+
+    @patch("ingredients.extract_ingredients_from_image")
+    def test_max_retries_exceeded(self, mock_extract):
+        """Should return None after max retries exceeded."""
+        mock_extract.return_value = None  # Keeps returning None
+
+        # PNG magic bytes
+        image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+
+        result = extract_ingredients_with_retries(image_bytes, max_retries=2)
+
+        assert result is None
+        assert mock_extract.call_count == 2  # Called exactly max_retries times
+
+
+class TestDetectIngredientsTool:
+    """Test the ingredient detection tool function."""
+
+    @patch("ingredients.extract_ingredients_with_retries")
+    @patch("ingredients.fetch_image_bytes")
+    def test_successful_url_extraction(self, mock_fetch, mock_extract):
+        """URL-based extraction should work correctly."""
+        mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+        mock_extract.return_value = {
+            "ingredients": ["tomato", "basil"],
+            "confidence_scores": {"tomato": 0.95, "basil": 0.88},
+        }
+
+        result = detect_ingredients_tool("http://example.com/image.jpg")
+
+        assert result is not None
+        assert result["ingredients"] == ["tomato", "basil"]
+        assert "tomato" in result["confidence_scores"]
+        assert "image_description" in result
+
+    @patch("ingredients.extract_ingredients_with_retries")
+    def test_successful_base64_extraction(self, mock_extract):
+        """Base64-based extraction should work correctly."""
+        import base64
+
+        # PNG magic bytes in base64
+        png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+        image_base64 = base64.b64encode(png_bytes).decode()
+
+        mock_extract.return_value = {
+            "ingredients": ["tomato"],
+            "confidence_scores": {"tomato": 0.95},
+        }
+
+        result = detect_ingredients_tool(image_base64)
+
+        assert result is not None
+        assert result["ingredients"] == ["tomato"]
+
+    @patch("ingredients.fetch_image_bytes")
+    def test_invalid_image_format(self, mock_fetch):
+        """Invalid image format should raise ValueError."""
+        mock_fetch.return_value = b"GIF89a"  # GIF format
+
+        with pytest.raises(ValueError, match="Invalid image format"):
+            detect_ingredients_tool("http://example.com/image.gif")
+
+    @patch("ingredients.extract_ingredients_with_retries")
+    @patch("ingredients.fetch_image_bytes")
+    def test_no_ingredients_detected(self, mock_fetch, mock_extract):
+        """No ingredients with sufficient confidence should raise ValueError."""
+        mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+        mock_extract.return_value = {
+            "ingredients": [],  # Empty after filtering
+            "confidence_scores": {},
+        }
+
+        with pytest.raises(ValueError, match="No ingredients detected"):
+            detect_ingredients_tool("http://example.com/image.jpg")
+
+    @patch("ingredients.fetch_image_bytes")
+    def test_failed_to_fetch_image(self, mock_fetch):
+        """Failed image fetch should raise ValueError."""
+        mock_fetch.return_value = None
+
+        with pytest.raises(ValueError, match="Could not retrieve image"):
+            detect_ingredients_tool("http://example.com/image.jpg")
+
+    @patch("ingredients.extract_ingredients_with_retries")
+    @patch("ingredients.fetch_image_bytes")
+    def test_image_description_multiple_ingredients(self, mock_fetch, mock_extract):
+        """Image description should show confidence percentages."""
+        mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+        mock_extract.return_value = {
+            "ingredients": ["tomato", "basil", "mozzarella", "olive oil", "garlic", "extra"],
+            "confidence_scores": {
+                "tomato": 0.95,
+                "basil": 0.88,
+                "mozzarella": 0.92,
+                "olive oil": 0.90,
+                "garlic": 0.85,
+                "extra": 0.75,
+            },
+        }
+
+        result = detect_ingredients_tool("http://example.com/image.jpg")
+
+        # Should show first 5 ingredients and mention "1 more"
+        assert "1 more" in result["image_description"]
+        assert "tomato" in result["image_description"]
+        assert "95%" in result["image_description"]
+

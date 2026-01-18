@@ -455,158 +455,213 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 
 ---
 
-### Task 6: Ingredient Detection Pre-Hook (ingredients.py)
+### Task 6: Ingredient Detection Core Functions (ingredients.py)
 
-**Objective:** Implement image processing and ingredient extraction using Gemini vision API.
+**Objective:** Implement reusable image processing and ingredient extraction using Gemini vision API.
 
 **Context:**
-- This is a pre-hook function (executes before agent processes request)
-- Runs locally in Python, not exposed to agent as tool
-- Calls Gemini vision API once per image
-- Appends results to user message as clean text
-- Clears images from input to prevent agent re-processing
-- Must handle errors gracefully (image processing failures)
-- Uses google-generativeai library
+- Ingredient detection can run in two modes: pre-hook or tool (configured via IMAGE_DETECTION_MODE)
+- Core detection logic is **mode-agnostic** (same functions for both patterns)
+- Pre-hook mode (default): Runs before agent processes request, appends ingredients to message
+- Tool mode (optional): Agent calls as @tool decorator when needed, returns structured output
+- Must handle errors gracefully and call Gemini vision API efficiently
 
 **Requirements:**
 
-1. Implement `extract_ingredients_pre_hook` function:
-   - Signature: `extract_ingredients_pre_hook(run_input: RunInput, session=None, user_id: str = None, debug_mode: bool = None) -> None`
-   - Access images via `getattr(run_input, 'images', [])`
-   - Return early (None) if no images present
-   - No return value needed (modifies run_input in-place)
+1. **Core Helper Functions (reusable for both modes):**
 
-2. For each image:
-   - Get image bytes from `image.url` (HTTP/HTTPS fetch) or `image.content` (direct bytes)
-   - Validate image format (JPEG or PNG only) using `imghdr.what()`
-   - Validate image size: fail if > config.MAX_IMAGE_SIZE_MB
-   - Return HTTP 413 error if size exceeded (via exception handling at API layer)
+   a. `fetch_image_bytes(image_source: str | bytes) -> Optional[bytes]`:
+      - Accept URL (str) or bytes directly
+      - If URL: Use urllib to fetch with 10s timeout
+      - Return raw bytes if successful, None on failure
+      - Log warnings on network errors (don't crash)
 
-3. Call Gemini vision API:
-   - Configure: `genai.configure(api_key=config.GEMINI_API_KEY)`
-   - Create model: `genai.GenerativeModel(config.GEMINI_MODEL)`
-   - Prompt: "Extract all food ingredients from this image. Return JSON with 'ingredients' list and 'confidence_scores' dict mapping ingredient name to confidence (0.0-1.0)."
-   - Image input: `{"mime_type": "image/jpeg", "data": image_bytes}`
+   b. `validate_image_format(image_bytes: bytes) -> bool`:
+      - Use `filetype.guess()` to detect format
+      - Accept JPEG and PNG only
+      - Return True if valid, False otherwise
+      - Log warning if invalid format
 
-4. Parse Gemini response:
-   - Extract JSON from response text
-   - Expected format: `{"ingredients": [...], "confidence_scores": {"ingredient_name": 0.85, ...}}`
-   - Filter ingredients by MIN_INGREDIENT_CONFIDENCE threshold
-   - Keep only ingredients with confidence >= threshold
+   c. `validate_image_size(image_bytes: bytes) -> bool`:
+      - Calculate size: `len(image_bytes) / (1024 * 1024)`
+      - Return True if <= config.MAX_IMAGE_SIZE_MB, False otherwise
+      - Log warning if exceeds limit
 
-5. Append to user message:
-   - Format: `f"{run_input.input_content}\n\n[Detected Ingredients] {ingredient1}, {ingredient2}, ..."`
-   - Clear images from run_input: `run_input.images = []` (prevents agent re-processing)
-   - Update run_input in-place
+   d. `parse_gemini_response(response_text: str) -> Optional[dict]`:
+      - Try direct JSON parse first: `json.loads(response_text)`
+      - If fails, use regex to extract JSON: `re.search(r"\{.*\}", text, re.DOTALL)`
+      - Handle case where Gemini adds explanatory text
+      - Return dict with keys 'ingredients' (list) and 'confidence_scores' (dict)
+      - Return None if parsing fails after both attempts
 
-6. Error handling:
-   - Log warnings (not errors) if image processing fails
-   - Continue to next image on failure (resilient)
-   - If all images fail and no ingredients detected, append nothing (graceful degradation)
-   - No exceptions should bubble up (pre-hook should never crash)
+   e. `extract_ingredients_from_image(image_bytes: bytes) -> Optional[dict]`:
+      - Validate format and size first (skip if invalid)
+      - Determine MIME type from file format
+      - Create Gemini client: `genai.Client(api_key=config.GEMINI_API_KEY)`
+      - Call vision API with prompt requesting JSON extraction
+      - Parse response using parse_gemini_response()
+      - Return dict with 'ingredients' and 'confidence_scores', or None on failure
+      - Log warnings (not errors) on any failures
+
+   f. `filter_ingredients_by_confidence(ingredients: list[str], confidence_scores: dict[str, float]) -> list[str]`:
+      - Filter ingredients where score >= config.MIN_INGREDIENT_CONFIDENCE
+      - Preserve order of original ingredients
+      - Return filtered list
+
+2. **Pre-Hook Function (uses core functions - Mode: pre-hook):**
+
+   `extract_ingredients_pre_hook(run_input, session=None, user_id: str = None, debug_mode: bool = None) -> None`:
+   - Check for images: `getattr(run_input, 'images', [])`
+   - Return early if no images
+   - For each image:
+     - Get bytes from `image.url` (fetch) or `image.content` (direct)
+     - Validate format and size
+     - Extract ingredients using `extract_ingredients_from_image()`
+     - Filter by confidence
+   - Append all detected ingredients to message as text: `"[Detected Ingredients] tomato, basil, mozzarella"`
+   - Clear images: `run_input.images = []` (prevents agent re-processing)
+   - Must not raise exceptions (pre-hooks are resilient)
+
+3. **Tool Function (uses core functions - Mode: tool):**
+
+   `detect_ingredients_tool(image_data: str) -> IngredientDetectionOutput`:
+   - Signature: Accepts image_data as base64 or URL string (Agno provides this)
+   - Decode/fetch image bytes
+   - Call core functions: validate → extract → filter
+   - Return `IngredientDetectionOutput` with:
+     - `ingredients`: List of detected ingredient names
+     - `confidence_scores`: Dict mapping ingredient to confidence
+     - `image_description`: Human-readable description of what was detected
+   - Raise exception on failure (tool failures are surfaced to agent)
 
 **Input:**
-- config.py from Task 2 (for API key, model name, thresholds)
+- config.py from Task 2 (for API key, model, thresholds)
 - google-generativeai library (from Task 1)
+- filetype library (from Task 1)
 
 **Output:**
-- `ingredients.py` file with `extract_ingredients_pre_hook` function
-- Ready to import: `from ingredients import extract_ingredients_pre_hook`
+- `ingredients.py` file with:
+  - Core helper functions (fetch_image_bytes, validate_image_format, etc.)
+  - extract_ingredients_pre_hook() function
+  - detect_ingredients_tool() function
+- Ready to import: `from ingredients import extract_ingredients_pre_hook, detect_ingredients_tool`
 
 **Success Criteria:**
-- Function signature matches Agno pre-hook contract
+- Core functions are modular and reusable
+- Pre-hook mode works: Images → ingredients appended to message, images cleared
+- Tool mode works: Image input → IngredientDetectionOutput returned
 - Handles JPEG/PNG images, rejects other formats
 - Filters by MIN_INGREDIENT_CONFIDENCE correctly
-- Appends [Detected Ingredients] section to message
-- Clears images from run_input
 - Gracefully handles errors without crashing
-- Tested manually with sample images
-
-**Dependencies:**
-- Task 2 (config.py for API key, thresholds)
-- Task 1 (google-generativeai library)
-
-**Key Constraints:**
-- Must not raise exceptions (pre-hooks should be resilient)
-- Must not store base64 images (only text ingredients)
-- Must call Gemini vision API exactly once per image (not twice)
-- Must filter by confidence threshold
-- Log warnings (not errors) on failures
-- JSON parsing should be lenient (handle malformed JSON gracefully)
-
----
-
-### Task 7: Local Tool Implementation (Gemini Vision Integration)
-
-**Objective:** Set up Gemini API integration for ingredient detection with retry logic.
-
-**Context:**
-- Complements Task 6 (pre-hook implementation)
-- Provides helper functions for API calls with retry logic
-- Handles JSON parsing and error recovery
-- Used by both pre-hook (ingredients.py) and tests
-
-**Requirements:**
-
-1. Create helper function `fetch_image_from_url(url: str) -> bytes`:
-   - Fetch image bytes from HTTP/HTTPS URL
-   - Return raw bytes
-   - Raise exception on network errors
-   - Used by pre-hook to fetch from image.url
-
-2. Create helper function `validate_image(image_bytes: bytes) -> None`:
-   - Check format using `imghdr.what(None, h=image_bytes)`
-   - Only allow JPEG and PNG
-   - Raise ValueError with message: "Invalid format: {format}" if not supported
-   - Check size: raise ValueError with message: "Image too large: {size}MB" if > MAX_IMAGE_SIZE_MB
-   - Return None if valid (no exception means valid)
-
-3. Create helper function `parse_json(text: str) -> dict`:
-   - Extract JSON from response text
-   - Handle case where response contains text before/after JSON
-   - Use regex or try multiple parsing strategies
-   - Return dict with 'ingredients' and 'confidence_scores' keys
-   - Raise exception if JSON cannot be parsed (let caller handle)
-
-4. Create helper function `extract_ingredients_with_retries(image_bytes: bytes, max_retries: int = 3) -> dict`:
-   - Call Gemini vision API with exponential backoff retry logic
-   - Retry on transient failures (network errors, rate limits, 5xx errors)
-   - Backoff: 1 second, 2 seconds, 4 seconds
-   - Return dict with ingredients list and confidence_scores
-   - Log each retry attempt for debugging
-   - Raise exception after max_retries exceeded
-
-5. Configuration for retries:
-   - MAX_RETRIES = 3 (configurable via parameter)
-   - Initial delay: 1 second
-   - Exponential backoff: multiply delay by 2 each retry
-
-**Input:**
-- config.py from Task 2 (for MAX_IMAGE_SIZE_MB)
-- google-generativeai library (from Task 1)
-
-**Output:**
-- Helper functions in ingredients.py or separate module
-- Ready to use in pre-hook and tests
-
-**Success Criteria:**
-- `validate_image()` accepts JPEG/PNG, rejects others
-- `validate_image()` rejects oversized images
-- `parse_json()` extracts JSON from text response
-- `fetch_image_from_url()` downloads image bytes
-- Retry logic handles transient failures gracefully
-- Tests pass with mocked Gemini API
+- JSON parsing lenient (handles Gemini response variations)
+- All functions tested with unit tests
 
 **Dependencies:**
 - Task 2 (config.py)
-- Task 6 (ingredients.py, pre-hook)
+- Task 1 (google-generativeai, filetype libraries)
+
+**Key Constraints:**
+- Core functions are mode-agnostic (no references to pre-hook or tool logic)
+- Pre-hook: Never raise exceptions, log warnings only
+- Tool: Raise exceptions so agent can handle them
+- No image bytes stored (only text ingredients in history)
+- Exactly one Gemini API call per image
+- Log all operations with logger (debug level for normal, warning for issues)
+
+---
+
+### Task 7: Ingredient Detection Retry Logic & Tool Registration
+
+**Objective:** Add retry logic for resilient Gemini API calls and register ingredient detection tool/pre-hook based on configuration.
+
+**Context:**
+- Task 6 provides core functions and both pre-hook and tool versions
+- This task adds:
+  1. Retry wrapper around Gemini API calls (handles transient failures)
+  2. Registration logic in app.py based on IMAGE_DETECTION_MODE config
+- Both modes use the same core functions, just registered differently
+
+**Requirements:**
+
+1. **Retry Logic Wrapper Function (in ingredients.py):**
+
+   `extract_ingredients_with_retries(image_bytes: bytes, max_retries: int = 3) -> Optional[dict]`:
+   - Wrap `extract_ingredients_from_image()` with exponential backoff retry
+   - Retry on transient failures only (network errors, rate limits, 5xx errors)
+   - Do NOT retry on permanent failures (invalid API key, malformed request)
+   - Backoff strategy: 1s, 2s, 4s (exponential: multiply by 2 each time)
+   - Log each retry attempt with current delay
+   - Return result on success or None after max_retries exceeded
+   - Log final warning if all retries exhausted
+
+2. **Configuration Validation (in config.py):**
+
+   In Config.__init__():
+   - Load: `IMAGE_DETECTION_MODE = os.getenv("IMAGE_DETECTION_MODE", "pre-hook")`
+   - Validate in Config.validate():
+     - Allowed values: "pre-hook" or "tool"
+     - Raise ValueError if invalid value provided
+
+   In Config class docstring, add:
+   - `IMAGE_DETECTION_MODE`: "pre-hook" or "tool" (default: pre-hook)
+     - "pre-hook": Extract ingredients before agent processes (faster, no agent overhead)
+     - "tool": Register ingredient detection as agent @tool (more agent control)
+
+3. **Tool Registration in app.py:**
+
+   When creating Agno Agent:
+   - Check config.IMAGE_DETECTION_MODE:
+     - If "pre-hook": Call `agent.add_pre_hook(extract_ingredients_pre_hook)`
+     - If "tool": Call `agent.add_tool(detect_ingredients_tool)`
+   - Both modes use same core functions, different orchestration
+
+4. **Environment Variable Documentation:**
+
+   Update .env.example with:
+   ```
+   # Ingredient Detection Mode: "pre-hook" (default) or "tool"
+   # - pre-hook: Faster (no extra LLM call), processes before agent
+   # - tool: Agent control (visible tool call, agent decides when to call)
+   IMAGE_DETECTION_MODE=pre-hook
+   ```
+
+**Input:**
+- ingredients.py from Task 6 (core functions, pre-hook, tool)
+- config.py from Task 2 (configuration)
+- app.py (for agent registration)
+
+**Output:**
+- Updated ingredients.py with retry wrapper
+- Updated config.py with IMAGE_DETECTION_MODE validation
+- Updated app.py with conditional tool/pre-hook registration based on mode
+- Updated .env.example with new configuration
+
+**Success Criteria:**
+- `extract_ingredients_with_retries()` handles transient failures gracefully
+- Retry logic respects exponential backoff (1s, 2s, 4s)
+- Pre-hook mode activates when IMAGE_DETECTION_MODE="pre-hook"
+- Tool mode activates when IMAGE_DETECTION_MODE="tool"
+- Invalid mode values raise ValueError during config validation
+- Unit tests verify retry logic with mocked API failures
+- Integration tests verify both modes work end-to-end
+- All existing tests still pass
+
+**Dependencies:**
+- Task 6 (ingredients.py core functions)
+- Task 2 (config.py)
+- app.py (for tool registration)
 - Task 1 (libraries)
 
 **Key Constraints:**
-- Handle JSON parsing leniently (Gemini might add explanatory text)
-- Log retry attempts for debugging
-- Do not retry on permanent failures (invalid API key, malformed request)
-- Keep retry logic generic (can be reused elsewhere)
+- Retry logic only in wrapper (core functions are retry-agnostic)
+- Only retry transient failures (detect 429, 500-599, network errors)
+- Exponential backoff: multiply delay by 2, start at 1 second
+- Pre-hook registration happens in agent configuration
+- Tool registration happens when creating agent
+- Both modes reuse Task 6 core functions without modification
+- Configuration validation happens during app startup
+
+
 
 ---
 
