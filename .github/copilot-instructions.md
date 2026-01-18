@@ -50,6 +50,9 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ### Phase 2: Core Features (Tasks 6-9)
 - [x] Task 6 complete (date: 2026-01-18) - Ingredient Detection Pre-Hook (ingredients.py) with Gemini vision API integration, 25 unit tests passing, using filetype package for image validation, google-genai package for latest API
+- [ ] Task 7: Local Tool Implementation - Pending
+- [ ] Task 8: Agno Agent Configuration & System Instructions - Pending
+- [ ] Task 9: AgentOS Application Setup - Pending
 
 ### Phase 3: Testing & Docs (Tasks 10-15)
 - [ ] Task 10: Integration Tests E2E - Pending
