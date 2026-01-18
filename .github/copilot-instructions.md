@@ -174,6 +174,12 @@ images/             # Sample test images for verification
    - Audience: developers and code challenge reviewers
    - No other documentation files should be created
 
+5. **Commit and Push to GitHub** (REQUIRED):
+   - Stage all changes: `git add -A`
+   - Commit with descriptive message: `git commit -m "Task [N]: Brief description of changes"`
+   - Push to main: `git push origin main`
+   - Verify changes appear on GitHub before proceeding to next task
+
 ### Code Quality Standards
 
 **Python Best Practices:**
