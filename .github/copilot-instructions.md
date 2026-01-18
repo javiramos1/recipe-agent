@@ -95,12 +95,25 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ## Core Architecture
 
-Single-entry-point application (`python app.py`):
-- **AgentOS** (runtime): REST API, Web UI, MCP lifecycle management, built-in tracing
+Single-entry-point application (`python app.py`) with factory pattern separation:
+
+**Initialization Flow:**
+- **app.py** (~50 lines): Calls `initialize_recipe_agent()` factory → creates AgentOS → serves
+- **agent.py** (~150 lines): `initialize_recipe_agent()` factory with 5 steps:
+  1. MCP init: SpoonacularMCP().initialize() (validate API key, test connection, exponential backoff)
+  2. DB config: SQLite (dev) or PostgreSQL (prod)
+  3. Tools registration: Spoonacular MCP + optional ingredient tool
+  4. Pre-hooks: From `get_pre_hooks()` (ingredient extraction + guardrails)
+  5. Agent config: Gemini model, database, memory, system instructions
+- **prompts.py** (~800 lines): `SYSTEM_INSTRUCTIONS` constant (pure data, no logic)
+- **hooks.py** (~30 lines): `get_pre_hooks()` factory (ingredient extraction + guardrails)
+
+**Components:**
+- **AgentOS** (runtime): REST API, Web UI, MCP lifecycle, built-in tracing
 - **Agno Agent** (orchestrator): Stateful memory, automatic retries, tool routing, guardrails
 - **Pre-hook** (ingredients.py): Vision API integration → ingredient extraction → request enrichment
-- **Spoonacular MCP** (mcp/spoonacular.py): Connection validation, exponential backoff retries, MCPTools initialization
-- **External Recipe API** (via npx): Recipe search with filtering (dietary, cuisine, type)
+- **Spoonacular MCP** (mcp_tools/spoonacular.py): Connection validation, exponential backoff retries
+- **External Recipe API** (via npx): Recipe search with filtering
 
 **Data Flow:**
 Request → Pre-hook (image processing) → Agent (orchestration) → MCP (recipe search) → Response
@@ -111,14 +124,15 @@ SpoonacularMCP.initialize() → Validate API key → Test connection (retry 1s/2
 ## Key Principles
 
 **Architecture & Design:**
-- Single entry point (app.py ~150-200 lines, no custom FastAPI or orchestration code)
-- No custom orchestration logic (use Agno Agent with system instructions instead)
+- Single entry point: `python app.py` (minimal 50-line orchestration)
+- Factory pattern: Agent initialization in agent.py, not app.py
+- System instructions define behavior, not code (in prompts.py)
+- No custom orchestration logic (Agno handles it)
 - No custom memory management (Agno automatic session persistence)
 - No custom API routes (AgentOS provides REST/Web UI automatically)
 - Pre-hook pattern eliminates LLM round-trip (image → ingredients → message in one call)
 - Images never stored in memory (only ingredient text in chat history)
 - MCP startup validation (fail startup if external tools unreachable)
-- Structured validation everywhere (Pydantic schemas for all inputs/outputs)
 
 **Code Quality & Operations:**
 - Concise, direct, production-ready code (no verbose comments, only essential documentation)
@@ -150,22 +164,49 @@ SpoonacularMCP.initialize() → Validate API key → Test connection (retry 1s/2
 ## Module Structure
 
 ```
-app.py              # AgentOS application (agent config, MCP init, orchestration)
+app.py              # AgentOS entry point (~50 lines, minimal orchestration)
+agent.py            # Agent factory function (initialize_recipe_agent, ~150 lines)
+prompts.py          # System instructions (SYSTEM_INSTRUCTIONS constant, ~800 lines)
+hooks.py            # Pre-hooks factory (get_pre_hooks, ~30 lines)
 config.py           # Environment variables and .env loading
 logger.py           # Structured logging configuration
 models.py           # Pydantic schemas (RecipeRequest, RecipeResponse, etc)
 ingredients.py      # Image detection (pre-hook/tool modes)
 
-mcp/
+mcp_tools/
 ├── __init__.py     # Package marker
 └── spoonacular.py  # SpoonacularMCP class (connection validation, retries)
 
 tests/
 ├── unit/           # Schema validation, config loading, MCP init (fast, isolated)
+│   ├── test_models.py
+│   ├── test_config.py
+│   ├── test_logger.py
+│   ├── test_ingredients.py
+│   ├── test_mcp.py
+│   └── test_app.py
 └── integration/    # E2E flows with real images and APIs
+    ├── test_e2e.py
+    └── test_api.py
 
 images/             # Sample test images for verification
+
+.docs/              # Documentation
+├── PRD.md
+├── DESIGN.md
+└── IMPLEMENTATION_PLAN.md
 ```
+
+**Factory Pattern Responsibility Map:**
+- **app.py** (50): Import factory → create AgentOS → serve
+- **agent.py** (150): MCP init → DB config → Tools → Pre-hooks → Agent
+- **prompts.py** (800): System instructions (pure data)
+- **hooks.py** (30): Pre-hook factory (ingredient extraction + guardrails)
+- **config.py**: Environment variables, validation
+- **logger.py**: Structured logging (text/JSON)
+- **models.py**: Pydantic schemas
+- **ingredients.py**: Image detection (core functions)
+- **mcp_tools/spoonacular.py**: MCP initialization
 
 ## Implementation Guidelines
 

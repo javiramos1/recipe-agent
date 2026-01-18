@@ -672,13 +672,13 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - Must initialize and validate connection BEFORE creating agent  
 - Fail application startup if MCP unreachable
 - Use exponential backoff for connection retries
-- Separate module (mcp/spoonacular.py) for clean separation and testability
+- Separate module (mcp_tools/spoonacular.py) for clean separation and testability
 
 **Requirements:**
 
-1. **Create mcp/ Package:**
-   - Create `mcp/__init__.py` (empty, makes it a package)
-   - Create `mcp/spoonacular.py` with SpoonacularMCP class
+1. **Create mcp_tools/ Package:**
+   - Create `mcp_tools/__init__.py` (empty, makes it a package)
+   - Create `mcp_tools/spoonacular.py` with SpoonacularMCP class
 
 2. **SpoonacularMCP Class Structure:**
 
@@ -773,9 +773,9 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - agno.tools.mcp.MCPTools (from agno library)
 
 **Output:**
-- `mcp/__init__.py` (empty file)
-- `mcp/spoonacular.py` with SpoonacularMCP class
-- Ready to import: `from mcp.spoonacular import SpoonacularMCP`
+- `mcp_tools/__init__.py` (empty file)
+- `mcp_tools/spoonacular.py` with SpoonacularMCP class
+- Ready to import: `from mcp_tools.spoonacular import SpoonacularMCP`
 
 **Success Criteria:**
 - `SpoonacularMCP` class instantiates without error
@@ -799,9 +799,9 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - **Fail-fast on startup**: Raise exception if connection fails after retries
 - **No silent failures**: All errors must be logged and raised
 - **Exponential backoff**: Retry delays from provided list [1, 2, 4]
-- **Clean separation**: All MCP logic in mcp/spoonacular.py, not app.py
+- **Clean separation**: All MCP logic in mcp_tools/spoonacular.py, not app.py
 - **Simple and testable**: Easy to unit test with mocked MCPTools
-- **No hardcoded values**: API key, retries, delays passed as parameters- **No hardcoded values**: API key, retries, delays passed as parameters
+- **No hardcoded values**: API key, retries, delays passed as parameters
 
 **Note on MCP Tools:**
 Spoonacular MCP provides these tools (agent will call them automatically):

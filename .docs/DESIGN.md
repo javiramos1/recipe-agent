@@ -214,10 +214,10 @@ For this code challenge, simplicity and time-to-value matter more than semantic 
 
 The Spoonacular MCP requires **proper initialization with connection validation** before the agent starts.
 
-**Architecture: SpoonacularMCP Class (mcp/spoonacular.py)**
+**Architecture: SpoonacularMCP Class (mcp_tools/spoonacular.py)**
 
 **Design Pattern:**
-- Dedicated initialization class in `mcp/spoonacular.py`
+- Dedicated initialization class in `mcp_tools/spoonacular.py`
 - Validates API key before attempting connection
 - Tests MCP connection with exponential backoff retries
 - Initializes MCPTools only after successful validation
@@ -239,7 +239,7 @@ The Spoonacular MCP requires **proper initialization with connection validation*
 - ✅ **Better error messages**: Specific failure reasons (API key invalid, connection timeout, etc.)
 
 **Trade-off:**
-Adds one more file (mcp/spoonacular.py), but provides much better error handling and startup validation than inline initialization.
+Adds one more file (mcp_tools/spoonacular.py), but provides much better error handling and startup validation than inline initialization.
 
 **Why This Matters:**
 - External MCP is critical dependency (app cannot function without it)
