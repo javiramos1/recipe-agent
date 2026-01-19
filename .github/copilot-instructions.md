@@ -44,7 +44,7 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ## Status Section
 
-**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), 140 unit tests passing**
+**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), 140 unit tests passing, Task 18 complete**
 
 ### Phase 1: Foundational (Tasks 1-5 + Task 2.5 logger) ✅
 - [x] Task 1: Project structure, dependencies, .gitignore
@@ -60,22 +60,11 @@ This is a code challenge implementing a production-quality GenAI system that tra
 - [x] Task 8: Spoonacular MCP initialization (mcp_tools/spoonacular.py)
 - [x] Task 9: Agno agent configuration & system instructions
 - [x] Task 10: AgentOS application setup (app.py + AGUI)
-- [x] **REFACTOR**: Factory pattern implementation
-  - app.py (50 lines): Minimal orchestration
-  - agent.py (150 lines): `initialize_recipe_agent()` factory
-  - prompts.py (800 lines): System instructions constant
-  - hooks.py (30 lines): Pre-hooks factory
-  - All 140 unit tests passing
-  - AgentOS/Agno UI compatibility verified
-- [x] **ASYNC REFACTOR** (date: 2026-01-19)
-  - ingredients.py: All functions async (fetch, extract, retries, tools)
-  - spoonacular.py: Async MCP initialization with asyncio.sleep()
-  - agent.py: Async factory function
-  - app.py: Uses asyncio.run() for async startup
-  - requirements.txt: Added aiohttp>=3.8.0
-  - Copilot instructions updated with async standards
+- [x] **REFACTOR**: Factory pattern implementation `initialize_recipe_agent()` factory
+- [x] **ASYNC REFACTOR** (date: 2026-01-19) All functions async
 
-### Phase 3: Testing & Docs (Tasks 11-17)
+### Phase 3: Developer Tools & Testing (Tasks 11-18)
+- [x] Task 18 complete (date: 2026-01-19) - Ad hoc query command
 - [ ] Task 11: Integration Tests E2E - Pending
 - [ ] Task 12: REST API Testing - Pending
 - [x] Task 13 complete (date: 2026-01-18) - Makefile with all development commands
