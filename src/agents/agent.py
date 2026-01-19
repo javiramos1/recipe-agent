@@ -14,11 +14,63 @@ from agno.tools import tool
 
 from src.utils.config import config
 from src.utils.logger import logger
-from src.models.models import ChatMessage, RecipeResponse
+from src.models.models import ChatMessage, RecipeResponse, IngredientDetectionOutput
 from src.mcp_tools.ingredients import detect_ingredients_tool
 from src.mcp_tools.spoonacular import SpoonacularMCP
 from src.prompts.prompts import get_system_instructions
 from src.hooks.hooks import get_pre_hooks
+
+
+@tool
+async def detect_image_ingredients(image_data: str) -> IngredientDetectionOutput:
+    """Extract ingredients from an uploaded image using Gemini vision API.
+    
+    This tool analyzes food images to detect and extract ingredient information
+    with confidence scores. It supports both URL-based and Base64-encoded images.
+    
+    **When to Use:**
+    - User uploads an image for ingredient detection
+    - Need structured ingredient data with confidence scores
+    - Want the agent to validate or ask clarifying questions about detected items
+    
+    **Image Format & Size:**
+    - Supports: JPEG and PNG only
+    - Maximum size: Configured by MAX_IMAGE_SIZE_MB (default: 5MB)
+    
+    **Processing Steps:**
+    1. Retrieves image bytes from URL or decodes Base64
+    2. Validates format (JPEG/PNG) and size constraints
+    3. Calls Gemini vision API to extract ingredients
+    4. Filters results by MIN_INGREDIENT_CONFIDENCE threshold
+    5. Returns structured ingredient data with confidence scores
+    
+    Args:
+        image_data: Either a URL string or Base64-encoded image.
+            Examples:
+            - "https://example.com/food.jpg" (URL)
+            - "iVBORw0KGgoAAAANSUhEUg..." (Base64)
+    
+    Returns:
+        IngredientDetectionOutput containing:
+        - ingredients: List of detected ingredient names (filtered by confidence)
+        - confidence_scores: Mapping of each ingredient to confidence (0.0-1.0)
+        - image_description: Human-readable summary of detected items
+        
+        Example:
+        {
+            "ingredients": ["tomato", "basil", "mozzarella"],
+            "confidence_scores": {"tomato": 0.95, "basil": 0.88, "mozzarella": 0.82},
+            "image_description": "Detected ingredients: tomato (95%), basil (88%), mozzarella (82%)"
+        }
+    
+    Raises:
+        ValueError: If image cannot be processed, with details about the failure:
+            - "Invalid image format. Only JPEG and PNG are supported."
+            - "Image too large. Maximum size is 5MB"
+            - "Failed to extract ingredients from image. Please try another image."
+            - "No ingredients detected with sufficient confidence. Please try another image."
+    """
+    return await detect_ingredients_tool(image_data)
 
 
 def initialize_recipe_agent() -> Agent:
@@ -72,25 +124,6 @@ def initialize_recipe_agent() -> Agent:
     # Add ingredient detection tool if in tool mode
     if config.IMAGE_DETECTION_MODE == "tool":
         logger.info("Registering ingredient detection as tool (tool mode)")
-        
-        @tool
-        def detect_image_ingredients(image_data: str) -> dict:
-            """Extract ingredients from an uploaded image using Gemini vision API.
-            
-            Call this tool when a user uploads an image to detect ingredients.
-            The tool returns detected ingredients with confidence scores.
-            
-            Args:
-                image_data: Base64-encoded image string or image URL.
-                
-            Returns:
-                Dict with 'ingredients' list, 'confidence_scores' dict, and 'image_description'.
-                
-            Raises:
-                ValueError: If image cannot be processed.
-            """
-            return detect_ingredients_tool(image_data)
-        
         tools.append(detect_image_ingredients)
         logger.info("✓ Ingredient detection tool registered")
     else:
