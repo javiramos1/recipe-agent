@@ -138,6 +138,27 @@ make run     # Production mode
 - **REST API**: http://localhost:7777/api/agents/chat
 - **API Documentation**: http://localhost:7777/docs (Swagger UI)
 
+### Run Ad Hoc Queries
+
+Execute single queries without starting the full server:
+
+```bash
+make query Q="What can I make with chicken and rice?"
+make query Q="Show me vegetarian recipes"
+```
+
+The query command:
+- Initializes the agent (including MCP tools)
+- Executes the query
+- Prints the response
+- Exits cleanly (no lingering processes)
+
+Useful for:
+- Testing agent behavior without the server UI
+- Quick recipe lookups from the command line
+- Debugging without API overhead
+- Integration with shell scripts and automation
+
 ### Run Tests
 
 ```bash
