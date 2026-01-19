@@ -502,10 +502,44 @@ if __name__ == "__main__":
 - Export configured logger instance for import by all modules
 - Never log sensitive data (API keys, full images, passwords)
 
-**models.py** (Pydantic Schemas)
-- Input schema: RecipeRequest (ingredients, preferences)
-- Output schema: RecipeResponse (recipes, ingredients, metadata)
-- Domain models: Recipe, Ingredient, IngredientDetectionOutput
+**models.py** (Pydantic v2 Schemas with Field Constraints)
+- **Input schema: RecipeRequest**
+  - `ingredients`: List[str] with constraints min_length=1, max_length=50 (1-50 ingredient items)
+  - Field validator on ingredients list: Ensure non-empty strings, max 100 chars each
+  - Optional fields: diet, cuisine, meal_type, intolerances (each 1-100 chars if provided)
+  - ConfigDict: Auto-strip whitespace from all string fields
+- **Output schema: RecipeResponse**
+  - `response`: Required string (1-5000 chars) - LLM-generated conversational response
+  - `recipes`: List[Recipe] with max_length=50 (up to 50 recipe objects)
+  - `ingredients`: List[str] with max_length=100 (detected/provided ingredients)
+  - `execution_time_ms`: int with constraints ge=0, le=300000 (0-5 minutes)
+  - Optional fields: reasoning, session_id, run_id (each 1-100 chars if provided)
+  - ConfigDict: Auto-strip whitespace from all string fields
+- **Domain model: Recipe**
+  - `title`: str (1-200 chars)
+  - `ingredients`: List[str] with constraints min_length=1, max_length=100
+  - `instructions`: List[str] with constraints min_length=1, max_length=100
+  - `prep_time_min`, `cook_time_min`: int with constraints ge=0, le=1440 (0-24 hours)
+  - `source_url`: Optional str with pattern validation (must start with http:// or https://)
+  - Model validator: Ensure total cooking time (prep + cook) ≤ 1440 minutes
+  - ConfigDict: Auto-strip whitespace
+- **Domain model: Ingredient**
+  - `name`: str (1-100 chars)
+  - `confidence`: float with constraints ge=0.0, le=1.0 (inclusive, allows boundaries)
+  - ConfigDict: Auto-strip whitespace
+- **Domain model: IngredientDetectionOutput**
+  - `ingredients`: List[str] with constraints min_length=1, max_length=50
+  - `confidence_scores`: dict[str, float] with field validator enforcing 0.0 < score < 1.0 (exclusive)
+  - Model validator: Ensure all ingredients have confidence scores
+  - Optional field: image_description (max 500 chars)
+  - ConfigDict: Auto-strip whitespace
+
+**Validation Architecture:**
+- Use `Annotated[Type, Field(...)]` for declarative constraints (ranges, lengths, patterns)
+- Field constraints: ge/le (inclusive), gt/lt (exclusive), min_length, max_length, pattern
+- Custom validators: Only for cross-field validation or complex logic (mode='after')
+- ConfigDict with str_strip_whitespace=True: Automatic whitespace trimming on all strings
+- Distinction: Ingredient.confidence uses inclusive (ge/le) 0.0-1.0; IngredientDetectionOutput.confidence_scores uses exclusive (gt/lt) 0.0-1.0
 
 **mcp_tools/spoonacular.py** (MCP Initialization)
 - SpoonacularMCP class with initialization logic

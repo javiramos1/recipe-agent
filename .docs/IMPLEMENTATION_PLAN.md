@@ -264,117 +264,171 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 
 ### Task 3: Data Models Implementation (models.py)
 
-**Objective:** Define all Pydantic schemas for request/response validation and domain models.
+**Objective:** Define all Pydantic v2 schemas with Field constraints for request/response validation and domain models.
 
 **Context:**
 - Uses Pydantic v2 (latest, installed via requirements.txt)
-- All models are used for validation by AgentOS automatically
-- No custom validation logic needed beyond Pydantic defaults
+- Leverage Pydantic v2 `Annotated[Type, Field(...)]` for declarative constraints
+- All models use `ConfigDict(str_strip_whitespace=True)` for automatic whitespace trimming
+- Custom validators only for cross-field validation or complex logic (not for simple range/length constraints)
+- Field constraint types: `ge`/`le` (inclusive), `gt`/`lt` (exclusive), `min_length`, `max_length`, `pattern`
+- All models are validated by AgentOS automatically
 - Models are imported by app.py and tests
 
 **Requirements:**
 
-1. Define `RecipeRequest` schema (input):
-   - `ingredients: List[str]` (required)
-   - `diet: Optional[str] = None` (e.g., "vegetarian", "vegan")
-   - `cuisine: Optional[str] = None` (e.g., "italian", "mexican")
-   - `meal_type: Optional[str] = None` (e.g., "main course", "dessert")
-   - `intolerances: Optional[str] = None` (e.g., "gluten, peanuts")
+1. Define `RecipeRequest` schema (input) with Field constraints:
+   - `ingredients: Annotated[List[str], Field(min_length=1, max_length=50, description="...")]`
+     - Enforced: 1-50 ingredients, each 1-100 chars (validated via field_validator, mode='after')
+   - `diet: Annotated[Optional[str], Field(None, min_length=1, max_length=50, description="...")]`
+   - `cuisine: Annotated[Optional[str], Field(None, min_length=1, max_length=50, description="...")]`
+   - `meal_type: Annotated[Optional[str], Field(None, min_length=1, max_length=50, description="...")]`
+   - `intolerances: Annotated[Optional[str], Field(None, min_length=1, max_length=100, description="...")]`
+   - Field validator `validate_ingredients()` with mode='after': Ensure non-empty strings, max 100 chars each
+   - Config: `ConfigDict(str_strip_whitespace=True)`
 
-2. Define `Ingredient` model (domain):
-   - `name: str` (ingredient name)
-   - `confidence: float` (0.0 to 1.0, from vision API)
+2. Define `Ingredient` model (domain) with Field constraints:
+   - `name: Annotated[str, Field(min_length=1, max_length=100, description="...")]`
+   - `confidence: Annotated[float, Field(ge=0.0, le=1.0, description="...")]` (inclusive: allows 0.0 and 1.0)
+   - Config: `ConfigDict(str_strip_whitespace=True)`
+   - No custom validators needed (Field constraints handle all validation)
 
-3. Define `Recipe` model (domain):
-   - `title: str` (recipe name)
-   - `description: Optional[str] = None` (brief description)
-   - `ingredients: List[str]` (list of ingredient names)
-   - `instructions: List[str]` (step-by-step instructions)
-   - `prep_time_min: int` (preparation time in minutes)
-   - `cook_time_min: int` (cooking time in minutes)
-   - `source_url: Optional[str] = None` (Spoonacular recipe URL)
+3. Define `Recipe` model (domain) with Field constraints:
+   - `title: Annotated[str, Field(min_length=1, max_length=200, description="...")]`
+   - `description: Annotated[Optional[str], Field(None, max_length=500, description="...")]`
+   - `ingredients: Annotated[List[str], Field(min_length=1, max_length=100, description="...")]`
+   - `instructions: Annotated[List[str], Field(min_length=1, max_length=100, description="...")]`
+   - `prep_time_min: Annotated[int, Field(ge=0, le=1440, description="...")]` (0-1440 min = 0-24 hours)
+   - `cook_time_min: Annotated[int, Field(ge=0, le=1440, description="...")]` (0-1440 min = 0-24 hours)
+   - `source_url: Annotated[Optional[str], Field(None, max_length=500, pattern=r'^https?://', description="...")]`
+   - Model validator `validate_total_cooking_time()` with mode='after': Ensure total (prep + cook) ≤ 1440 min
+   - Config: `ConfigDict(str_strip_whitespace=True)`
 
-4. Define `RecipeResponse` schema (output):
-   - `recipes: List[Recipe]` (list of Recipe objects)
-   - `ingredients: List[str]` (extracted/provided ingredients used)
-   - `preferences: dict[str, str]` (tracked preferences: diet, cuisine, etc.)
-   - `session_id: Optional[str] = None` (unique conversation identifier)
-   - `run_id: Optional[str] = None` (unique interaction identifier)
-   - `execution_time_ms: int` (total execution time in milliseconds)
+4. Define `RecipeResponse` schema (output) with Field constraints:
+   - `response: Annotated[str, Field(min_length=1, max_length=5000, description="...")]` (required, LLM-generated)
+   - `recipes: Annotated[List[Recipe], Field(default_factory=list, max_length=50, description="...")]`
+   - `ingredients: Annotated[List[str], Field(default_factory=list, max_length=100, description="...")]`
+   - `preferences: Annotated[dict[str, str], Field(default_factory=dict, description="...")]`
+   - `reasoning: Annotated[Optional[str], Field(None, max_length=2000, description="...")]`
+   - `session_id: Annotated[Optional[str], Field(None, min_length=1, max_length=100, description="...")]`
+   - `run_id: Annotated[Optional[str], Field(None, min_length=1, max_length=100, description="...")]`
+   - `execution_time_ms: Annotated[int, Field(ge=0, le=300000, description="...")]` (0-5 min)
+   - Config: `ConfigDict(str_strip_whitespace=True)`
 
-5. Define `IngredientDetectionOutput` model (tool output):
-   - `ingredients: List[str]` (detected ingredient names)
-   - `confidence_scores: dict[str, float]` (name → confidence mapping)
-   - `image_description: Optional[str] = None` (human-readable image description)
+5. Define `IngredientDetectionOutput` model (tool output) with Field constraints:
+   - `ingredients: Annotated[List[str], Field(min_length=1, max_length=50, description="...")]`
+   - `confidence_scores: Annotated[dict[str, float], Field(description="...")]`
+     - Field validator `validate_confidence_scores()` with mode='before': Each value must be 0.0 < score < 1.0 (exclusive)
+   - `image_description: Annotated[Optional[str], Field(None, max_length=500, description="...")]`
+   - Model validator `validate_scores_match_ingredients()` with mode='after': All ingredients must have confidence scores
+   - Config: `ConfigDict(str_strip_whitespace=True)`
+
+**Validation Architecture:**
+- Use `Annotated[Type, Field(...)]` for declarative, self-documenting constraints
+- Constraint types:
+  - **Ranges (Numeric)**: `ge=0.0, le=1.0` (inclusive, allows boundaries), or `gt=0.0, lt=1.0` (exclusive)
+  - **Lengths (Collections/Strings)**: `min_length`, `max_length`
+  - **Format (Strings)**: `pattern=r'^pattern'` for regex validation
+- Custom validators (only when Field constraints insufficient):
+  - List item validation (e.g., non-empty strings with length limits)
+  - Cross-field validation (e.g., total cooking time)
+  - Complex logic (confidence score dict validation)
+- Use `mode='before'` for pre-processing, `mode='after'` for validation after Pydantic coercion
+- All string fields auto-trimmed via `ConfigDict(str_strip_whitespace=True)`
+- Distinction in confidence scores: Ingredient (inclusive 0.0-1.0) vs. IngredientDetectionOutput (exclusive 0.0 < score < 1.0)
 
 **Input:**
 - None (data modeling task)
 
 **Output:**
-- `models.py` file with all Pydantic models
+- `models.py` file with all Pydantic v2 models using Field constraints
 - Models ready to import: `from src.models.models import Recipe, RecipeRequest, RecipeResponse, etc.`
 
 **Success Criteria:**
-- All models are valid Pydantic BaseModel subclasses
+- All models are valid Pydantic BaseModel subclasses with `Annotated[Type, Field(...)]` patterns
 - `RecipeRequest(ingredients=["tomato"])` creates object without error
-- `RecipeRequest(diet="invalid")` still creates object (string validation not strict)
-- `RecipeResponse` accepts all required and optional fields
-- Models have proper type hints
-- `python -c "from src.models.models import RecipeRequest; print(RecipeRequest.model_json_schema())"` outputs valid JSON schema
+- `RecipeRequest(ingredients=[])` raises ValidationError (min_length=1)
+- `RecipeRequest(ingredients=["a" * 101])` raises ValidationError (max 100 chars per ingredient via validator)
+- `Ingredient(name="tomato", confidence=0.5)` valid (0.0-1.0 inclusive)
+- `Ingredient(name="tomato", confidence=1.5)` raises ValidationError (le=1.0)
+- `Recipe` with prep_time_min=700, cook_time_min=800 raises ValidationError (total > 1440)
+- `IngredientDetectionOutput` with any confidence score ≤ 0.0 or ≥ 1.0 raises ValidationError
+- `RecipeResponse` requires response field (non-empty)
+- All string fields are auto-trimmed (whitespace handled transparently)
+- `python -c "from src.models.models import RecipeRequest; print(RecipeRequest.model_json_schema())"` outputs valid JSON schema with all constraints documented
 
 **Dependencies:**
 - Task 2 (for imports only, optional)
 
 **Key Constraints:**
-- Use `Optional[X] = None` for optional fields, not `Union[X, None]`
-- Use `List[X]` from typing module for list fields
-- Include docstrings for each model explaining purpose
-- Do not add custom validators or computed fields (keep models simple)
-- All models inherit from `BaseModel`
+- Use `Annotated[Type, Field(...)]` syntax exclusively (Pydantic v2 best practice)
+- Field constraints: `ge`/`le`/`gt`/`lt` for numeric ranges, `min_length`/`max_length` for collections/strings, `pattern` for regex
+- Optional fields: `Annotated[Optional[Type], Field(None, ...)]` or with defaults
+- Custom validators: Only for list item validation, cross-field checks, or complex logic (not for simple constraints)
+- ConfigDict with `str_strip_whitespace=True` on all models (automatic trimming)
+- All models inherit from `BaseModel` with proper docstrings
+- Include field descriptions in Field(...) for API schema documentation (OpenAPI)
 
 ---
 
 ### Task 4: Unit Tests - Models Validation (tests/unit/test_models.py)
 
-**Objective:** Test Pydantic model validation for correctness.
+**Objective:** Test Pydantic model validation for correctness with Field constraints.
 
 **Context:**
 - Tests should be isolated and fast (no external calls)
 - Uses pytest framework
 - Tests imported models from models.py
-- Validates both successful and failure cases
+- Validates both successful cases and constraint violations
 
 **Requirements:**
 
 1. Test `RecipeRequest` validation:
    - Valid request with only required fields: `ingredients=["tomato", "basil"]`
    - Valid request with optional fields: includes diet, cuisine, meal_type, intolerances
-   - Invalid: missing required ingredients field (should raise ValueError)
-   - Invalid: empty ingredients list (should still be valid per Pydantic)
-   - Invalid: ingredients not a list (should raise ValueError)
+   - Valid: Field constraints enforce 1-50 ingredients
+   - Invalid: empty ingredients list raises ValidationError (min_length=1)
+   - Invalid: ingredients not a list raises ValidationError
+   - Invalid: ingredient > 100 chars raises ValidationError (custom validator)
 
-2. Test `Recipe` model validation:
+2. Test `Ingredient` model validation:
+   - Valid: `name="tomato", confidence=0.5`
+   - Valid: Boundary values `confidence=0.0` and `confidence=1.0` (inclusive)
+   - Invalid: `confidence=1.1` raises ValidationError (le=1.0)
+   - Invalid: `confidence=-0.1` raises ValidationError (ge=0.0)
+   - Validate field types via type hints
+
+3. Test `Recipe` model validation:
    - Valid recipe with all required fields
    - Valid recipe with optional fields (description, source_url)
-   - Validate field types: `prep_time_min` and `cook_time_min` are integers
+   - Invalid: Empty ingredients/instructions lists raise ValidationError (min_length=1)
+   - Invalid: prep_time_min > 1440 raises ValidationError (le=1440)
+   - Invalid: total cooking time > 1440 raises ValidationError (model_validator)
+   - Invalid: source_url not starting with http:// or https:// raises ValidationError (pattern)
 
-3. Test `RecipeResponse` schema validation:
-   - Valid response with all fields populated
-   - Valid response with optional fields as None
+4. Test `RecipeResponse` schema validation:
+   - Valid response with response field (required)
+   - Valid response with optional fields as None or empty collections
+   - Valid: recipes/ingredients lists can be empty (default_factory=list)
+   - Invalid: Missing response field raises ValidationError
    - Validate nested Recipe objects in recipes list
 
-4. Test `IngredientDetectionOutput` validation:
-   - Valid output with all required fields
-   - Validate confidence_scores is dict of strings to floats
-   - Test with partial confidence scores (not all ingredients have scores)
+5. Test `IngredientDetectionOutput` validation:
+   - Valid output: `ingredients=["tomato"], confidence_scores={"tomato": 0.95}`
+   - Valid: Boundary values for confidence excluded: 0.0 < score < 1.0 (exclusive)
+   - Invalid: confidence_scores with value ≤ 0.0 raises ValidationError (gt=0.0)
+   - Invalid: confidence_scores with value ≥ 1.0 raises ValidationError (lt=1.0)
+   - Invalid: confidence_scores with missing ingredient raises ValidationError (model_validator)
+   - Invalid: ingredients without matching confidence_scores raises ValidationError
 
-5. Test JSON serialization/deserialization:
+6. Test JSON serialization/deserialization:
    - RecipeRequest: `model_validate_json(model.model_dump_json())` round-trips
    - RecipeResponse: Same round-trip test
-   - Validate proper datetime/float handling if present
+   - Validate proper type coercion (string to int/float conversions)
+   - Validate whitespace auto-trimming (str_strip_whitespace=True)
 
 **Input:**
-- models.py from Task 3
+- models.py from Task 3 with Field constraints
 - pytest installed (from Task 1)
 
 **Output:**

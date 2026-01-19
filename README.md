@@ -361,51 +361,60 @@ DATABASE_URL=postgresql://user:password@localhost:5432/recipe_service
 
 Send a message and get recipe recommendations.
 
-**Request Body:**
+**Request Schema (RecipeRequest):**
 ```json
 {
-  "message": "string (required) - User message",
-  "image_base64": "string (optional) - Base64-encoded image",
-  "image_url": "string (optional) - URL to ingredient image",
-  "session_id": "string (optional) - Conversation identifier",
-  "diet": "string (optional) - Dietary preference (vegetarian, vegan, etc.)",
-  "intolerances": "string (optional) - Comma-separated intolerances (gluten, dairy, etc.)",
-  "cuisine": "string (optional) - Preferred cuisine (italian, mexican, etc.)",
-  "meal_type": "string (optional) - Meal type (main course, dessert, etc.)"
+  "ingredients": ["string"] - Array of 1-50 ingredients, each 1-100 chars (required),
+  "diet": "string" - Dietary preference like 'vegetarian', 'vegan', etc. (1-50 chars, optional),
+  "cuisine": "string" - Cuisine preference like 'Italian', 'Asian', etc. (1-50 chars, optional),
+  "meal_type": "string" - Meal type like 'breakfast', 'dinner', etc. (1-50 chars, optional),
+  "intolerances": "string" - Comma-separated allergies like 'gluten,dairy,nuts' (1-100 chars, optional)
 }
 ```
 
-**Response (Success - 200):**
+**Validation Rules:**
+- `ingredients`: List with 1-50 items; each item stripped of whitespace and validated to 1-100 chars non-empty strings
+- `diet`, `cuisine`, `meal_type`: Optional; if provided, 1-50 chars
+- `intolerances`: Optional; if provided, 1-100 chars
+- All string fields: Whitespace automatically trimmed (`str_strip_whitespace=True`)
+
+**Response Schema (RecipeResponse):**
 ```json
 {
-  "session_id": "string - Unique conversation ID",
-  "run_id": "string - Unique request ID",
-  "response": "string - Natural language response",
-  "ingredients": ["string"] - Detected/provided ingredients,
+  "response": "string" - LLM-generated conversational response (1-5000 chars, required),
   "recipes": [
     {
-      "title": "string - Recipe name",
-      "description": "string - Brief description",
-      "ingredients": ["string"] - Ingredient list",
-      "instructions": ["string"] - Step-by-step instructions",
-      "prep_time_min": "int - Preparation time in minutes",
-      "cook_time_min": "int - Cooking time in minutes",
-      "source_url": "string - Link to full recipe"
+      "title": "string" - Recipe name (1-200 chars, required),
+      "description": "string" - Brief description (max 500 chars, optional),
+      "ingredients": ["string"] - Ingredient list with quantities (1-100 items, required),
+      "instructions": ["string"] - Step-by-step cooking instructions (1-100 steps, required),
+      "prep_time_min": integer - Preparation time in minutes (0-1440, i.e., 0-24 hours, required),
+      "cook_time_min": integer - Cooking time in minutes (0-1440, i.e., 0-24 hours, required),
+      "source_url": "string" - URL to original recipe source (must start with http:// or https://, optional)
     }
-  ],
+  ] - List of up to 50 recipes (optional, defaults to empty),
+  "ingredients": ["string"] - Detected/provided ingredients list (max 100 items, optional),
   "preferences": {
     "diet": "string",
     "cuisine": "string",
     "meal_type": "string",
     "intolerances": "string"
-  },
-  "metadata": {
-    "tools_called": ["string"] - Which tools were invoked",
-    "model": "string - Model used",
-    "response_time_ms": "int - Milliseconds to complete"
-  }
+  } - User preferences extracted from conversation (optional),
+  "reasoning": "string" - Explanation of agent's decision-making (max 2000 chars, optional),
+  "session_id": "string" - Session identifier for conversation continuity (1-100 chars, optional),
+  "run_id": "string" - Unique ID for this agent execution (1-100 chars, optional),
+  "execution_time_ms": integer - Total execution time in milliseconds (0-300000, i.e., 0-5 min, required)
 }
 ```
+
+**Validation Rules:**
+- `response`: Required non-empty string (1-5000 chars); automatically trimmed
+- `recipes`: Optional list of up to 50 Recipe objects
+- Each `Recipe.prep_time_min` and `Recipe.cook_time_min`: 0-1440 minutes (0-24 hours)
+- Cross-field validation: Total cooking time (prep + cook) must not exceed 1440 minutes
+- `Recipe.source_url`: Optional; if provided, must start with `http://` or `https://`
+- All string fields: Whitespace automatically trimmed
+- `execution_time_ms`: 0-300000 milliseconds (0-5 minutes)
 
 **Error Responses:**
 - `400 Bad Request` - Malformed JSON, missing required fields
