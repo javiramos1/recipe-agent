@@ -17,7 +17,7 @@ from src.utils.logger import logger
 from src.models.models import RecipeRequest, RecipeResponse
 from src.mcp_tools.ingredients import detect_ingredients_tool
 from src.mcp_tools.spoonacular import SpoonacularMCP
-from src.prompts.prompts import SYSTEM_INSTRUCTIONS
+from src.prompts.prompts import get_system_instructions
 from src.hooks.hooks import get_pre_hooks
 
 
@@ -105,6 +105,12 @@ def initialize_recipe_agent() -> Agent:
     
     # 5. Configure Agno Agent
     logger.info("Step 5/5: Configuring Agno Agent...")
+    # Generate system instructions with config values
+    system_instructions = get_system_instructions(
+        max_recipes=config.MAX_RECIPES,
+        max_history=config.MAX_HISTORY,
+        min_ingredient_confidence=config.MIN_INGREDIENT_CONFIDENCE,
+    )
     agent = Agent(
         model=Gemini(
             id=config.GEMINI_MODEL,
@@ -115,7 +121,7 @@ def initialize_recipe_agent() -> Agent:
         pre_hooks=pre_hooks,
         input_schema=RecipeRequest,
         output_schema=RecipeResponse,
-        instructions=SYSTEM_INSTRUCTIONS,
+        instructions=system_instructions,
         # Memory settings
         add_history_to_context=True,
         num_history_runs=config.MAX_HISTORY,

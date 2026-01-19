@@ -44,7 +44,7 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ## Status Section
 
-**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), 140 unit tests passing, Task 18 complete, Smoke Test Complete ✅**
+**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), 140 unit tests passing, Task 18 complete, Task 19 complete (dev-bkg & query automation), Smoke Test Complete ✅**
 
 ### Phase 1: Foundational (Tasks 1-5 + Task 2.5 logger) ✅
 - [x] Task 1: Project structure, dependencies, .gitignore
@@ -66,6 +66,7 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ### Phase 3: Developer Tools & Testing (Tasks 11-18)
 - [x] Task 18 complete (date: 2026-01-18) - Ad hoc query command
+- [x] Task 19 complete (date: 2026-01-19) - Background server support (make dev-bkg, make query automation)
 - [ ] Task 11: Integration Tests E2E - Pending
 - [ ] Task 12: REST API Testing - Pending
 - [x] Task 13 complete (date: 2026-01-18) - Makefile with all development commands

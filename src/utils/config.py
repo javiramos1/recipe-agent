@@ -26,6 +26,7 @@ class Config:
         self.GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
         self.PORT: int = int(os.getenv("PORT", "7777"))
         self.MAX_HISTORY: int = int(os.getenv("MAX_HISTORY", "3"))
+        self.MAX_RECIPES: int = int(os.getenv("MAX_RECIPES", "3"))
         self.MAX_IMAGE_SIZE_MB: int = int(os.getenv("MAX_IMAGE_SIZE_MB", "5"))
         self.MIN_INGREDIENT_CONFIDENCE: float = float(os.getenv("MIN_INGREDIENT_CONFIDENCE", "0.7"))
         self.IMAGE_DETECTION_MODE: str = os.getenv("IMAGE_DETECTION_MODE", "pre-hook")

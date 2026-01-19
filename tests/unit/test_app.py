@@ -139,38 +139,28 @@ class TestMemoryConfiguration:
 class TestSystemInstructionsContent:
     """Tests for system instructions content."""
 
-    def _read_system_instructions(self):
-        """Helper to read SYSTEM_INSTRUCTIONS from prompts.py file."""
-        import ast
-        with open("src/prompts/prompts.py", "r") as f:
-            code = f.read()
-        # Extract SYSTEM_INSTRUCTIONS string
-        tree = ast.parse(code)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id == "SYSTEM_INSTRUCTIONS":
-                        if isinstance(node.value, ast.Constant):
-                            return node.value.value
-        return ""
+    def _get_system_instructions(self):
+        """Helper to get system instructions from the function."""
+        from src.prompts.prompts import get_system_instructions
+        return get_system_instructions()
 
     def test_system_instructions_cover_core_responsibilities(self):
         """Test system instructions include core responsibilities."""
-        instructions = self._read_system_instructions()
+        instructions = self._get_system_instructions()
         assert "recommend recipes" in instructions.lower()
         assert "complete recipe details" in instructions.lower()
         assert "dietary" in instructions.lower()
 
     def test_system_instructions_cover_ingredient_sources(self):
         """Test system instructions define ingredient source priority."""
-        instructions = self._read_system_instructions()
+        instructions = self._get_system_instructions()
         assert "ingredient sources" in instructions.lower()
         assert "priority" in instructions.lower()
         assert "[detected ingredients]" in instructions.lower()
 
     def test_system_instructions_cover_two_step_recipe_process(self):
         """Test system instructions enforce two-step recipe process."""
-        instructions = self._read_system_instructions()
+        instructions = self._get_system_instructions()
         assert "two-step" in instructions.lower() or ("step 1" in instructions.lower() and "step 2" in instructions.lower())
         assert "search_recipes" in instructions
         assert "get_recipe_information_bulk" in instructions
@@ -178,7 +168,7 @@ class TestSystemInstructionsContent:
 
     def test_system_instructions_cover_preference_management(self):
         """Test system instructions cover preference extraction and application."""
-        instructions = self._read_system_instructions()
+        instructions = self._get_system_instructions()
         assert "preference" in instructions.lower()
         assert "extract" in instructions.lower()
         assert "dietary" in instructions.lower()
@@ -186,20 +176,20 @@ class TestSystemInstructionsContent:
 
     def test_system_instructions_cover_image_handling(self):
         """Test system instructions cover image handling for both modes."""
-        instructions = self._read_system_instructions()
+        instructions = self._get_system_instructions()
         assert "pre-hook mode" in instructions.lower()
         assert "tool mode" in instructions.lower()
         assert "detect_image_ingredients" in instructions
 
     def test_system_instructions_cover_edge_cases(self):
         """Test system instructions cover edge cases."""
-        instructions = self._read_system_instructions()
+        instructions = self._get_system_instructions()
         assert "no ingredients" in instructions.lower() or "no ingredients detected" in instructions.lower()
         assert "no recipes found" in instructions.lower()
 
     def test_system_instructions_cover_critical_guardrails(self):
         """Test system instructions include critical guardrails."""
-        instructions = self._read_system_instructions()
+        instructions = self._get_system_instructions()
         assert "critical guardrails" in instructions.lower() or "guardrails" in instructions.lower()
         assert "ground" in instructions.lower()
 

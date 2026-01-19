@@ -213,6 +213,7 @@ class TestRecipeResponse:
             cook_time_min=10,
         )
         response = RecipeResponse(
+            response="Here are some recipes for you.",
             recipes=[recipe],
             ingredients=["ingredient1", "ingredient2"],
             preferences={"diet": "vegetarian", "cuisine": "italian"},
@@ -224,6 +225,7 @@ class TestRecipeResponse:
         assert response.recipes[0].title == "Test Recipe"
         assert response.session_id == "session123"
         assert response.execution_time_ms == 1500
+        assert response.response == "Here are some recipes for you."
 
     def test_valid_response_with_optional_fields_none(self):
         """Test valid response with optional fields as None."""
@@ -235,6 +237,7 @@ class TestRecipeResponse:
             cook_time_min=0,
         )
         response = RecipeResponse(
+            response="Here's a test recipe.",
             recipes=[recipe],
             ingredients=["test"],
             preferences={},
@@ -244,10 +247,12 @@ class TestRecipeResponse:
         )
         assert response.session_id is None
         assert response.run_id is None
+        assert response.response == "Here's a test recipe."
 
     def test_valid_response_empty_recipes_list(self):
         """Test valid response with empty recipes list."""
         response = RecipeResponse(
+            response="No recipes found for your request.",
             recipes=[],
             ingredients=[],
             preferences={},
@@ -255,6 +260,7 @@ class TestRecipeResponse:
         )
         assert response.recipes == []
         assert response.ingredients == []
+        assert response.response == "No recipes found for your request."
 
     def test_valid_response_multiple_recipes(self):
         """Test valid response with multiple recipes."""
@@ -269,12 +275,14 @@ class TestRecipeResponse:
             for i in range(3)
         ]
         response = RecipeResponse(
+            response="Found 3 great recipes for you!",
             recipes=recipes,
             ingredients=["ing1", "ing2", "ing3"],
             preferences={"diet": "keto"},
             execution_time_ms=2000,
         )
         assert len(response.recipes) == 3
+        assert response.response == "Found 3 great recipes for you!"
 
     def test_invalid_missing_execution_time(self):
         """Test that missing execution_time_ms raises error."""
@@ -288,6 +296,7 @@ class TestRecipeResponse:
     def test_valid_execution_time_string_coercion(self):
         """Test that execution_time_ms as string is coerced to int by Pydantic."""
         response = RecipeResponse(
+            response="Test response.",
             recipes=[],
             ingredients=[],
             preferences={},
@@ -306,6 +315,7 @@ class TestRecipeResponse:
             cook_time_min=10,
         )
         original = RecipeResponse(
+            response="Roundtrip test response.",
             recipes=[recipe],
             ingredients=["test"],
             preferences={"diet": "vegan"},
@@ -316,6 +326,7 @@ class TestRecipeResponse:
         assert len(deserialized.recipes) == 1
         assert deserialized.recipes[0].title == "Roundtrip Test"
         assert deserialized.execution_time_ms == 1000
+        assert deserialized.response == "Roundtrip test response."
 
 
 class TestIngredientDetectionOutput:
