@@ -8,7 +8,7 @@ import asyncio
 from typing import Optional
 
 from agno.tools.mcp import MCPTools
-from logger import logger
+from src.utils.logger import logger
 
 
 class SpoonacularMCP:

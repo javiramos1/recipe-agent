@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 import pytest
 
-from config import Config
+from src.utils.config import Config
 
 
 class TestConfigInitialization:

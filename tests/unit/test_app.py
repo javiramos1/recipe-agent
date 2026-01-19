@@ -11,7 +11,7 @@ Tests verify:
 import pytest
 from unittest.mock import patch, MagicMock, mock_open
 
-from config import config
+from src.utils.config import config
 
 
 class TestMCPInitialization:
@@ -36,12 +36,12 @@ class TestAgentConfiguration:
     def test_agent_module_syntax_valid(self):
         """Test that agent module has no syntax errors."""
         import ast
-        with open("agent.py", "r") as f:
+        with open("src/agents/agent.py", "r") as f:
             code = f.read()
         try:
             ast.parse(code)
         except SyntaxError as e:
-            pytest.fail(f"agent.py has syntax errors: {e}")
+            pytest.fail(f"src/agents/agent.py has syntax errors: {e}")
 
     def test_database_sqlite_when_no_database_url(self):
         """Test SQLite is used when DATABASE_URL is not set."""
@@ -53,12 +53,12 @@ class TestAgentConfiguration:
     def test_factory_function_defined(self):
         """Test that initialize_recipe_agent factory function is defined in agent.py."""
         import ast
-        with open("agent.py", "r") as f:
+        with open("src/agents/agent.py", "r") as f:
             code = f.read()
         tree = ast.parse(code)
         
-        # Find function definition
-        functions = [node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
+        # Find top-level function definitions (including async functions)
+        functions = [node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
         assert "initialize_recipe_agent" in functions
 
 
@@ -72,13 +72,13 @@ class TestImageDetectionMode:
     def test_pre_hook_mode_configuration(self):
         """Test pre-hook mode configuration."""
         with patch.dict("os.environ", {"IMAGE_DETECTION_MODE": "pre-hook"}, clear=False):
-            test_config = __import__("config").Config()
+            test_config = __import__("src.utils.config", fromlist=["Config"]).Config()
             assert test_config.IMAGE_DETECTION_MODE == "pre-hook"
 
     def test_tool_mode_configuration(self):
         """Test tool mode configuration."""
         with patch.dict("os.environ", {"IMAGE_DETECTION_MODE": "tool"}, clear=False):
-            test_config = __import__("config").Config()
+            test_config = __import__("src.utils.config", fromlist=["Config"]).Config()
             assert test_config.IMAGE_DETECTION_MODE == "tool"
 
 
@@ -142,7 +142,7 @@ class TestSystemInstructionsContent:
     def _read_system_instructions(self):
         """Helper to read SYSTEM_INSTRUCTIONS from prompts.py file."""
         import ast
-        with open("prompts.py", "r") as f:
+        with open("src/prompts/prompts.py", "r") as f:
             code = f.read()
         # Extract SYSTEM_INSTRUCTIONS string
         tree = ast.parse(code)
@@ -209,7 +209,7 @@ class TestToolsAndPreHooks:
 
     def test_ingredient_detection_tool_signature(self):
         """Test ingredient detection tool has correct signature."""
-        from ingredients import detect_ingredients_tool
+        from src.mcp_tools.ingredients import detect_ingredients_tool
         
         # Tool function should be callable
         assert callable(detect_ingredients_tool)
@@ -221,7 +221,7 @@ class TestToolsAndPreHooks:
 
     def test_pre_hook_function_signature(self):
         """Test pre-hook function has correct signature."""
-        from ingredients import extract_ingredients_pre_hook
+        from src.mcp_tools.ingredients import extract_ingredients_pre_hook
         
         # Pre-hook should be callable
         assert callable(extract_ingredients_pre_hook)
@@ -238,7 +238,7 @@ class TestAgentMetadata:
 
     def test_agent_configuration_in_code(self):
         """Test agent has proper configuration in agent.py."""
-        with open("agent.py", "r") as f:
+        with open("src/agents/agent.py", "r") as f:
             code = f.read()
         
         # Verify agent initialization with proper settings

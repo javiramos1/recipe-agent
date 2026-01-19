@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from logger import JSONFormatter, RichTextFormatter, get_logger, logger
+from src.utils.logger import JSONFormatter, RichTextFormatter, get_logger, logger
 
 
 class TestJSONFormatter:
@@ -287,20 +287,20 @@ class TestModuleLevelLogger:
 
     def test_logger_is_importable(self):
         """Test that logger can be imported from logger module."""
-        from logger import logger as imported_logger
+        from src.utils.logger import logger as imported_logger
 
         assert isinstance(imported_logger, logging.Logger)
         assert imported_logger.name == "recipe_service"
 
     def test_logger_has_handlers(self):
         """Test that module-level logger has at least one handler configured."""
-        from logger import logger as imported_logger
+        from src.utils.logger import logger as imported_logger
 
         assert len(imported_logger.handlers) > 0
 
     def test_logger_can_log_messages(self):
         """Test that module-level logger can log messages."""
-        from logger import logger as imported_logger
+        from src.utils.logger import logger as imported_logger
 
         # Should not raise any exceptions
         imported_logger.info("Test message")

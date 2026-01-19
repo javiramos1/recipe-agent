@@ -41,8 +41,8 @@ import filetype
 from google import genai
 from google.genai import types
 
-from config import config
-from logger import logger
+from src.utils.config import config
+from src.utils.logger import logger
 
 
 async def fetch_image_bytes(image_source: str | bytes) -> Optional[bytes]:

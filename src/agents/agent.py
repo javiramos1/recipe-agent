@@ -12,13 +12,13 @@ from agno.db.sqlite import SqliteDb
 from agno.db.postgres import PostgresDb
 from agno.tools import tool
 
-from config import config
-from logger import logger
-from models import RecipeRequest, RecipeResponse
-from ingredients import detect_ingredients_tool
-from mcp_tools.spoonacular import SpoonacularMCP
-from prompts import SYSTEM_INSTRUCTIONS
-from hooks import get_pre_hooks
+from src.utils.config import config
+from src.utils.logger import logger
+from src.models.models import RecipeRequest, RecipeResponse
+from src.mcp_tools.ingredients import detect_ingredients_tool
+from src.mcp_tools.spoonacular import SpoonacularMCP
+from src.prompts.prompts import SYSTEM_INSTRUCTIONS
+from src.hooks.hooks import get_pre_hooks
 
 
 async def initialize_recipe_agent() -> Agent:

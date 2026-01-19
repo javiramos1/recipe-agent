@@ -4,7 +4,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from models import (
+from src.models.models import (
     RecipeRequest,
     Ingredient,
     Recipe,

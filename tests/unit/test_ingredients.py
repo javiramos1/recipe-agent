@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from ingredients import (
+from src.mcp_tools.ingredients import (
     detect_ingredients_tool,
     extract_ingredients_from_image,
     extract_ingredients_pre_hook,
@@ -161,8 +161,8 @@ class TestExtractIngredientsPreHook:
         # Should not crash
         extract_ingredients_pre_hook(run_input)
 
-    @patch("ingredients.fetch_image_bytes")
-    @patch("ingredients.extract_ingredients_from_image")
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
     def test_successful_extraction(self, mock_extract, mock_fetch):
         """Successful extraction should append ingredients to message."""
         # PNG magic bytes
@@ -189,7 +189,7 @@ class TestExtractIngredientsPreHook:
         # Should clear images
         assert run_input.images == []
 
-    @patch("ingredients.extract_ingredients_from_image")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
     def test_failed_extraction(self, mock_extract):
         """Failed extraction should not modify message."""
         mock_extract.return_value = None
@@ -210,8 +210,8 @@ class TestExtractIngredientsPreHook:
         # Should still clear images
         assert run_input.images == []
 
-    @patch("ingredients.fetch_image_bytes")
-    @patch("ingredients.extract_ingredients_from_image")
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
     def test_multiple_images(self, mock_extract, mock_fetch):
         """Multiple images should have ingredients combined."""
         # PNG magic bytes
@@ -244,8 +244,8 @@ class TestExtractIngredientsPreHook:
         assert "mozzarella" in run_input.input_content
         assert "olive oil" in run_input.input_content
 
-    @patch("ingredients.fetch_image_bytes")
-    @patch("ingredients.extract_ingredients_from_image")
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
     def test_duplicate_ingredients(self, mock_extract, mock_fetch):
         """Duplicate ingredients should be deduplicated."""
         # PNG magic bytes
@@ -279,7 +279,7 @@ class TestExtractIngredientsPreHook:
         # Should appear only once
         assert tomato_count == 1
 
-    @patch("ingredients.extract_ingredients_from_image")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
     def test_error_resilience(self, mock_extract):
         """Pre-hook should not crash on errors."""
         mock_extract.side_effect = Exception("API error")
@@ -301,7 +301,7 @@ class TestExtractIngredientsPreHook:
 class TestExtractIngredientsFromImage:
     """Test the Gemini vision API integration."""
 
-    @patch("ingredients.genai.Client")
+    @patch("src.mcp_tools.ingredients.genai.Client")
     def test_successful_call(self, mock_client_class):
         """Successful API call should return parsed ingredients."""
         mock_client = Mock()
@@ -320,7 +320,7 @@ class TestExtractIngredientsFromImage:
         assert result["ingredients"] == ["tomato"]
         assert result["confidence_scores"]["tomato"] == 0.95
 
-    @patch("ingredients.genai.Client")
+    @patch("src.mcp_tools.ingredients.genai.Client")
     def test_invalid_response_structure(self, mock_client_class):
         """Invalid response structure should return None."""
         mock_client = Mock()
@@ -337,7 +337,7 @@ class TestExtractIngredientsFromImage:
 
         assert result is None
 
-    @patch("ingredients.genai.Client")
+    @patch("src.mcp_tools.ingredients.genai.Client")
     def test_api_error(self, mock_client_class):
         """API errors should be caught and return None."""
         mock_client = Mock()
@@ -355,7 +355,7 @@ class TestExtractIngredientsFromImage:
 class TestExtractIngredientsWithRetries:
     """Test retry logic with exponential backoff."""
 
-    @patch("ingredients.extract_ingredients_from_image")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
     def test_success_first_attempt(self, mock_extract):
         """Should return immediately on first success."""
         mock_extract.return_value = {
@@ -371,7 +371,7 @@ class TestExtractIngredientsWithRetries:
         assert result is not None
         assert mock_extract.call_count == 1  # Only called once
 
-    @patch("ingredients.extract_ingredients_from_image")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
     @patch("time.sleep")
     def test_retry_on_transient_failure(self, mock_sleep, mock_extract):
         """Should retry on transient failures (network errors, timeouts)."""
@@ -393,7 +393,7 @@ class TestExtractIngredientsWithRetries:
         assert result is not None
         assert mock_extract.call_count == 3  # Called 3 times (2 failures + 1 success)
 
-    @patch("ingredients.extract_ingredients_from_image")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
     @patch("time.sleep")
     def test_exponential_backoff(self, mock_sleep, mock_extract):
         """Should use exponential backoff (1s, 2s, 4s)."""
@@ -414,7 +414,7 @@ class TestExtractIngredientsWithRetries:
         calls = [call[0][0] for call in mock_sleep.call_args_list]
         assert calls == [1, 2]
 
-    @patch("ingredients.extract_ingredients_from_image")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
     def test_no_retry_on_permanent_failure(self, mock_extract):
         """Should NOT retry on permanent failures (invalid API key)."""
         mock_extract.side_effect = Exception("Invalid API key")
@@ -428,7 +428,7 @@ class TestExtractIngredientsWithRetries:
         # Should be called only once (no retries on permanent error)
         assert mock_extract.call_count == 1
 
-    @patch("ingredients.extract_ingredients_from_image")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
     def test_max_retries_exceeded(self, mock_extract):
         """Should return None after max retries exceeded."""
         mock_extract.return_value = None  # Keeps returning None
@@ -445,8 +445,8 @@ class TestExtractIngredientsWithRetries:
 class TestDetectIngredientsTool:
     """Test the ingredient detection tool function."""
 
-    @patch("ingredients.extract_ingredients_with_retries")
-    @patch("ingredients.fetch_image_bytes")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries")
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
     def test_successful_url_extraction(self, mock_fetch, mock_extract):
         """URL-based extraction should work correctly."""
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
@@ -462,7 +462,7 @@ class TestDetectIngredientsTool:
         assert "tomato" in result["confidence_scores"]
         assert "image_description" in result
 
-    @patch("ingredients.extract_ingredients_with_retries")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries")
     def test_successful_base64_extraction(self, mock_extract):
         """Base64-based extraction should work correctly."""
         import base64
@@ -481,7 +481,7 @@ class TestDetectIngredientsTool:
         assert result is not None
         assert result["ingredients"] == ["tomato"]
 
-    @patch("ingredients.fetch_image_bytes")
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
     def test_invalid_image_format(self, mock_fetch):
         """Invalid image format should raise ValueError."""
         mock_fetch.return_value = b"GIF89a"  # GIF format
@@ -489,8 +489,8 @@ class TestDetectIngredientsTool:
         with pytest.raises(ValueError, match="Invalid image format"):
             detect_ingredients_tool("http://example.com/image.gif")
 
-    @patch("ingredients.extract_ingredients_with_retries")
-    @patch("ingredients.fetch_image_bytes")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries")
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
     def test_no_ingredients_detected(self, mock_fetch, mock_extract):
         """No ingredients with sufficient confidence should raise ValueError."""
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
@@ -502,7 +502,7 @@ class TestDetectIngredientsTool:
         with pytest.raises(ValueError, match="No ingredients detected"):
             detect_ingredients_tool("http://example.com/image.jpg")
 
-    @patch("ingredients.fetch_image_bytes")
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
     def test_failed_to_fetch_image(self, mock_fetch):
         """Failed image fetch should raise ValueError."""
         mock_fetch.return_value = None
@@ -510,8 +510,8 @@ class TestDetectIngredientsTool:
         with pytest.raises(ValueError, match="Could not retrieve image"):
             detect_ingredients_tool("http://example.com/image.jpg")
 
-    @patch("ingredients.extract_ingredients_with_retries")
-    @patch("ingredients.fetch_image_bytes")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries")
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
     def test_image_description_multiple_ingredients(self, mock_fetch, mock_extract):
         """Image description should show confidence percentages."""
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"

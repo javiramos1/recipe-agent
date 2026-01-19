@@ -20,9 +20,9 @@ import asyncio
 from agno.os import AgentOS
 from agno.os.interfaces.agui import AGUI
 
-from config import config
-from logger import logger
-from agent import initialize_recipe_agent
+from src.utils.config import config
+from src.utils.logger import logger
+from src.agents.agent import initialize_recipe_agent
 
 
 # Initialize agent using factory pattern (async)

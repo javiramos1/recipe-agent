@@ -7,9 +7,9 @@ from typing import List
 
 from agno.guardrails import PromptInjectionGuardrail
 
-from config import config
-from logger import logger
-from ingredients import extract_ingredients_pre_hook
+from src.utils.config import config
+from src.utils.logger import logger
+from src.mcp_tools.ingredients import extract_ingredients_pre_hook
 
 
 def get_pre_hooks() -> List:

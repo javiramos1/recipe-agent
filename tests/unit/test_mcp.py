@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 
-from mcp_tools.spoonacular import SpoonacularMCP
+from src.mcp_tools.spoonacular import SpoonacularMCP
 
 
 class TestMCPInit:
@@ -24,26 +24,27 @@ class TestMCPInit:
 class TestMCPInitialize:
     """Tests for initialize method."""
 
-    @patch("mcp_tools.spoonacular.MCPTools")
-    def test_initialize_success(self, mock_mcp: Mock) -> None:
+    @patch("src.mcp_tools.spoonacular.MCPTools")
+    @patch("src.mcp_tools.spoonacular.asyncio.to_thread")
+    async def test_initialize_success(self, mock_to_thread, mock_mcp: Mock) -> None:
         """Test successful initialization."""
         mock_instance = MagicMock()
-        mock_mcp.return_value = mock_instance
+        mock_to_thread.return_value = mock_instance
         
         mcp = SpoonacularMCP(api_key="test")
-        result = mcp.initialize()
+        result = await mcp.initialize()
         
         assert result == mock_instance
 
-    @patch("mcp_tools.spoonacular.time.sleep")
-    @patch("mcp_tools.spoonacular.MCPTools")
-    def test_initialize_with_retries(self, mock_mcp: Mock, mock_sleep: Mock) -> None:
+    @patch("src.mcp_tools.spoonacular.asyncio.sleep")
+    @patch("src.mcp_tools.spoonacular.asyncio.to_thread")
+    async def test_initialize_with_retries(self, mock_to_thread: Mock, mock_sleep: Mock) -> None:
         """Test initialization with retries."""
         mock_instance = MagicMock()
-        mock_mcp.side_effect = [ConnectionError(), ConnectionError(), mock_instance]
+        mock_to_thread.side_effect = [ConnectionError(), ConnectionError(), mock_instance]
         
         mcp = SpoonacularMCP(api_key="test", max_retries=3)
-        result = mcp.initialize()
+        result = await mcp.initialize()
         
         assert result == mock_instance
-        assert mock_mcp.call_count == 3
+        assert mock_to_thread.call_count == 3
