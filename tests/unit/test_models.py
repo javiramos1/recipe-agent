@@ -64,9 +64,9 @@ class TestRecipeRequest:
             RecipeRequest(ingredients="tomato, basil")
 
     def test_valid_empty_ingredients_list(self):
-        """Test that empty ingredients list is valid (Pydantic allows it)."""
-        request = RecipeRequest(ingredients=[])
-        assert request.ingredients == []
+        """Test that empty ingredients list raises error (min_length=1)."""
+        with pytest.raises(ValidationError):
+            RecipeRequest(ingredients=[])
 
     def test_json_serialization_roundtrip(self):
         """Test JSON serialization and deserialization roundtrip."""
@@ -357,26 +357,24 @@ class TestIngredientDetectionOutput:
         assert output.image_description is None
 
     def test_valid_output_partial_confidence_scores(self):
-        """Test valid output where not all ingredients have confidence scores."""
-        output = IngredientDetectionOutput(
-            ingredients=["chicken", "rice", "soy sauce"],
-            confidence_scores={
-                "chicken": 0.92,
-                "rice": 0.88,
-            },
-            image_description="Asian dish",
-        )
-        assert len(output.ingredients) == 3
-        assert len(output.confidence_scores) == 2
+        """Test that missing confidence scores raises error (all required)."""
+        with pytest.raises(ValidationError):
+            IngredientDetectionOutput(
+                ingredients=["chicken", "rice", "soy sauce"],
+                confidence_scores={
+                    "chicken": 0.92,
+                    "rice": 0.88,
+                },
+                image_description="Asian dish",
+            )
 
     def test_valid_output_empty_ingredients(self):
-        """Test valid output with empty ingredients list."""
-        output = IngredientDetectionOutput(
-            ingredients=[],
-            confidence_scores={},
-        )
-        assert output.ingredients == []
-        assert output.confidence_scores == {}
+        """Test that empty ingredients list raises error (min_length=1)."""
+        with pytest.raises(ValidationError):
+            IngredientDetectionOutput(
+                ingredients=[],
+                confidence_scores={},
+            )
 
     def test_invalid_missing_ingredients(self):
         """Test that missing ingredients raises error."""

@@ -4,29 +4,74 @@ Defines Pydantic models for request/response validation and domain objects.
 All models use Pydantic v2 for strict validation and OpenAPI schema generation.
 """
 
-from typing import List, Optional
-from pydantic import BaseModel, Field
+from typing import List, Optional, Annotated
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 
 class RecipeRequest(BaseModel):
     """Request schema for recipe recommendations.
     
     Validates incoming requests with ingredient list and optional preferences.
+    Enforces constraints on ingredient count, string lengths, and format.
     """
-    ingredients: List[str]
-    diet: Optional[str] = None
-    cuisine: Optional[str] = None
-    meal_type: Optional[str] = None
-    intolerances: Optional[str] = None
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
+    ingredients: Annotated[List[str], Field(
+        min_length=1,
+        max_length=50,
+        description="List of ingredients (1-50 items, each 1-100 chars)"
+    )]
+    diet: Annotated[Optional[str], Field(
+        None,
+        min_length=1,
+        max_length=50,
+        description="Dietary preference (e.g., vegetarian, vegan, gluten-free)"
+    )]
+    cuisine: Annotated[Optional[str], Field(
+        None,
+        min_length=1,
+        max_length=50,
+        description="Cuisine preference (e.g., Italian, Asian, Mexican)"
+    )]
+    meal_type: Annotated[Optional[str], Field(
+        None,
+        min_length=1,
+        max_length=50,
+        description="Meal type (e.g., breakfast, lunch, dinner, dessert)"
+    )]
+    intolerances: Annotated[Optional[str], Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description="Comma-separated allergies/intolerances (e.g., peanuts, dairy, gluten)"
+    )]
+    
+    @field_validator('ingredients', mode='before')
+    @classmethod
+    def validate_ingredients(cls, v: List[str]) -> List[str]:
+        """Validate ingredients list: non-empty strings, max length 100 chars each."""
+        if not isinstance(v, list):
+            raise ValueError('ingredients must be a list')
 
 
 class Ingredient(BaseModel):
     """Domain model for a detected ingredient.
     
     Represents an ingredient extracted from an image with confidence score.
+    Enforces valid confidence scores (0.0-1.0) and non-empty ingredient names.
     """
-    name: str
-    confidence: float
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
+    name: Annotated[str, Field(
+        min_length=1,
+        max_length=100,
+        description="Ingredient name (1-100 chars)"
+    )]
+    confidence: Annotated[float, Field(
+        ge=0.0,
+        le=1.0,
+        description="Confidence score (0.0-1.0)"
+    )]
 
 
 class Recipe(BaseModel):
@@ -34,14 +79,46 @@ class Recipe(BaseModel):
     
     Represents a complete recipe with structured ingredients, instructions, and metadata.
     Designed for API responses and structured data handling.
+    Enforces constraints on all fields for data integrity.
     """
-    title: str = Field(..., description="Recipe name or title")
-    description: Optional[str] = Field(None, description="Brief description of the dish")
-    ingredients: List[str] = Field(..., description="List of required ingredients with quantities")
-    instructions: List[str] = Field(..., description="Step-by-step cooking instructions")
-    prep_time_min: int = Field(..., description="Preparation time in minutes", ge=0)
-    cook_time_min: int = Field(..., description="Cooking time in minutes", ge=0)
-    source_url: Optional[str] = Field(None, description="URL to original recipe source")
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
+    title: Annotated[str, Field(
+        min_length=1,
+        max_length=200,
+        description="Recipe name or title (1-200 chars)"
+    )]
+    description: Annotated[Optional[str], Field(
+        None,
+        max_length=500,
+        description="Brief description of the dish (max 500 chars)"
+    )]
+    ingredients: Annotated[List[str], Field(
+        min_length=1,
+        max_length=100,
+        description="List of required ingredients with quantities (1-100 items)"
+    )]
+    instructions: Annotated[List[str], Field(
+        min_length=1,
+        max_length=100,
+        description="Step-by-step cooking instructions (1-100 steps)"
+    )]
+    prep_time_min: Annotated[int, Field(
+        ge=0,
+        le=1440,
+        description="Preparation time in minutes (0-1440, i.e., 0-24 hours)"
+    )]
+    cook_time_min: Annotated[int, Field(
+        ge=0,
+        le=1440,
+        description="Cooking time in minutes (0-1440, i.e., 0-24 hours)"
+    )]
+    source_url: Annotated[Optional[str], Field(
+        None,
+        max_length=500,
+        pattern=r'^https?://',
+        description="URL to original recipe source (must start with http:// or https://)"
+    )]
 
 
 class RecipeResponse(BaseModel):
@@ -54,37 +131,71 @@ class RecipeResponse(BaseModel):
     - Any guardrails, follow-up questions, or suggestions
     
     The 'reasoning' field provides transparency about agent decisions.
+    Enforces constraints on all fields for API consistency.
     """
-    response: str = Field(
-        ...,
-        description="Conversational response from the LLM including recipe details, guardrails, and follow-ups"
-    )
-    recipes: List[Recipe] = Field(
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
+    response: Annotated[str, Field(
+        min_length=1,
+        max_length=5000,
+        description="Conversational response from the LLM (1-5000 chars)"
+    )]
+    recipes: Annotated[List[Recipe], Field(
         default_factory=list,
-        description="List of recipe objects with structured data (up to MAX_RECIPES)"
-    )
-    ingredients: List[str] = Field(
+        max_length=50,
+        description="List of recipe objects (max 50 recipes)"
+    )]
+    ingredients: Annotated[List[str], Field(
         default_factory=list,
-        description="List of detected or provided ingredients"
-    )
-    preferences: dict[str, str] = Field(
+        max_length=100,
+        description="List of detected or provided ingredients (max 100)"
+    )]
+    preferences: Annotated[dict[str, str], Field(
         default_factory=dict,
-        description="User preferences extracted from conversation (diet, cuisine, meal_type, etc.)"
-    )
-    reasoning: Optional[str] = Field(
+        description="User preferences (diet, cuisine, meal_type, etc.)"
+    )]
+    reasoning: Annotated[Optional[str], Field(
         None,
-        description="Explanation of agent's decision-making process (why these recipes, guardrails applied, etc.)"
-    )
-    session_id: Optional[str] = Field(None, description="Session identifier for conversation continuity")
-    run_id: Optional[str] = Field(None, description="Unique ID for this agent execution")
-    execution_time_ms: int = Field(..., description="Total execution time in milliseconds", ge=0)
+        max_length=2000,
+        description="Explanation of agent's decision-making (max 2000 chars)"
+    )]
+    session_id: Annotated[Optional[str], Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description="Session identifier for conversation continuity"
+    )]
+    run_id: Annotated[Optional[str], Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description="Unique ID for this agent execution"
+    )]
+    execution_time_ms: Annotated[int, Field(
+        ge=0,
+        le=300000,
+        description="Execution time in milliseconds (0-300000, i.e., 0-5 min)"
+    )]
 
 
 class IngredientDetectionOutput(BaseModel):
     """Output schema for ingredient detection tool.
     
     Contains detected ingredients with confidence scores and description.
+    Enforces strict validation on confidence scores and ingredient format.
     """
-    ingredients: List[str]
-    confidence_scores: dict[str, float]
-    image_description: Optional[str] = None
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
+    ingredients: Annotated[List[str], Field(
+        min_length=1,
+        max_length=50,
+        description="List of detected ingredients (1-50 items)"
+    )]
+    confidence_scores: Annotated[dict[str, float], Field(
+        description="Confidence scores for each ingredient (0.0-1.0)"
+    )]
+    image_description: Annotated[Optional[str], Field(
+        None,
+        max_length=500,
+        description="Natural language description of the image (max 500 chars)"
+    )]
