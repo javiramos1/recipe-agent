@@ -22,7 +22,7 @@ from src.utils.logger import logger
 from src.agents.agent import initialize_recipe_agent
 
 
-async def run_query(query: str) -> None:
+def run_query(query: str) -> None:
     """Execute a single ad hoc query and print the response.
     
     Args:
@@ -30,7 +30,7 @@ async def run_query(query: str) -> None:
     """
     try:
         logger.info("Initializing agent...")
-        agent = await initialize_recipe_agent()
+        agent = initialize_recipe_agent()
         
         logger.info(f"Running query: {query}")
         logger.info("---")
@@ -48,8 +48,8 @@ async def run_query(query: str) -> None:
             ingredients = [p.strip() for p in parts if p.strip()]
             request_data = {"ingredients": ingredients}
         
-        # Run the query and get response
-        response = await agent.arun(input=json.dumps(request_data))
+        # Run the query and get response (async call)
+        response = asyncio.run(agent.arun(input=json.dumps(request_data)))
         
         logger.info("---")
         print(response.content)
@@ -71,5 +71,5 @@ if __name__ == "__main__":
     # Join all arguments after script name as the query (handles queries with spaces)
     query = " ".join(sys.argv[1:])
     
-    # Run the async query function
-    asyncio.run(run_query(query))
+    # Run the query function
+    run_query(query)

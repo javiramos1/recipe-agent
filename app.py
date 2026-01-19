@@ -20,12 +20,12 @@ from agno.os.interfaces.agui import AGUI
 
 from src.utils.config import config
 from src.utils.logger import logger
-from src.agents.agent import initialize_recipe_agent_sync
+from src.agents.agent import initialize_recipe_agent
 
 
-# Initialize agent using factory pattern (synchronous wrapper)
+# Initialize agent using factory pattern (sync)
 logger.info("Starting Recipe Recommendation Service initialization...")
-agent = initialize_recipe_agent_sync()
+agent = initialize_recipe_agent()
 
 # Create AgentOS with the agent and Web UI interface
 logger.info("Creating AgentOS instance with Web UI...")

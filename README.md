@@ -131,6 +131,7 @@ The application will start with full logging and hot-reload support.
 ```bash
 make dev     # Development mode with output
 make run     # Production mode
+make stop    # Stop running server
 ```
 
 **Access Points:**

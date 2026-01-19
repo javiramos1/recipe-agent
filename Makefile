@@ -1,4 +1,4 @@
-.PHONY: setup dev run query test eval clean help venv-check
+.PHONY: setup dev run query stop test eval clean help venv-check
 
 # Virtual environment directory
 VENV_DIR := .venv
@@ -15,6 +15,7 @@ help:
 	@echo "Development:"
 	@echo "  make dev         Start application (http://localhost:7777)"
 	@echo "  make run         Start application (production mode)"
+	@echo "  make stop        Stop running application server"
 	@echo "  make query Q=\"..\"  Run ad hoc query without starting server"
 	@echo ""
 	@echo "Testing:"
@@ -75,6 +76,11 @@ run: venv-check
 	@echo "OpenAPI Docs:      http://localhost:7777/docs"
 	@echo ""
 	$(PYTHON) app.py
+
+# Stop: Kill any running app.py processes
+stop:
+	@pkill -f "python app.py" 2>/dev/null || true
+	@echo "✓ Application stopped"
 
 # Ad hoc Query: Run a single query without starting the server
 query: venv-check

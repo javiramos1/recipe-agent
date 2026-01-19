@@ -21,11 +21,11 @@ from src.prompts.prompts import SYSTEM_INSTRUCTIONS
 from src.hooks.hooks import get_pre_hooks
 
 
-async def initialize_recipe_agent() -> Agent:
-    """Factory function to initialize and configure the recipe recommendation agent (async).
+def initialize_recipe_agent() -> Agent:
+    """Factory function to initialize and configure the recipe recommendation agent (sync).
     
     This function:
-    1. Initializes Spoonacular MCP with connection validation and fail-fast pattern (async)
+    1. Initializes Spoonacular MCP with connection validation and fail-fast pattern
     2. Configures database (SQLite for development, PostgreSQL optional for production)
     3. Builds tools list based on IMAGE_DETECTION_MODE configuration
     4. Registers ingredient detection tool (tool mode only)
@@ -40,7 +40,7 @@ async def initialize_recipe_agent() -> Agent:
     """
     logger.info("=== Initializing Recipe Recommendation Agent ===")
     
-    # 1. Initialize MCP FIRST (fail-fast if unreachable) - async
+    # 1. Initialize MCP FIRST (fail-fast if unreachable)
     logger.info("Step 1/5: Initializing Spoonacular MCP...")
     spoonacular_mcp = SpoonacularMCP(
         api_key=config.SPOONACULAR_API_KEY,
@@ -48,7 +48,8 @@ async def initialize_recipe_agent() -> Agent:
         retry_delays=[1, 2, 4],
     )
     try:
-        mcp_tools = await spoonacular_mcp.initialize()
+        # Run async initialization synchronously using asyncio.run
+        mcp_tools = asyncio.run(spoonacular_mcp.initialize())
         logger.info("✓ Spoonacular MCP initialized successfully")
     except Exception as e:
         logger.error(f"✗ MCP initialization failed: {e}")
@@ -129,29 +130,3 @@ async def initialize_recipe_agent() -> Agent:
     logger.info("=== Agent initialization complete ===")
     
     return agent
-
-
-def initialize_recipe_agent_sync() -> Agent:
-    """Synchronous wrapper for initialize_recipe_agent (for module-level initialization).
-    
-    This wrapper handles async initialization at module load time before AgentOS
-    creates its event loop.
-    """
-    try:
-        # Try to get the current event loop (will fail if none exists)
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # If loop is already running, we can't use it - create a new one
-            raise RuntimeError("Event loop already running")
-    except RuntimeError:
-        # No event loop exists - create a new one
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(initialize_recipe_agent())
-        finally:
-            # Don't close the loop if it might be used by uvicorn later
-            pass
-    
-    # This shouldn't happen in normal startup, but just in case
-    return loop.run_until_complete(initialize_recipe_agent())
