@@ -5,11 +5,86 @@ import pytest
 from pydantic import ValidationError
 
 from src.models.models import (
+    ChatMessage,
     RecipeRequest,
     Recipe,
     RecipeResponse,
     IngredientDetectionOutput,
 )
+
+
+class TestChatMessage:
+    """Test ChatMessage model validation (minimal input schema)."""
+
+    def test_valid_message_required_field_only(self):
+        """Test valid message with only required message field."""
+        msg = ChatMessage(message="Show me vegetarian recipes")
+        assert msg.message == "Show me vegetarian recipes"
+        assert msg.images is None
+
+    def test_valid_message_with_images(self):
+        """Test valid message with images."""
+        images = ["data:image/jpeg;base64,/9j/4AAQSkZ...", "https://example.com/image.png"]
+        msg = ChatMessage(message="What can I make with these?", images=images)
+        assert msg.message == "What can I make with these?"
+        assert msg.images == images
+
+    def test_valid_message_with_empty_images_list(self):
+        """Test valid message with empty images list."""
+        msg = ChatMessage(message="Show recipes", images=[])
+        assert msg.message == "Show recipes"
+        assert msg.images == []
+
+    def test_invalid_missing_message(self):
+        """Test invalid message missing required message field."""
+        with pytest.raises(ValidationError) as exc:
+            ChatMessage(images=["image1"])
+        assert "message" in str(exc.value)
+
+    def test_invalid_empty_message(self):
+        """Test invalid message with empty string."""
+        with pytest.raises(ValidationError) as exc:
+            ChatMessage(message="")
+        assert "message" in str(exc.value)
+
+    def test_valid_message_whitespace_stripped(self):
+        """Test message with surrounding whitespace gets stripped."""
+        msg = ChatMessage(message="  Show me recipes  ")
+        assert msg.message == "Show me recipes"
+
+    def test_valid_message_long_text(self):
+        """Test message with maximum length (2000 chars)."""
+        long_msg = "x" * 2000
+        msg = ChatMessage(message=long_msg)
+        assert msg.message == long_msg
+
+    def test_invalid_message_too_long(self):
+        """Test message exceeding maximum length."""
+        long_msg = "x" * 2001
+        with pytest.raises(ValidationError) as exc:
+            ChatMessage(message=long_msg)
+        assert "message" in str(exc.value)
+
+    def test_valid_message_max_images(self):
+        """Test message with maximum number of images (10)."""
+        images = [f"image_{i}" for i in range(10)]
+        msg = ChatMessage(message="Show me", images=images)
+        assert len(msg.images) == 10
+
+    def test_invalid_message_too_many_images(self):
+        """Test message with too many images (>10)."""
+        images = [f"image_{i}" for i in range(11)]
+        with pytest.raises(ValidationError) as exc:
+            ChatMessage(message="Show me", images=images)
+        assert "images" in str(exc.value)
+
+    def test_json_serialization_roundtrip(self):
+        """Test ChatMessage can be serialized and deserialized."""
+        original = ChatMessage(message="Test", images=["img1", "img2"])
+        json_str = original.model_dump_json()
+        restored = ChatMessage.model_validate_json(json_str)
+        assert restored.message == original.message
+        assert restored.images == original.images
 
 
 class TestRecipeRequest:

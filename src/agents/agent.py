@@ -14,7 +14,7 @@ from agno.tools import tool
 
 from src.utils.config import config
 from src.utils.logger import logger
-from src.models.models import RecipeRequest, RecipeResponse
+from src.models.models import ChatMessage, RecipeResponse
 from src.mcp_tools.ingredients import detect_ingredients_tool
 from src.mcp_tools.spoonacular import SpoonacularMCP
 from src.prompts.prompts import get_system_instructions
@@ -119,7 +119,7 @@ def initialize_recipe_agent() -> Agent:
         db=db,
         tools=tools,
         pre_hooks=pre_hooks,
-        input_schema=RecipeRequest,
+        input_schema=ChatMessage,
         output_schema=RecipeResponse,
         instructions=system_instructions,
         # Memory settings

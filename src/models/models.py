@@ -8,6 +8,28 @@ from typing import List, Optional, Annotated
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 
+class ChatMessage(BaseModel):
+    """Minimal input schema for conversational recipe recommendation.
+    
+    Accepts natural language message and optional images.
+    Preferences and ingredients are extracted from the message or retrieved from agent memory.
+    
+    This minimal schema allows full conversational flexibility without pre-structuring input.
+    """
+    model_config = ConfigDict(str_strip_whitespace=True)
+    
+    message: Annotated[str, Field(
+        min_length=1,
+        max_length=2000,
+        description="Natural language message from user (1-2000 chars)"
+    )]
+    images: Annotated[Optional[List[str]], Field(
+        None,
+        max_length=10,
+        description="Optional list of base64-encoded images or image URLs (max 10 images)"
+    )]
+
+
 class RecipeRequest(BaseModel):
     """Request schema for recipe recommendations.
     
