@@ -6,7 +6,6 @@ from pydantic import ValidationError
 
 from src.models.models import (
     RecipeRequest,
-    Ingredient,
     Recipe,
     RecipeResponse,
     IngredientDetectionOutput,
@@ -78,42 +77,6 @@ class TestRecipeRequest:
         deserialized = RecipeRequest.model_validate_json(json_str)
         assert deserialized.ingredients == original.ingredients
         assert deserialized.diet == original.diet
-
-
-class TestIngredient:
-    """Test Ingredient model validation."""
-
-    def test_valid_ingredient(self):
-        """Test valid ingredient with name and confidence."""
-        ingredient = Ingredient(name="tomato", confidence=0.95)
-        assert ingredient.name == "tomato"
-        assert ingredient.confidence == 0.95
-
-    def test_valid_ingredient_min_confidence(self):
-        """Test valid ingredient with minimum confidence."""
-        ingredient = Ingredient(name="basil", confidence=0.0)
-        assert ingredient.confidence == 0.0
-
-    def test_valid_ingredient_max_confidence(self):
-        """Test valid ingredient with maximum confidence."""
-        ingredient = Ingredient(name="garlic", confidence=1.0)
-        assert ingredient.confidence == 1.0
-
-    def test_invalid_missing_name(self):
-        """Test that missing name raises error."""
-        with pytest.raises(ValidationError):
-            Ingredient(confidence=0.8)
-
-    def test_invalid_missing_confidence(self):
-        """Test that missing confidence raises error."""
-        with pytest.raises(ValidationError):
-            Ingredient(name="onion")
-
-    def test_valid_confidence_string_coercion(self):
-        """Test that confidence as string is coerced to float by Pydantic."""
-        ingredient = Ingredient(name="pepper", confidence="0.8")
-        assert ingredient.confidence == 0.8
-        assert isinstance(ingredient.confidence, float)
 
 
 class TestRecipe:

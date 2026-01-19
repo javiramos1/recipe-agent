@@ -64,26 +64,6 @@ class RecipeRequest(BaseModel):
         return validated
 
 
-class Ingredient(BaseModel):
-    """Domain model for a detected ingredient.
-    
-    Represents an ingredient extracted from an image with confidence score.
-    Enforces valid confidence scores (0.0-1.0) and non-empty ingredient names.
-    """
-    model_config = ConfigDict(str_strip_whitespace=True)
-    
-    name: Annotated[str, Field(
-        min_length=1,
-        max_length=100,
-        description="Ingredient name (1-100 chars)"
-    )]
-    confidence: Annotated[float, Field(
-        ge=0.0,
-        le=1.0,
-        description="Confidence score (0.0-1.0)"
-    )]
-
-
 class Recipe(BaseModel):
     """Domain model for a recipe.
     

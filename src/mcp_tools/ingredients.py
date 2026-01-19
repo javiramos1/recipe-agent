@@ -43,6 +43,7 @@ from google.genai import types
 
 from src.utils.config import config
 from src.utils.logger import logger
+from src.models.models import IngredientDetectionOutput
 
 
 async def fetch_image_bytes(image_source: str | bytes) -> Optional[bytes]:
@@ -101,41 +102,65 @@ def validate_image_size(image_bytes: bytes) -> bool:
     return True
 
 
-def parse_gemini_response(response_text: str) -> Optional[dict]:
-    """Parse JSON from Gemini response, handling text before/after JSON.
+def parse_gemini_response(response_text: str) -> Optional[IngredientDetectionOutput]:
+    """Parse JSON from Gemini response into validated IngredientDetectionOutput model.
+    
+    Handles text before/after JSON and validates parsed data against IngredientDetectionOutput schema.
 
     Args:
         response_text: Raw response text from Gemini API.
 
     Returns:
-        Parsed dict with 'ingredients' and 'confidence_scores', or None on parse failure.
+        Validated IngredientDetectionOutput instance, or None on parse/validation failure.
     """
+    parsed_dict = None
+    
     try:
         # Try direct JSON parse first
-        return json.loads(response_text)
+        parsed_dict = json.loads(response_text)
     except json.JSONDecodeError:
         pass
 
     # Try to extract JSON from text (Gemini might add explanatory text)
-    json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
-    if json_match:
-        try:
-            return json.loads(json_match.group())
-        except json.JSONDecodeError:
-            pass
+    if not parsed_dict:
+        json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
+        if json_match:
+            try:
+                parsed_dict = json.loads(json_match.group())
+            except json.JSONDecodeError:
+                pass
 
-    logger.warning("Failed to parse JSON from Gemini response")
-    return None
+    if not parsed_dict:
+        logger.warning("Failed to parse JSON from Gemini response")
+        return None
+
+    # Validate and parse into IngredientDetectionOutput model
+    try:
+        # Extract fields with defaults for missing optional fields
+        ingredients = parsed_dict.get("ingredients", [])
+        confidence_scores = parsed_dict.get("confidence_scores", {})
+        image_description = parsed_dict.get("image_description", None)
+        
+        # Create validated model instance
+        output = IngredientDetectionOutput(
+            ingredients=ingredients,
+            confidence_scores=confidence_scores,
+            image_description=image_description,
+        )
+        return output
+    except Exception as e:
+        logger.warning(f"Failed to validate parsed response against IngredientDetectionOutput: {e}")
+        return None
 
 
-async def extract_ingredients_from_image(image_bytes: bytes) -> Optional[dict]:
+async def extract_ingredients_from_image(image_bytes: bytes) -> Optional[IngredientDetectionOutput]:
     """Call Gemini vision API to extract ingredients from image.
 
     Args:
         image_bytes: Raw image bytes.
 
     Returns:
-        Dict with 'ingredients' list and 'confidence_scores' dict, or None on failure.
+        Validated IngredientDetectionOutput instance, or None on failure.
     """
     try:
         # Determine MIME type based on image format
@@ -159,20 +184,8 @@ async def extract_ingredients_from_image(image_bytes: bytes) -> Optional[dict]:
             ],
         )
 
-        # Parse response
+        # Parse and validate response into IngredientDetectionOutput
         result = parse_gemini_response(response.text)
-        if not result:
-            return None
-
-        # Validate response structure
-        if not isinstance(result.get("ingredients"), list):
-            logger.warning("Invalid response structure: 'ingredients' is not a list")
-            return None
-
-        if not isinstance(result.get("confidence_scores"), dict):
-            logger.warning("Invalid response structure: 'confidence_scores' is not a dict")
-            return None
-
         return result
 
     except Exception as e:
@@ -276,15 +289,15 @@ async def extract_ingredients_pre_hook(
             if not validate_image_size(image_bytes):
                 continue
 
-            # Extract ingredients from image (async)
+            # Extract ingredients from image (async) - returns validated IngredientDetectionOutput
             result = await extract_ingredients_from_image(image_bytes)
             if not result:
                 logger.warning(f"Image {idx + 1}: Failed to extract ingredients")
                 continue
 
-            # Filter by confidence
+            # Filter by confidence and extract ingredient names
             ingredients = filter_ingredients_by_confidence(
-                result.get("ingredients", []), result.get("confidence_scores", {})
+                result.ingredients, result.confidence_scores
             )
 
             if ingredients:
@@ -313,7 +326,7 @@ async def extract_ingredients_pre_hook(
 
 async def extract_ingredients_with_retries(
     image_bytes: bytes, max_retries: int = 3
-) -> Optional[dict]:
+) -> Optional[IngredientDetectionOutput]:
     """Call Gemini vision API with exponential backoff retry logic (async).
 
     Retries on transient failures (network errors, rate limits, 5xx errors).
@@ -324,7 +337,7 @@ async def extract_ingredients_with_retries(
         max_retries: Maximum number of retry attempts (default: 3).
 
     Returns:
-        Dict with 'ingredients' and 'confidence_scores', or None if all retries failed.
+        Validated IngredientDetectionOutput instance, or None if all retries failed.
     """
     retry_count = 0
     delay_seconds = 1
@@ -365,7 +378,7 @@ async def extract_ingredients_with_retries(
     return None
 
 
-async def detect_ingredients_tool(image_data: str) -> dict:
+async def detect_ingredients_tool(image_data: str) -> IngredientDetectionOutput:
     """Tool function for ingredient detection (register with @tool decorator).
 
     This function extracts ingredients from uploaded images using Gemini vision API.
@@ -380,7 +393,7 @@ async def detect_ingredients_tool(image_data: str) -> dict:
     2. Validates image format (JPEG/PNG only) and size
     3. Calls Gemini vision API to extract ingredients (async)
     4. Filters results by MIN_INGREDIENT_CONFIDENCE threshold
-    5. Returns structured dict or raises ValueError
+    5. Returns structured IngredientDetectionOutput or raises ValueError
 
     Error Handling
     ==============
@@ -397,21 +410,17 @@ async def detect_ingredients_tool(image_data: str) -> dict:
                    - "iVBORw0KGgoAAAANSUhEUg..." (Base64)
 
     Returns:
-        Dict with three keys:
-        - "ingredients": List[str] - ingredient names in order of confidence
-        - "confidence_scores": Dict[str, float] - name → confidence (0.0-1.0)
-        - "image_description": str - human-readable summary
+        IngredientDetectionOutput with validated fields:
+        - ingredients: List[str] - ingredient names in order of confidence
+        - confidence_scores: Dict[str, float] - name → confidence (0.0 < score < 1.0)
+        - image_description: str - human-readable summary
 
         Example:
-        {
-            "ingredients": ["tomato", "basil", "mozzarella"],
-            "confidence_scores": {
-                "tomato": 0.95,
-                "basil": 0.88,
-                "mozzarella": 0.82
-            },
-            "image_description": "Detected ingredients: tomato (95%), basil (88%), mozzarella (82%)"
-        }
+        IngredientDetectionOutput(
+            ingredients=["tomato", "basil", "mozzarella"],
+            confidence_scores={"tomato": 0.95, "basil": 0.88, "mozzarella": 0.82},
+            image_description="Detected ingredients: tomato (95%), basil (88%), mozzarella (82%)"
+        )
 
     Raises:
         ValueError: If image cannot be processed with details about the failure.
@@ -441,34 +450,30 @@ async def detect_ingredients_tool(image_data: str) -> dict:
         if not validate_image_size(image_bytes):
             raise ValueError(f"Image too large. Maximum size is {config.MAX_IMAGE_SIZE_MB}MB")
 
-        # Extract ingredients with retry logic (async)
+        # Extract ingredients with retry logic (async) - returns validated IngredientDetectionOutput
         result = await extract_ingredients_with_retries(image_bytes)
         if not result:
             raise ValueError("Failed to extract ingredients from image. Please try another image.")
 
-        # Filter by confidence
+        # Filter by confidence to ensure we only return high-confidence ingredients
         ingredients = filter_ingredients_by_confidence(
-            result.get("ingredients", []), result.get("confidence_scores", {})
+            result.ingredients, result.confidence_scores
         )
 
         if not ingredients:
             raise ValueError("No ingredients detected with sufficient confidence. Please try another image.")
 
-        # Build description
-        confidence_scores = result.get("confidence_scores", {})
-        scores_text = ", ".join(
-            f"{ing} ({confidence_scores.get(ing, 0):.0%})" for ing in ingredients[:5]
+        # Return validated IngredientDetectionOutput with filtered ingredients
+        # The model is already validated by parse_gemini_response(), just update if needed
+        return IngredientDetectionOutput(
+            ingredients=ingredients,
+            confidence_scores={ing: result.confidence_scores[ing] for ing in ingredients},
+            image_description=result.image_description,
         )
-        image_description = f"Detected ingredients: {scores_text}"
-        if len(ingredients) > 5:
-            image_description += f" and {len(ingredients) - 5} more"
 
-        return {
-            "ingredients": ingredients,
-            "confidence_scores": {ing: confidence_scores.get(ing, 0) for ing in ingredients},
-            "image_description": image_description,
-        }
-
+    except ValueError:
+        # Re-raise ValueError (intended for agent handling)
+        raise
     except Exception as e:
         logger.error(f"Ingredient detection tool failed: {e}")
         raise ValueError(f"Ingredient detection failed: {str(e)}")

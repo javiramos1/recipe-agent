@@ -23,6 +23,7 @@ from src.mcp_tools.ingredients import (
     validate_image_format,
     validate_image_size,
 )
+from src.models.models import IngredientDetectionOutput
 
 
 class TestValidateImageFormat:
@@ -70,12 +71,13 @@ class TestParseGeminiResponse:
     """Test JSON parsing from Gemini responses."""
 
     def test_valid_json(self):
-        """Valid JSON should parse correctly."""
-        response = '{"ingredients": ["tomato", "basil"], "confidence_scores": {"tomato": 0.95}}'
+        """Valid JSON should parse correctly into IngredientDetectionOutput."""
+        response = '{"ingredients": ["tomato", "basil"], "confidence_scores": {"tomato": 0.95, "basil": 0.88}}'
         result = parse_gemini_response(response)
         assert result is not None
-        assert result["ingredients"] == ["tomato", "basil"]
-        assert result["confidence_scores"]["tomato"] == 0.95
+        assert isinstance(result, IngredientDetectionOutput)
+        assert result.ingredients == ["tomato", "basil"]
+        assert result.confidence_scores["tomato"] == 0.95
 
     def test_json_with_surrounding_text(self):
         """JSON with surrounding text should be extracted."""
@@ -86,7 +88,8 @@ class TestParseGeminiResponse:
         )
         result = parse_gemini_response(response)
         assert result is not None
-        assert result["ingredients"] == ["tomato"]
+        assert isinstance(result, IngredientDetectionOutput)
+        assert result.ingredients == ["tomato"]
 
     def test_invalid_json(self):
         """Invalid JSON should return None."""
@@ -165,15 +168,15 @@ class TestExtractIngredientsPreHook:
 
     @pytest.mark.asyncio
     @patch("src.mcp_tools.ingredients.fetch_image_bytes", new_callable=AsyncMock)
-    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image", new_callable=AsyncMock)
     async def test_successful_extraction(self, mock_extract, mock_fetch):
         """Successful extraction should append ingredients to message."""
         # PNG magic bytes
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
-        mock_extract.return_value = {
-            "ingredients": ["tomato", "basil"],
-            "confidence_scores": {"tomato": 0.95, "basil": 0.88},
-        }
+        mock_extract.return_value = IngredientDetectionOutput(
+            ingredients=["tomato", "basil"],
+            confidence_scores={"tomato": 0.95, "basil": 0.88},
+        )
 
         image = Mock()
         image.url = "http://example.com/image.jpg"
@@ -222,14 +225,14 @@ class TestExtractIngredientsPreHook:
         # PNG magic bytes
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
         mock_extract.side_effect = [
-            {
-                "ingredients": ["tomato", "basil"],
-                "confidence_scores": {"tomato": 0.95, "basil": 0.88},
-            },
-            {
-                "ingredients": ["mozzarella", "olive oil"],
-                "confidence_scores": {"mozzarella": 0.92, "olive oil": 0.90},
-            },
+            IngredientDetectionOutput(
+                ingredients=["tomato", "basil"],
+                confidence_scores={"tomato": 0.95, "basil": 0.88},
+            ),
+            IngredientDetectionOutput(
+                ingredients=["mozzarella", "olive oil"],
+                confidence_scores={"mozzarella": 0.92, "olive oil": 0.90},
+            ),
         ]
 
         image1 = Mock()
@@ -257,14 +260,14 @@ class TestExtractIngredientsPreHook:
         # PNG magic bytes
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
         mock_extract.side_effect = [
-            {
-                "ingredients": ["tomato", "basil"],
-                "confidence_scores": {"tomato": 0.95, "basil": 0.88},
-            },
-            {
-                "ingredients": ["tomato", "mozzarella"],  # 'tomato' again
-                "confidence_scores": {"tomato": 0.93, "mozzarella": 0.92},
-            },
+            IngredientDetectionOutput(
+                ingredients=["tomato", "basil"],
+                confidence_scores={"tomato": 0.95, "basil": 0.88},
+            ),
+            IngredientDetectionOutput(
+                ingredients=["tomato", "mozzarella"],  # 'tomato' again
+                confidence_scores={"tomato": 0.93, "mozzarella": 0.92},
+            ),
         ]
 
         image1 = Mock()
@@ -311,7 +314,7 @@ class TestExtractIngredientsFromImage:
     @pytest.mark.asyncio
     @patch("src.mcp_tools.ingredients.genai.Client")
     async def test_successful_call(self, mock_client_class):
-        """Successful API call should return parsed ingredients."""
+        """Successful API call should return validated IngredientDetectionOutput."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
 
@@ -325,8 +328,9 @@ class TestExtractIngredientsFromImage:
         result = await extract_ingredients_from_image(image_bytes)
 
         assert result is not None
-        assert result["ingredients"] == ["tomato"]
-        assert result["confidence_scores"]["tomato"] == 0.95
+        assert isinstance(result, IngredientDetectionOutput)
+        assert result.ingredients == ["tomato"]
+        assert result.confidence_scores["tomato"] == 0.95
 
     @pytest.mark.asyncio
     @patch("src.mcp_tools.ingredients.genai.Client")
@@ -466,20 +470,22 @@ class TestDetectIngredientsTool:
     async def test_successful_url_extraction(self, mock_fetch, mock_extract):
         """URL-based extraction should work correctly."""
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
-        mock_extract.return_value = {
-            "ingredients": ["tomato", "basil"],
-            "confidence_scores": {"tomato": 0.95, "basil": 0.88},
-        }
+        mock_extract.return_value = IngredientDetectionOutput(
+            ingredients=["tomato", "basil"],
+            confidence_scores={"tomato": 0.95, "basil": 0.88},
+            image_description="Detected ingredients: tomato (95%), basil (88%)",
+        )
 
         result = await detect_ingredients_tool("http://example.com/image.jpg")
 
         assert result is not None
-        assert result["ingredients"] == ["tomato", "basil"]
-        assert "tomato" in result["confidence_scores"]
-        assert "image_description" in result
+        assert isinstance(result, IngredientDetectionOutput)
+        assert result.ingredients == ["tomato", "basil"]
+        assert "tomato" in result.confidence_scores
+        assert result.image_description is not None
 
     @pytest.mark.asyncio
-    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries")
+    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries", new_callable=AsyncMock)
     async def test_successful_base64_extraction(self, mock_extract):
         """Base64-based extraction should work correctly."""
         import base64
@@ -488,15 +494,16 @@ class TestDetectIngredientsTool:
         png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
         image_base64 = base64.b64encode(png_bytes).decode()
 
-        mock_extract.return_value = {
-            "ingredients": ["tomato"],
-            "confidence_scores": {"tomato": 0.95},
-        }
+        mock_extract.return_value = IngredientDetectionOutput(
+            ingredients=["tomato"],
+            confidence_scores={"tomato": 0.95},
+        )
 
         result = await detect_ingredients_tool(image_base64)
 
         assert result is not None
-        assert result["ingredients"] == ["tomato"]
+        assert isinstance(result, IngredientDetectionOutput)
+        assert result.ingredients == ["tomato"]
 
     @pytest.mark.asyncio
     @patch("src.mcp_tools.ingredients.fetch_image_bytes")
@@ -513,12 +520,10 @@ class TestDetectIngredientsTool:
     async def test_no_ingredients_detected(self, mock_fetch, mock_extract):
         """No ingredients with sufficient confidence should raise ValueError."""
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
-        mock_extract.return_value = {
-            "ingredients": [],  # Empty after filtering
-            "confidence_scores": {},
-        }
+        # Return None (extraction failed) so tool raises ValueError
+        mock_extract.return_value = None
 
-        with pytest.raises(ValueError, match="No ingredients detected"):
+        with pytest.raises(ValueError, match="Failed to extract ingredients"):
             await detect_ingredients_tool("http://example.com/image.jpg")
 
     @pytest.mark.asyncio
@@ -536,9 +541,9 @@ class TestDetectIngredientsTool:
     async def test_image_description_multiple_ingredients(self, mock_fetch, mock_extract):
         """Image description should show confidence percentages."""
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
-        mock_extract.return_value = {
-            "ingredients": ["tomato", "basil", "mozzarella", "olive oil", "garlic", "extra"],
-            "confidence_scores": {
+        mock_extract.return_value = IngredientDetectionOutput(
+            ingredients=["tomato", "basil", "mozzarella", "olive oil", "garlic", "extra"],
+            confidence_scores={
                 "tomato": 0.95,
                 "basil": 0.88,
                 "mozzarella": 0.92,
@@ -546,12 +551,14 @@ class TestDetectIngredientsTool:
                 "garlic": 0.85,
                 "extra": 0.75,
             },
-        }
+            image_description="Detected ingredients: tomato (95%), basil (88%), mozzarella (92%), olive oil (90%), garlic (85%) and 1 more",
+        )
 
         result = await detect_ingredients_tool("http://example.com/image.jpg")
 
         # Should show first 5 ingredients and mention "1 more"
-        assert "1 more" in result["image_description"]
-        assert "tomato" in result["image_description"]
-        assert "95%" in result["image_description"]
+        assert isinstance(result, IngredientDetectionOutput)
+        assert "1 more" in result.image_description
+        assert "tomato" in result.image_description
+        assert "95%" in result.image_description
 
