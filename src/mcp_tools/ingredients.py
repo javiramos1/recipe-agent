@@ -51,16 +51,18 @@ except ImportError:
     HAS_PIL = False
 
 
-def compress_image(image_bytes: bytes, max_size_mb: float = 1.0, max_width: int = 1024) -> bytes:
-    """Compress image for API transmission while preserving quality.
+def compress_image(image_bytes: bytes, max_width: int = 1024) -> bytes:
+    """Compress image for API transmission using Pillow.
+    
+    Uses JPEG format with quality=85 + optimize + progressive for optimal size/quality trade-off.
+    Resizes oversized images and converts color modes to RGB.
     
     Args:
         image_bytes: Raw image bytes to compress
-        max_size_mb: Target maximum file size in MB
         max_width: Maximum image width in pixels
         
     Returns:
-        Compressed image bytes (or original if compression not available)
+        Compressed image bytes (or original if PIL unavailable)
     """
     if not HAS_PIL:
         logger.debug("PIL not available, skipping image compression")
@@ -70,7 +72,7 @@ def compress_image(image_bytes: bytes, max_size_mb: float = 1.0, max_width: int 
         img = Image.open(BytesIO(image_bytes))
         original_size_mb = len(image_bytes) / (1024 * 1024)
         
-        # Convert RGBA to RGB if needed
+        # Convert RGBA/LA/P to RGB for better compression
         if img.mode in ("RGBA", "LA", "P"):
             rgb_img = Image.new("RGB", img.size, (255, 255, 255))
             if img.mode == "RGBA":
@@ -79,24 +81,15 @@ def compress_image(image_bytes: bytes, max_size_mb: float = 1.0, max_width: int 
                 rgb_img.paste(img)
             img = rgb_img
         
-        # Resize if too large
+        # Resize if oversized
         if img.width > max_width:
             ratio = max_width / img.width
             new_height = int(img.height * ratio)
             img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
         
-        # Compress to target size
+        # Compress to JPEG with quality 85 + optimize + progressive
         output = BytesIO()
-        quality = 85
-        while quality > 10:
-            output.seek(0)
-            output.truncate(0)
-            img.save(output, format="JPEG", quality=quality, optimize=True)
-            size_mb = output.tell() / (1024 * 1024)
-            if size_mb <= max_size_mb:
-                break
-            quality -= 5
-        
+        img.save(output, format="JPEG", quality=85, optimize=True, progressive=True)
         output.seek(0)
         compressed_bytes = output.read()
         compressed_size_mb = len(compressed_bytes) / (1024 * 1024)
@@ -355,9 +348,10 @@ async def extract_ingredients_pre_hook(
             if not validate_image_size(image_bytes):
                 continue
             
-            # Compress image for API transmission
-            logger.debug(f"Image {idx + 1}: Compressing for API transmission...")
-            image_bytes = compress_image(image_bytes)
+            # Compress image for API transmission (if enabled)
+            if config.COMPRESS_IMG:
+                logger.debug(f"Image {idx + 1}: Compressing for API transmission...")
+                image_bytes = compress_image(image_bytes)
 
             # Extract ingredients from image (async) - returns validated IngredientDetectionOutput
             result = await extract_ingredients_from_image(image_bytes)

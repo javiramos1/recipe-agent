@@ -215,3 +215,84 @@ class TestImageDetectionMode:
         with pytest.raises(ValueError, match="IMAGE_DETECTION_MODE"):
             config.validate()
 
+
+class TestCompressImg:
+    """Test COMPRESS_IMG configuration for image compression toggle."""
+
+    def test_default_compress_img_enabled(self, monkeypatch):
+        """Test that COMPRESS_IMG defaults to True (enabled)."""
+        monkeypatch.delenv("COMPRESS_IMG", raising=False)
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        assert config.COMPRESS_IMG is True
+
+    def test_compress_img_enabled_explicit_true(self, monkeypatch):
+        """Test COMPRESS_IMG=true enables compression."""
+        monkeypatch.setenv("COMPRESS_IMG", "true")
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        assert config.COMPRESS_IMG is True
+
+    def test_compress_img_enabled_with_yes(self, monkeypatch):
+        """Test COMPRESS_IMG=yes enables compression."""
+        monkeypatch.setenv("COMPRESS_IMG", "yes")
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        assert config.COMPRESS_IMG is True
+
+    def test_compress_img_enabled_with_one(self, monkeypatch):
+        """Test COMPRESS_IMG=1 enables compression."""
+        monkeypatch.setenv("COMPRESS_IMG", "1")
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        assert config.COMPRESS_IMG is True
+
+    def test_compress_img_disabled_false(self, monkeypatch):
+        """Test COMPRESS_IMG=false disables compression."""
+        monkeypatch.setenv("COMPRESS_IMG", "false")
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        assert config.COMPRESS_IMG is False
+
+    def test_compress_img_disabled_no(self, monkeypatch):
+        """Test COMPRESS_IMG=no disables compression."""
+        monkeypatch.setenv("COMPRESS_IMG", "no")
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        assert config.COMPRESS_IMG is False
+
+    def test_compress_img_disabled_zero(self, monkeypatch):
+        """Test COMPRESS_IMG=0 disables compression."""
+        monkeypatch.setenv("COMPRESS_IMG", "0")
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        assert config.COMPRESS_IMG is False
+
+    def test_compress_img_case_insensitive(self, monkeypatch):
+        """Test COMPRESS_IMG is case-insensitive."""
+        monkeypatch.setenv("COMPRESS_IMG", "TRUE")
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        assert config.COMPRESS_IMG is True
+
+        monkeypatch.setenv("COMPRESS_IMG", "False")
+        config2 = Config()
+        assert config2.COMPRESS_IMG is False
+
+

@@ -6,7 +6,6 @@ from pydantic import ValidationError
 
 from src.models.models import (
     ChatMessage,
-    RecipeRequest,
     Recipe,
     RecipeResponse,
     IngredientDetectionOutput,
@@ -85,73 +84,6 @@ class TestChatMessage:
         restored = ChatMessage.model_validate_json(json_str)
         assert restored.message == original.message
         assert restored.images == original.images
-
-
-class TestRecipeRequest:
-    """Test RecipeRequest model validation."""
-
-    def test_valid_request_required_fields_only(self):
-        """Test valid request with only required ingredients field."""
-        request = RecipeRequest(ingredients=["tomato", "basil"])
-        assert request.ingredients == ["tomato", "basil"]
-        assert request.diet is None
-        assert request.cuisine is None
-        assert request.meal_type is None
-        assert request.intolerances is None
-
-    def test_valid_request_with_all_fields(self):
-        """Test valid request with all optional fields populated."""
-        request = RecipeRequest(
-            ingredients=["chicken", "rice"],
-            diet="keto",
-            cuisine="asian",
-            meal_type="main course",
-            intolerances="gluten, peanuts",
-        )
-        assert request.ingredients == ["chicken", "rice"]
-        assert request.diet == "keto"
-        assert request.cuisine == "asian"
-        assert request.meal_type == "main course"
-        assert request.intolerances == "gluten, peanuts"
-
-    def test_valid_request_with_partial_optional_fields(self):
-        """Test valid request with some optional fields."""
-        request = RecipeRequest(
-            ingredients=["salmon"],
-            diet="mediterranean",
-            cuisine="italian",
-        )
-        assert request.ingredients == ["salmon"]
-        assert request.diet == "mediterranean"
-        assert request.cuisine == "italian"
-        assert request.meal_type is None
-        assert request.intolerances is None
-
-    def test_invalid_missing_required_ingredients(self):
-        """Test that missing required ingredients field raises error."""
-        with pytest.raises(ValidationError):
-            RecipeRequest(diet="vegan")
-
-    def test_invalid_ingredients_not_list(self):
-        """Test that ingredients not as list raises error."""
-        with pytest.raises(ValidationError):
-            RecipeRequest(ingredients="tomato, basil")
-
-    def test_valid_empty_ingredients_list(self):
-        """Test that empty ingredients list raises error (min_length=1)."""
-        with pytest.raises(ValidationError):
-            RecipeRequest(ingredients=[])
-
-    def test_json_serialization_roundtrip(self):
-        """Test JSON serialization and deserialization roundtrip."""
-        original = RecipeRequest(
-            ingredients=["egg", "cheese"],
-            diet="vegetarian",
-        )
-        json_str = original.model_dump_json()
-        deserialized = RecipeRequest.model_validate_json(json_str)
-        assert deserialized.ingredients == original.ingredients
-        assert deserialized.diet == original.diet
 
 
 class TestRecipe:
@@ -254,7 +186,7 @@ class TestRecipeResponse:
             response="Here are some recipes for you.",
             recipes=[recipe],
             ingredients=["ingredient1", "ingredient2"],
-            preferences={"diet": "vegetarian", "cuisine": "italian"},
+            preferences=["vegetarian", "italian"],
             session_id="session123",
             run_id="run456",
             execution_time_ms=1500,
@@ -278,7 +210,7 @@ class TestRecipeResponse:
             response="Here's a test recipe.",
             recipes=[recipe],
             ingredients=["test"],
-            preferences={},
+            preferences=[],
             session_id=None,
             run_id=None,
             execution_time_ms=100,
@@ -293,7 +225,7 @@ class TestRecipeResponse:
             response="No recipes found for your request.",
             recipes=[],
             ingredients=[],
-            preferences={},
+            preferences=[],
             execution_time_ms=50,
         )
         assert response.recipes == []
@@ -316,7 +248,7 @@ class TestRecipeResponse:
             response="Found 3 great recipes for you!",
             recipes=recipes,
             ingredients=["ing1", "ing2", "ing3"],
-            preferences={"diet": "keto"},
+            preferences=["keto"],
             execution_time_ms=2000,
         )
         assert len(response.recipes) == 3
@@ -337,7 +269,7 @@ class TestRecipeResponse:
             response="Test response.",
             recipes=[],
             ingredients=[],
-            preferences={},
+            preferences=[],
             execution_time_ms="1500",
         )
         assert response.execution_time_ms == 1500
@@ -356,7 +288,7 @@ class TestRecipeResponse:
             response="Roundtrip test response.",
             recipes=[recipe],
             ingredients=["test"],
-            preferences={"diet": "vegan"},
+            preferences=["vegan"],
             execution_time_ms=1000,
         )
         json_str = original.model_dump_json()
@@ -460,15 +392,6 @@ class TestIngredientDetectionOutput:
 
 class TestJSONSchemaGeneration:
     """Test JSON schema generation for OpenAPI documentation."""
-
-    def test_recipe_request_schema(self):
-        """Test that RecipeRequest generates valid JSON schema."""
-        schema = RecipeRequest.model_json_schema()
-        assert schema is not None
-        assert "properties" in schema
-        assert "ingredients" in schema["properties"]
-        assert "required" in schema
-        assert "ingredients" in schema["required"]
 
     def test_recipe_response_schema(self):
         """Test that RecipeResponse generates valid JSON schema."""

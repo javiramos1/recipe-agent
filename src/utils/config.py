@@ -30,6 +30,7 @@ class Config:
         self.MAX_IMAGE_SIZE_MB: int = int(os.getenv("MAX_IMAGE_SIZE_MB", "5"))
         self.MIN_INGREDIENT_CONFIDENCE: float = float(os.getenv("MIN_INGREDIENT_CONFIDENCE", "0.7"))
         self.IMAGE_DETECTION_MODE: str = os.getenv("IMAGE_DETECTION_MODE", "pre-hook")
+        self.COMPRESS_IMG: bool = os.getenv("COMPRESS_IMG", "true").lower() in ("true", "1", "yes")
         self.DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
 
     def validate(self) -> None:
