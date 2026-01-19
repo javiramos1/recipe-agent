@@ -15,19 +15,17 @@ Features:
 - Tool lifecycle: MCPs initialized before AgentOS starts (async initialization)
 """
 
-import asyncio
-
 from agno.os import AgentOS
 from agno.os.interfaces.agui import AGUI
 
 from src.utils.config import config
 from src.utils.logger import logger
-from src.agents.agent import initialize_recipe_agent
+from src.agents.agent import initialize_recipe_agent_sync
 
 
-# Initialize agent using factory pattern (async)
+# Initialize agent using factory pattern (synchronous wrapper)
 logger.info("Starting Recipe Recommendation Service initialization...")
-agent = asyncio.run(initialize_recipe_agent())
+agent = initialize_recipe_agent_sync()
 
 # Create AgentOS with the agent and Web UI interface
 logger.info("Creating AgentOS instance with Web UI...")
@@ -52,4 +50,5 @@ if __name__ == "__main__":
     
     # Run with AgentOS (production-ready, no reload)
     # Note: reload=False (default) to avoid MCP lifespan issues
-    agent_os.serve(app="app:app", port=config.PORT, reload=False)
+    # Pass the app object directly instead of string to avoid reimport
+    agent_os.serve(app=app, port=config.PORT, reload=False)

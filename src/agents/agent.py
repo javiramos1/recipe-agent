@@ -114,7 +114,7 @@ async def initialize_recipe_agent() -> Agent:
         pre_hooks=pre_hooks,
         input_schema=RecipeRequest,
         output_schema=RecipeResponse,
-        system_prompt=SYSTEM_INSTRUCTIONS,
+        instructions=SYSTEM_INSTRUCTIONS,
         # Memory settings
         add_history_to_context=True,
         num_history_runs=config.MAX_HISTORY,
@@ -129,3 +129,29 @@ async def initialize_recipe_agent() -> Agent:
     logger.info("=== Agent initialization complete ===")
     
     return agent
+
+
+def initialize_recipe_agent_sync() -> Agent:
+    """Synchronous wrapper for initialize_recipe_agent (for module-level initialization).
+    
+    This wrapper handles async initialization at module load time before AgentOS
+    creates its event loop.
+    """
+    try:
+        # Try to get the current event loop (will fail if none exists)
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If loop is already running, we can't use it - create a new one
+            raise RuntimeError("Event loop already running")
+    except RuntimeError:
+        # No event loop exists - create a new one
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(initialize_recipe_agent())
+        finally:
+            # Don't close the loop if it might be used by uvicorn later
+            pass
+    
+    # This shouldn't happen in normal startup, but just in case
+    return loop.run_until_complete(initialize_recipe_agent())
