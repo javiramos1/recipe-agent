@@ -1,4 +1,4 @@
-.PHONY: setup dev run query stop test eval clean help venv-check
+.PHONY: setup dev dev-bkg run query stop test eval clean help venv-check
 
 # Virtual environment directory
 VENV_DIR := .venv
@@ -14,9 +14,10 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev         Start application (http://localhost:7777)"
+	@echo "  make dev-bkg     Start application in background"
 	@echo "  make run         Start application (production mode)"
 	@echo "  make stop        Stop running application server"
-	@echo "  make query Q=\"..\"  Run ad hoc query without starting server"
+	@echo "  make query Q=\"..\"  Run ad hoc query (auto-starts/stops background server)"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test        Run unit tests"
@@ -67,6 +68,10 @@ dev: venv-check
 	@echo ""
 	$(PYTHON) app.py
 
+# Development background: Start in background using helper script
+dev-bkg: venv-check
+	@./scripts/start_bkg.sh $(PYTHON)
+
 # Production: Start without hot-reload
 run: venv-check
 	@echo "Starting application in production mode..."
@@ -82,8 +87,8 @@ stop:
 	@pkill -f "python app.py" 2>/dev/null || true
 	@echo "✓ Application stopped"
 
-# Ad hoc Query: Run a single query without starting the server
-query: venv-check
+# Ad hoc Query: Run a single query (auto-manages background server)
+query: venv-check dev-bkg
 	@if [ -z "$(Q)" ]; then \
 		echo "Usage: make query Q=\"<your query>\""; \
 		echo "Example: make query Q=\"What can I make with chicken and rice?\""; \
@@ -91,7 +96,13 @@ query: venv-check
 	fi
 	@echo "Running ad hoc query..."
 	@echo ""
-	$(PYTHON) query.py $(Q)
+	@sleep 1; \
+	$(PYTHON) query.py $(Q); \
+	QUERY_RESULT=$$?; \
+	echo ""; \
+	echo "Stopping background server..."; \
+	make stop; \
+	exit $$QUERY_RESULT
 
 # Unit Tests
 test: venv-check
