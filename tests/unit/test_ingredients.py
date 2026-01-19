@@ -9,7 +9,7 @@ Tests cover:
 """
 
 import json
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -141,29 +141,32 @@ class TestFilterIngredientsByConfidence:
 class TestExtractIngredientsPreHook:
     """Test the main pre-hook function."""
 
-    def test_no_images(self):
+    @pytest.mark.asyncio
+    async def test_no_images(self):
         """Request without images should return early."""
         run_input = Mock()
         run_input.images = []
         run_input.input_content = "What can I make?"
 
-        extract_ingredients_pre_hook(run_input)
+        await extract_ingredients_pre_hook(run_input)
 
         # Should not modify input
         assert run_input.input_content == "What can I make?"
         assert run_input.images == []
 
-    def test_no_images_attribute(self):
+    @pytest.mark.asyncio
+    async def test_no_images_attribute(self):
         """Request without images attribute should return early."""
         run_input = Mock(spec=[])  # No images attribute
         run_input.input_content = "What can I make?"
 
         # Should not crash
-        extract_ingredients_pre_hook(run_input)
+        await extract_ingredients_pre_hook(run_input)
 
-    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes", new_callable=AsyncMock)
     @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
-    def test_successful_extraction(self, mock_extract, mock_fetch):
+    async def test_successful_extraction(self, mock_extract, mock_fetch):
         """Successful extraction should append ingredients to message."""
         # PNG magic bytes
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
@@ -179,7 +182,7 @@ class TestExtractIngredientsPreHook:
         run_input.images = [image]
         run_input.input_content = "What can I make?"
 
-        extract_ingredients_pre_hook(run_input)
+        await extract_ingredients_pre_hook(run_input)
 
         # Should append ingredients
         assert "[Detected Ingredients]" in run_input.input_content
@@ -189,8 +192,9 @@ class TestExtractIngredientsPreHook:
         # Should clear images
         assert run_input.images == []
 
-    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
-    def test_failed_extraction(self, mock_extract):
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image", new_callable=AsyncMock)
+    async def test_failed_extraction(self, mock_extract):
         """Failed extraction should not modify message."""
         mock_extract.return_value = None
 
@@ -201,7 +205,7 @@ class TestExtractIngredientsPreHook:
         run_input.images = [image]
         run_input.input_content = "What can I make?"
 
-        extract_ingredients_pre_hook(run_input)
+        await extract_ingredients_pre_hook(run_input)
 
         # Should not append ingredients
         assert "[Detected Ingredients]" not in run_input.input_content
@@ -210,9 +214,10 @@ class TestExtractIngredientsPreHook:
         # Should still clear images
         assert run_input.images == []
 
-    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
-    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
-    def test_multiple_images(self, mock_extract, mock_fetch):
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes", new_callable=AsyncMock)
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image", new_callable=AsyncMock)
+    async def test_multiple_images(self, mock_extract, mock_fetch):
         """Multiple images should have ingredients combined."""
         # PNG magic bytes
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
@@ -236,7 +241,7 @@ class TestExtractIngredientsPreHook:
         run_input.images = [image1, image2]
         run_input.input_content = "What can I make?"
 
-        extract_ingredients_pre_hook(run_input)
+        await extract_ingredients_pre_hook(run_input)
 
         # All ingredients should be present
         assert "tomato" in run_input.input_content
@@ -244,9 +249,10 @@ class TestExtractIngredientsPreHook:
         assert "mozzarella" in run_input.input_content
         assert "olive oil" in run_input.input_content
 
-    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
-    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
-    def test_duplicate_ingredients(self, mock_extract, mock_fetch):
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes", new_callable=AsyncMock)
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image", new_callable=AsyncMock)
+    async def test_duplicate_ingredients(self, mock_extract, mock_fetch):
         """Duplicate ingredients should be deduplicated."""
         # PNG magic bytes
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
@@ -270,7 +276,7 @@ class TestExtractIngredientsPreHook:
         run_input.images = [image1, image2]
         run_input.input_content = "What can I make?"
 
-        extract_ingredients_pre_hook(run_input)
+        await extract_ingredients_pre_hook(run_input)
 
         # Count occurrences of 'tomato' in ingredient text
         ingredients_section = run_input.input_content.split("[Detected Ingredients] ")[1]
@@ -279,8 +285,9 @@ class TestExtractIngredientsPreHook:
         # Should appear only once
         assert tomato_count == 1
 
-    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
-    def test_error_resilience(self, mock_extract):
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image", new_callable=AsyncMock)
+    async def test_error_resilience(self, mock_extract):
         """Pre-hook should not crash on errors."""
         mock_extract.side_effect = Exception("API error")
 
@@ -292,7 +299,7 @@ class TestExtractIngredientsPreHook:
         run_input.input_content = "What can I make?"
 
         # Should not raise exception
-        extract_ingredients_pre_hook(run_input)
+        await extract_ingredients_pre_hook(run_input)
 
         # Should still clear images
         assert run_input.images == []
@@ -301,8 +308,9 @@ class TestExtractIngredientsPreHook:
 class TestExtractIngredientsFromImage:
     """Test the Gemini vision API integration."""
 
+    @pytest.mark.asyncio
     @patch("src.mcp_tools.ingredients.genai.Client")
-    def test_successful_call(self, mock_client_class):
+    async def test_successful_call(self, mock_client_class):
         """Successful API call should return parsed ingredients."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
@@ -314,14 +322,15 @@ class TestExtractIngredientsFromImage:
         # PNG magic bytes
         image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
 
-        result = extract_ingredients_from_image(image_bytes)
+        result = await extract_ingredients_from_image(image_bytes)
 
         assert result is not None
         assert result["ingredients"] == ["tomato"]
         assert result["confidence_scores"]["tomato"] == 0.95
 
+    @pytest.mark.asyncio
     @patch("src.mcp_tools.ingredients.genai.Client")
-    def test_invalid_response_structure(self, mock_client_class):
+    async def test_invalid_response_structure(self, mock_client_class):
         """Invalid response structure should return None."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
@@ -333,12 +342,13 @@ class TestExtractIngredientsFromImage:
         # PNG magic bytes
         image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
 
-        result = extract_ingredients_from_image(image_bytes)
+        result = await extract_ingredients_from_image(image_bytes)
 
         assert result is None
 
+    @pytest.mark.asyncio
     @patch("src.mcp_tools.ingredients.genai.Client")
-    def test_api_error(self, mock_client_class):
+    async def test_api_error(self, mock_client_class):
         """API errors should be caught and return None."""
         mock_client = Mock()
         mock_client_class.return_value = mock_client
@@ -347,7 +357,7 @@ class TestExtractIngredientsFromImage:
         # PNG magic bytes
         image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
 
-        result = extract_ingredients_from_image(image_bytes)
+        result = await extract_ingredients_from_image(image_bytes)
 
         assert result is None
 
@@ -355,8 +365,9 @@ class TestExtractIngredientsFromImage:
 class TestExtractIngredientsWithRetries:
     """Test retry logic with exponential backoff."""
 
+    @pytest.mark.asyncio
     @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
-    def test_success_first_attempt(self, mock_extract):
+    async def test_success_first_attempt(self, mock_extract):
         """Should return immediately on first success."""
         mock_extract.return_value = {
             "ingredients": ["tomato"],
@@ -366,14 +377,15 @@ class TestExtractIngredientsWithRetries:
         # PNG magic bytes
         image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
 
-        result = extract_ingredients_with_retries(image_bytes, max_retries=3)
+        result = await extract_ingredients_with_retries(image_bytes, max_retries=3)
 
         assert result is not None
         assert mock_extract.call_count == 1  # Only called once
 
-    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image", new_callable=AsyncMock)
     @patch("time.sleep")
-    def test_retry_on_transient_failure(self, mock_sleep, mock_extract):
+    async def test_retry_on_transient_failure(self, mock_sleep, mock_extract):
         """Should retry on transient failures (network errors, timeouts)."""
         # First two calls fail with transient error, third succeeds
         mock_extract.side_effect = [
@@ -388,14 +400,15 @@ class TestExtractIngredientsWithRetries:
         # PNG magic bytes
         image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
 
-        result = extract_ingredients_with_retries(image_bytes, max_retries=3)
+        result = await extract_ingredients_with_retries(image_bytes, max_retries=3)
 
         assert result is not None
         assert mock_extract.call_count == 3  # Called 3 times (2 failures + 1 success)
 
-    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
-    @patch("time.sleep")
-    def test_exponential_backoff(self, mock_sleep, mock_extract):
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image", new_callable=AsyncMock)
+    @patch("src.mcp_tools.ingredients.asyncio.sleep", new_callable=AsyncMock)
+    async def test_exponential_backoff(self, mock_sleep, mock_extract):
         """Should use exponential backoff (1s, 2s, 4s)."""
         mock_extract.side_effect = [
             Exception("Connection timeout"),
@@ -406,7 +419,7 @@ class TestExtractIngredientsWithRetries:
         # PNG magic bytes
         image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
 
-        result = extract_ingredients_with_retries(image_bytes, max_retries=3)
+        result = await extract_ingredients_with_retries(image_bytes, max_retries=3)
 
         assert result is None
         # Should sleep twice (between attempts): 1s and 2s
@@ -414,29 +427,31 @@ class TestExtractIngredientsWithRetries:
         calls = [call[0][0] for call in mock_sleep.call_args_list]
         assert calls == [1, 2]
 
-    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
-    def test_no_retry_on_permanent_failure(self, mock_extract):
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image", new_callable=AsyncMock)
+    async def test_no_retry_on_permanent_failure(self, mock_extract):
         """Should NOT retry on permanent failures (invalid API key)."""
         mock_extract.side_effect = Exception("Invalid API key")
 
         # PNG magic bytes
         image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
 
-        result = extract_ingredients_with_retries(image_bytes, max_retries=3)
+        result = await extract_ingredients_with_retries(image_bytes, max_retries=3)
 
         assert result is None
         # Should be called only once (no retries on permanent error)
         assert mock_extract.call_count == 1
 
-    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image")
-    def test_max_retries_exceeded(self, mock_extract):
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.extract_ingredients_from_image", new_callable=AsyncMock)
+    async def test_max_retries_exceeded(self, mock_extract):
         """Should return None after max retries exceeded."""
         mock_extract.return_value = None  # Keeps returning None
 
         # PNG magic bytes
         image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
 
-        result = extract_ingredients_with_retries(image_bytes, max_retries=2)
+        result = await extract_ingredients_with_retries(image_bytes, max_retries=2)
 
         assert result is None
         assert mock_extract.call_count == 2  # Called exactly max_retries times
@@ -445,9 +460,10 @@ class TestExtractIngredientsWithRetries:
 class TestDetectIngredientsTool:
     """Test the ingredient detection tool function."""
 
-    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries")
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries", new_callable=AsyncMock)
     @patch("src.mcp_tools.ingredients.fetch_image_bytes")
-    def test_successful_url_extraction(self, mock_fetch, mock_extract):
+    async def test_successful_url_extraction(self, mock_fetch, mock_extract):
         """URL-based extraction should work correctly."""
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
         mock_extract.return_value = {
@@ -455,15 +471,16 @@ class TestDetectIngredientsTool:
             "confidence_scores": {"tomato": 0.95, "basil": 0.88},
         }
 
-        result = detect_ingredients_tool("http://example.com/image.jpg")
+        result = await detect_ingredients_tool("http://example.com/image.jpg")
 
         assert result is not None
         assert result["ingredients"] == ["tomato", "basil"]
         assert "tomato" in result["confidence_scores"]
         assert "image_description" in result
 
+    @pytest.mark.asyncio
     @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries")
-    def test_successful_base64_extraction(self, mock_extract):
+    async def test_successful_base64_extraction(self, mock_extract):
         """Base64-based extraction should work correctly."""
         import base64
 
@@ -476,22 +493,24 @@ class TestDetectIngredientsTool:
             "confidence_scores": {"tomato": 0.95},
         }
 
-        result = detect_ingredients_tool(image_base64)
+        result = await detect_ingredients_tool(image_base64)
 
         assert result is not None
         assert result["ingredients"] == ["tomato"]
 
+    @pytest.mark.asyncio
     @patch("src.mcp_tools.ingredients.fetch_image_bytes")
-    def test_invalid_image_format(self, mock_fetch):
+    async def test_invalid_image_format(self, mock_fetch):
         """Invalid image format should raise ValueError."""
         mock_fetch.return_value = b"GIF89a"  # GIF format
 
         with pytest.raises(ValueError, match="Invalid image format"):
-            detect_ingredients_tool("http://example.com/image.gif")
+            await detect_ingredients_tool("http://example.com/image.gif")
 
-    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries")
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries", new_callable=AsyncMock)
     @patch("src.mcp_tools.ingredients.fetch_image_bytes")
-    def test_no_ingredients_detected(self, mock_fetch, mock_extract):
+    async def test_no_ingredients_detected(self, mock_fetch, mock_extract):
         """No ingredients with sufficient confidence should raise ValueError."""
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
         mock_extract.return_value = {
@@ -500,19 +519,21 @@ class TestDetectIngredientsTool:
         }
 
         with pytest.raises(ValueError, match="No ingredients detected"):
-            detect_ingredients_tool("http://example.com/image.jpg")
+            await detect_ingredients_tool("http://example.com/image.jpg")
 
-    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
-    def test_failed_to_fetch_image(self, mock_fetch):
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes", new_callable=AsyncMock)
+    async def test_failed_to_fetch_image(self, mock_fetch):
         """Failed image fetch should raise ValueError."""
         mock_fetch.return_value = None
 
         with pytest.raises(ValueError, match="Could not retrieve image"):
-            detect_ingredients_tool("http://example.com/image.jpg")
+            await detect_ingredients_tool("http://example.com/image.jpg")
 
-    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries")
-    @patch("src.mcp_tools.ingredients.fetch_image_bytes")
-    def test_image_description_multiple_ingredients(self, mock_fetch, mock_extract):
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries", new_callable=AsyncMock)
+    @patch("src.mcp_tools.ingredients.fetch_image_bytes", new_callable=AsyncMock)
+    async def test_image_description_multiple_ingredients(self, mock_fetch, mock_extract):
         """Image description should show confidence percentages."""
         mock_fetch.return_value = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
         mock_extract.return_value = {
@@ -527,7 +548,7 @@ class TestDetectIngredientsTool:
             },
         }
 
-        result = detect_ingredients_tool("http://example.com/image.jpg")
+        result = await detect_ingredients_tool("http://example.com/image.jpg")
 
         # Should show first 5 ingredients and mention "1 more"
         assert "1 more" in result["image_description"]

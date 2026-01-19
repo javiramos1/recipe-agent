@@ -1,7 +1,7 @@
 """Unit tests for Spoonacular MCP initialization."""
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 from src.mcp_tools.spoonacular import SpoonacularMCP
 
@@ -24,8 +24,9 @@ class TestMCPInit:
 class TestMCPInitialize:
     """Tests for initialize method."""
 
+    @pytest.mark.asyncio
     @patch("src.mcp_tools.spoonacular.MCPTools")
-    @patch("src.mcp_tools.spoonacular.asyncio.to_thread")
+    @patch("src.mcp_tools.spoonacular.asyncio.to_thread", new_callable=AsyncMock)
     async def test_initialize_success(self, mock_to_thread, mock_mcp: Mock) -> None:
         """Test successful initialization."""
         mock_instance = MagicMock()
@@ -36,8 +37,9 @@ class TestMCPInitialize:
         
         assert result == mock_instance
 
-    @patch("src.mcp_tools.spoonacular.asyncio.sleep")
-    @patch("src.mcp_tools.spoonacular.asyncio.to_thread")
+    @pytest.mark.asyncio
+    @patch("src.mcp_tools.spoonacular.asyncio.sleep", new_callable=AsyncMock)
+    @patch("src.mcp_tools.spoonacular.asyncio.to_thread", new_callable=AsyncMock)
     async def test_initialize_with_retries(self, mock_to_thread: Mock, mock_sleep: Mock) -> None:
         """Test initialization with retries."""
         mock_instance = MagicMock()
