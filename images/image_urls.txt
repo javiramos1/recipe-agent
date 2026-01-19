@@ -1,13 +1,15 @@
 # Sample Ingredient Images for Testing
-# Format: URL | Description | Local File
-# Source: Unsplash (https://unsplash.com) - Free for commercial use + Local test images
+# Format: URL | Description | Source
+# Source: Unsplash (https://unsplash.com) - Free for commercial use
+# All images contain actual food ingredients (not text)
 
-# Downloaded from Unsplash
-https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600 | Fresh salad bowl ingredients | images/salad_bowl.jpg
+# LOCAL IMAGES
+file://images/salad_bowl.jpg | Fresh salad bowl ready to serve | Local
+file://images/fresh_produce.jpg | Variety of fresh produce and ingredients | Local
+file://images/fresh_vegetables.jpg | Assorted fresh vegetables ready for cooking | Local
+file://images/fruit.jpg | Fresh assorted fruits | Local
 
-# Local test images with ingredient labels (created for testing)
-file://images/tomato_basil.jpg | Fresh tomato and basil ingredients | images/tomato_basil.jpg
-file://images/vegetables.jpg | Mixed fresh vegetables | images/vegetables.jpg
-file://images/pasta_ingredients.jpg | Fresh pasta ingredients | images/pasta_ingredients.jpg
-file://images/herbs.jpg | Fresh herbs and spices | images/herbs.jpg
-file://images/garlic_onion.jpg | Fresh garlic and onion | images/garlic_onion.jpg
+# REMOTE IMAGES (Unsplash)
+https://plus.unsplash.com/premium_photo-1670895801174-8278045808f4?q=80&w=987&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D | Gourmet food ingredients | Unsplash
+https://images.unsplash.com/photo-1466637574441-749b8f19452f?q=80&w=1180&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D | Fresh herbs and spices | Unsplash
+https://images.unsplash.com/photo-1507048331197-7d4ac70811cf?q=80&w=1674&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D | Colorful fresh produce | Unsplash

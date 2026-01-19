@@ -21,10 +21,12 @@ help:
 	@echo "  make stop            Stop running application server"
 	@echo ""
 	@echo "Queries (with auto-managed background server):"
-	@echo "  make query Q=\"..\"                    Run stateful query (uses session memory)"
-	@echo "  make query Q=\"..\" S=1                Run stateless query (no session history)"
-	@echo "  make query Q=\"..\" DEBUG=1            Run with debug output enabled"
-	@echo "  make query Q=\"..\" S=1 DEBUG=1        Run stateless with debug enabled"
+	@echo "  make query Q=\"..\"                           Run stateful query (uses session memory)"
+	@echo "  make query Q=\"..\" S=1                       Run stateless query (no session history)"
+	@echo "  make query Q=\"..\" DEBUG=1                   Run with debug output enabled"
+	@echo "  make query Q=\"..\" IMG=path/to/image.png    Include image for ingredient detection"
+	@echo "  make query Q=\"..\" S=1 DEBUG=1              Run stateless with debug enabled"
+	@echo "  make query Q=\"..\" IMG=images/pasta.png DEBUG=1  Test with image and debug"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test            Run unit tests"
@@ -101,48 +103,73 @@ stop:
 	@echo "✓ Application stopped"
 
 # Ad hoc Query: Run a single query (auto-manages background server)
-# Usage: make query Q="..." [S=1] [DEBUG=1] where S=1 enables stateless mode, DEBUG=1 enables debug output
+# Usage: make query Q="..." [S=1] [DEBUG=1] [IMG=path/to/image.png]
 query: venv-check dev-bkg
 	@if [ -z "$(Q)" ]; then \
-		echo "Usage: make query Q=\"<your query>\" [S=1] [DEBUG=1]"; \
+		echo "Usage: make query Q=\"<your query>\" [S=1] [DEBUG=1] [IMG=path/to/image.png]"; \
 		echo ""; \
 		echo "Options:"; \
-		echo "  S=1     Run in stateless mode (no session history)"; \
-		echo "  DEBUG=1 Enable debug output (see tool calls, LLM input/output, metrics)"; \
+		echo "  S=1             Run in stateless mode (no session history)"; \
+		echo "  DEBUG=1         Enable debug output (see tool calls, LLM input/output, metrics)"; \
+		echo "  IMG=path/file   Include image for ingredient detection"; \
 		echo ""; \
 		echo "Examples:"; \
 		echo "  make query Q=\"What can I make with chicken?\""; \
 		echo "  make query Q=\"What can I make with chicken?\" S=1"; \
 		echo "  make query Q=\"What can I make with chicken?\" DEBUG=1"; \
-		echo "  make query Q=\"What can I make with chicken?\" S=1 DEBUG=1"; \
+		echo "  make query Q=\"What can I make with this?\" IMG=images/pasta.png"; \
+		echo "  make query Q=\"What can I make with this?\" IMG=images/pasta.png DEBUG=1"; \
 		exit 1; \
 	fi
 	@if [ "$(DEBUG)" = "1" ] || [ "$(DEBUG)" = "true" ]; then \
 		export AGNO_DEBUG=True; \
-		echo "Running stateless ad hoc query (no session memory)..."; \
+		if [ "$(S)" = "1" ]; then \
+			echo "Running stateless ad hoc query (no session memory)..."; \
+		else \
+			echo "Running stateful ad hoc query (with session memory)..."; \
+		fi; \
+		if [ -n "$(IMG)" ]; then \
+			echo "Image: $(IMG)"; \
+		fi; \
 		echo "Debug output enabled"; \
 		echo ""; \
 		sleep 1; \
 		if [ "$(S)" = "1" ]; then \
-			$(PYTHON) query.py --stateless "$(Q)"; \
+			if [ -n "$(IMG)" ]; then \
+				$(PYTHON) query.py --stateless --image $(IMG) "$(Q)"; \
+			else \
+				$(PYTHON) query.py --stateless "$(Q)"; \
+			fi; \
 		else \
-			echo "Running stateful ad hoc query (with session memory)..."; \
-			echo "Debug output enabled"; \
-			echo ""; \
-			sleep 1; \
-			$(PYTHON) query.py "$(Q)"; \
+			if [ -n "$(IMG)" ]; then \
+				$(PYTHON) query.py --image $(IMG) "$(Q)"; \
+			else \
+				$(PYTHON) query.py "$(Q)"; \
+			fi; \
 		fi; \
 	else \
 		if [ "$(S)" = "1" ]; then \
 			echo "Running stateless ad hoc query (no session memory)..."; \
-			echo ""; \
-			sleep 1; \
-			$(PYTHON) query.py --stateless "$(Q)"; \
 		else \
 			echo "Running stateful ad hoc query (with session memory)..."; \
-			echo ""; \
-			sleep 1; \
-			$(PYTHON) query.py "$(Q)"; \
+		fi; \
+		if [ -n "$(IMG)" ]; then \
+			echo "Image: $(IMG)"; \
+		fi; \
+		echo ""; \
+		sleep 1; \
+		if [ "$(S)" = "1" ]; then \
+			if [ -n "$(IMG)" ]; then \
+				$(PYTHON) query.py --stateless --image $(IMG) "$(Q)"; \
+			else \
+				$(PYTHON) query.py --stateless "$(Q)"; \
+			fi; \
+		else \
+			if [ -n "$(IMG)" ]; then \
+				$(PYTHON) query.py --image $(IMG) "$(Q)"; \
+			else \
+				$(PYTHON) query.py "$(Q)"; \
+			fi; \
 		fi; \
 	fi; \
 	QUERY_RESULT=$$?; \

@@ -31,6 +31,7 @@ import asyncio
 import base64
 import json
 import re
+from io import BytesIO
 from typing import Optional
 
 import aiohttp
@@ -41,6 +42,74 @@ from google.genai import types
 from src.utils.config import config
 from src.utils.logger import logger
 from src.models.models import IngredientDetectionOutput
+
+# Try to import PIL for image compression
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+
+
+def compress_image(image_bytes: bytes, max_size_mb: float = 1.0, max_width: int = 1024) -> bytes:
+    """Compress image for API transmission while preserving quality.
+    
+    Args:
+        image_bytes: Raw image bytes to compress
+        max_size_mb: Target maximum file size in MB
+        max_width: Maximum image width in pixels
+        
+    Returns:
+        Compressed image bytes (or original if compression not available)
+    """
+    if not HAS_PIL:
+        logger.debug("PIL not available, skipping image compression")
+        return image_bytes
+    
+    try:
+        img = Image.open(BytesIO(image_bytes))
+        original_size_mb = len(image_bytes) / (1024 * 1024)
+        
+        # Convert RGBA to RGB if needed
+        if img.mode in ("RGBA", "LA", "P"):
+            rgb_img = Image.new("RGB", img.size, (255, 255, 255))
+            if img.mode == "RGBA":
+                rgb_img.paste(img, mask=img.split()[-1])
+            else:
+                rgb_img.paste(img)
+            img = rgb_img
+        
+        # Resize if too large
+        if img.width > max_width:
+            ratio = max_width / img.width
+            new_height = int(img.height * ratio)
+            img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+        
+        # Compress to target size
+        output = BytesIO()
+        quality = 85
+        while quality > 10:
+            output.seek(0)
+            output.truncate(0)
+            img.save(output, format="JPEG", quality=quality, optimize=True)
+            size_mb = output.tell() / (1024 * 1024)
+            if size_mb <= max_size_mb:
+                break
+            quality -= 5
+        
+        output.seek(0)
+        compressed_bytes = output.read()
+        compressed_size_mb = len(compressed_bytes) / (1024 * 1024)
+        
+        logger.debug(
+            f"Image compressed: {original_size_mb:.2f}MB → {compressed_size_mb:.2f}MB "
+            f"({(1 - compressed_size_mb/original_size_mb)*100:.1f}% reduction)"
+        )
+        return compressed_bytes
+        
+    except Exception as e:
+        logger.warning(f"Failed to compress image: {e}. Using original.")
+        return image_bytes
 
 
 async def fetch_image_bytes(image_source: str | bytes) -> Optional[bytes]:
@@ -285,6 +354,10 @@ async def extract_ingredients_pre_hook(
 
             if not validate_image_size(image_bytes):
                 continue
+            
+            # Compress image for API transmission
+            logger.debug(f"Image {idx + 1}: Compressing for API transmission...")
+            image_bytes = compress_image(image_bytes)
 
             # Extract ingredients from image (async) - returns validated IngredientDetectionOutput
             result = await extract_ingredients_from_image(image_bytes)
