@@ -39,40 +39,29 @@ def run_query(query: str, debug: bool = False, stateless: bool = False) -> None:
     Args:
         query: The user query to send to the agent (plain text or JSON).
         debug: If True, display full JSON response with all fields.
-        stateless: If True, use a temporary database (clears memory between queries).
+        stateless: If True, disable persistence (no session memory).
     """
     try:
         logger.info(f"Initializing agent (stateless={stateless})...")
         
-        # For stateless mode, temporarily override DATABASE_URL to use a temp database
-        original_db_url = config.DATABASE_URL
-        if stateless:
-            temp_db = Path(tempfile.gettempdir()) / f"query_stateless_{id(asyncio)}.db"
-            config.DATABASE_URL = f"sqlite:///{temp_db}"
-            logger.info(f"Using temporary database: {temp_db}")
-        
         try:
-            agent = initialize_recipe_agent()
+            # Initialize agent with persistence disabled for stateless queries
+            agent = initialize_recipe_agent(use_db=not stateless)
         finally:
-            # Restore original DATABASE_URL
-            if stateless:
-                config.DATABASE_URL = original_db_url
+            pass
         
         logger.info(f"Running query: {query}")
         logger.info("---")
         
-        # Try to parse as JSON, otherwise treat as a text query with extracted ingredients
+        # Try to parse as JSON, otherwise treat as a text message
         try:
             request_data = json.loads(query)
+            # If it's valid JSON, ensure it has a 'message' field
+            if "message" not in request_data:
+                request_data = {"message": query}
         except json.JSONDecodeError:
-            # If not JSON, extract ingredients from natural language or treat as a plain query
-            # For now, send as a simple list of ingredients extracted from common patterns
-            # e.g., "chicken and rice" -> ["chicken", "rice"]
-            import re
-            # Simple extraction: split by "and", commas, etc.
-            parts = re.split(r'\s+(?:and|or|,)\s+|\s*,\s*', query.lower())
-            ingredients = [p.strip() for p in parts if p.strip()]
-            request_data = {"ingredients": ingredients}
+            # If not JSON, treat the entire input as a message
+            request_data = {"message": query}
         
         # Run the query and get response (async call)
         response = asyncio.run(agent.arun(input=json.dumps(request_data)))
@@ -91,7 +80,18 @@ def run_query(query: str, debug: bool = False, stateless: bool = False) -> None:
         
         # Formatted markdown output
         if hasattr(response, 'content'):
-            markdown_content = Markdown(response.content)
+            # If response.content is a Pydantic model or dict, extract the 'response' field
+            if hasattr(response.content, 'response'):
+                markdown_content = Markdown(response.content.response)
+            elif isinstance(response.content, dict) and 'response' in response.content:
+                markdown_content = Markdown(response.content['response'])
+            else:
+                # Convert to string if it's a model
+                markdown_content = Markdown(str(response.content))
+            console.print(markdown_content)
+        elif hasattr(response, 'response'):
+            # Response itself has a response field (RecipeResponse object)
+            markdown_content = Markdown(response.response)
             console.print(markdown_content)
         else:
             console.print(response)

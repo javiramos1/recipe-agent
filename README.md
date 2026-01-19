@@ -143,11 +143,6 @@ LOG_TYPE=text
 - **Use Case**: Development and testing
 - **Throttle**: 1 request/second
 
-**Paid Plans:**
-- **Starter**: 500/day - $12.99/month
-- **Professional**: 5,000/day - $99.99/month
-- **Premium**: Unlimited - Contact sales
-
 **Quota Status:**
 - Check remaining quota in `.env` file or dashboard
 - When exceeded: API returns `402 Payment Required` error

@@ -73,7 +73,7 @@ async def detect_image_ingredients(image_data: str) -> IngredientDetectionOutput
     return await detect_ingredients_tool(image_data)
 
 
-def initialize_recipe_agent() -> Agent:
+def initialize_recipe_agent(use_db: bool = True) -> Agent:
     """Factory function to initialize and configure the recipe recommendation agent (sync).
     
     This function:
@@ -83,6 +83,9 @@ def initialize_recipe_agent() -> Agent:
     4. Registers ingredient detection tool (tool mode only)
     5. Registers pre-hooks including ingredient extraction and guardrails
     6. Configures Agno Agent with system instructions and memory settings
+    
+    Args:
+        use_db: If True, use persistent database. If False, run stateless without persistence.
     
     Returns:
         Agent: Fully configured recipe recommendation agent ready for use with AgentOS.
@@ -109,13 +112,18 @@ def initialize_recipe_agent() -> Agent:
     
     # 2. Configure database for session persistence
     logger.info("Step 2/5: Configuring database for session persistence...")
-    if config.DATABASE_URL:
-        logger.info(f"Using PostgreSQL: {config.DATABASE_URL.split('@')[1] if '@' in config.DATABASE_URL else '...'}")
-        db = PostgresDb(db_url=config.DATABASE_URL)
+    if use_db:
+        if config.DATABASE_URL:
+            logger.info(f"Using PostgreSQL: {config.DATABASE_URL.split('@')[1] if '@' in config.DATABASE_URL else '...'}")
+            db = PostgresDb(db_url=config.DATABASE_URL)
+        else:
+            logger.info("Using SQLite database: agno.db")
+            db = SqliteDb(db_file="agno.db")
+        logger.info("✓ Database configured")
     else:
-        logger.info("Using SQLite database: agno.db")
-        db = SqliteDb(db_file="agno.db")
-    logger.info("✓ Database configured")
+        logger.info("Database persistence disabled (stateless mode)")
+        db = None
+        logger.info("✓ Stateless mode configured")
     
     # 3. Build tools list based on configuration
     logger.info("Step 3/5: Registering tools...")

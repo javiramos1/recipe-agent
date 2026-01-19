@@ -14,11 +14,17 @@ help:
 	@echo ""
 	@echo "Development:"
 	@echo "  make dev             Start application (http://localhost:7777)"
+	@echo "  make dev DEBUG=1     Start with debug output enabled"
 	@echo "  make dev-bkg         Start application in background"
 	@echo "  make run             Start application (production mode)"
+	@echo "  make run DEBUG=1     Start with debug output enabled"
 	@echo "  make stop            Stop running application server"
-	@echo "  make query Q=\"..\"    Run ad hoc query (stateful - uses session memory)"
-	@echo "  make query Q=\"..\" S=1  Run stateless query (no session history)"
+	@echo ""
+	@echo "Queries (with auto-managed background server):"
+	@echo "  make query Q=\"..\"                    Run stateful query (uses session memory)"
+	@echo "  make query Q=\"..\" S=1                Run stateless query (no session history)"
+	@echo "  make query Q=\"..\" DEBUG=1            Run with debug output enabled"
+	@echo "  make query Q=\"..\" S=1 DEBUG=1        Run stateless with debug enabled"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test            Run unit tests"
@@ -67,6 +73,9 @@ dev: venv-check
 	@echo ""
 	@echo "Press Ctrl+C to stop"
 	@echo ""
+	@if [ "$(DEBUG)" = "1" ] || [ "$(DEBUG)" = "true" ]; then \
+		export AGNO_DEBUG=True; \
+	fi; \
 	$(PYTHON) app.py
 
 # Development background: Start in background using helper script
@@ -81,6 +90,9 @@ run: venv-check
 	@echo "REST API:          http://localhost:7777/api/agents/chat"
 	@echo "OpenAPI Docs:      http://localhost:7777/docs"
 	@echo ""
+	@if [ "$(DEBUG)" = "1" ] || [ "$(DEBUG)" = "true" ]; then \
+		export AGNO_DEBUG=True; \
+	fi; \
 	$(PYTHON) app.py
 
 # Stop: Kill any running app.py processes
@@ -89,24 +101,49 @@ stop:
 	@echo "✓ Application stopped"
 
 # Ad hoc Query: Run a single query (auto-manages background server)
-# Usage: make query Q="..." [S=1] where S=1 enables stateless mode
+# Usage: make query Q="..." [S=1] [DEBUG=1] where S=1 enables stateless mode, DEBUG=1 enables debug output
 query: venv-check dev-bkg
 	@if [ -z "$(Q)" ]; then \
-		echo "Usage: make query Q=\"<your query>\" [S=1]"; \
-		echo "Example (stateful):   make query Q=\"What can I make with chicken and rice?\""; \
-		echo "Example (stateless):  make query Q=\"What can I make with chicken and rice?\" S=1"; \
+		echo "Usage: make query Q=\"<your query>\" [S=1] [DEBUG=1]"; \
+		echo ""; \
+		echo "Options:"; \
+		echo "  S=1     Run in stateless mode (no session history)"; \
+		echo "  DEBUG=1 Enable debug output (see tool calls, LLM input/output, metrics)"; \
+		echo ""; \
+		echo "Examples:"; \
+		echo "  make query Q=\"What can I make with chicken?\""; \
+		echo "  make query Q=\"What can I make with chicken?\" S=1"; \
+		echo "  make query Q=\"What can I make with chicken?\" DEBUG=1"; \
+		echo "  make query Q=\"What can I make with chicken?\" S=1 DEBUG=1"; \
 		exit 1; \
 	fi
-	@if [ "$(S)" = "1" ]; then \
+	@if [ "$(DEBUG)" = "1" ] || [ "$(DEBUG)" = "true" ]; then \
+		export AGNO_DEBUG=True; \
 		echo "Running stateless ad hoc query (no session memory)..."; \
+		echo "Debug output enabled"; \
 		echo ""; \
 		sleep 1; \
-		$(PYTHON) query.py --stateless "$(Q)"; \
+		if [ "$(S)" = "1" ]; then \
+			$(PYTHON) query.py --stateless "$(Q)"; \
+		else \
+			echo "Running stateful ad hoc query (with session memory)..."; \
+			echo "Debug output enabled"; \
+			echo ""; \
+			sleep 1; \
+			$(PYTHON) query.py "$(Q)"; \
+		fi; \
 	else \
-		echo "Running stateful ad hoc query (with session memory)..."; \
-		echo ""; \
-		sleep 1; \
-		$(PYTHON) query.py "$(Q)"; \
+		if [ "$(S)" = "1" ]; then \
+			echo "Running stateless ad hoc query (no session memory)..."; \
+			echo ""; \
+			sleep 1; \
+			$(PYTHON) query.py --stateless "$(Q)"; \
+		else \
+			echo "Running stateful ad hoc query (with session memory)..."; \
+			echo ""; \
+			sleep 1; \
+			$(PYTHON) query.py "$(Q)"; \
+		fi; \
 	fi; \
 	QUERY_RESULT=$$?; \
 	echo ""; \

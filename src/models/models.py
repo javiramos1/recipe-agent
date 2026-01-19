@@ -91,39 +91,30 @@ class RecipeResponse(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     
     response: Annotated[str, Field(
-        min_length=1,
-        max_length=5000,
         description="Conversational response from the LLM (1-5000 chars)"
     )]
     recipes: Annotated[List[Recipe], Field(
         default_factory=list,
-        max_length=50,
         description="List of recipe objects (max 50 recipes)"
     )]
     ingredients: Annotated[List[str], Field(
         default_factory=list,
-        max_length=100,
         description="List of detected or provided ingredients (max 100)"
     )]
-    preferences: Annotated[dict[str, str], Field(
-        default_factory=dict,
+    preferences: Annotated[Optional[List[str]], Field(
+        default_factory=list,
         description="User preferences (diet, cuisine, meal_type, etc.)"
     )]
     reasoning: Annotated[Optional[str], Field(
         None,
-        max_length=2000,
         description="Explanation of agent's decision-making (max 2000 chars)"
     )]
     session_id: Annotated[Optional[str], Field(
         None,
-        min_length=1,
-        max_length=100,
         description="Session identifier for conversation continuity"
     )]
     run_id: Annotated[Optional[str], Field(
         None,
-        min_length=1,
-        max_length=100,
         description="Unique ID for this agent execution"
     )]
     execution_time_ms: Annotated[int, Field(
