@@ -390,18 +390,33 @@ if __name__ == "__main__":
 ```
 .
 ├── app.py                    # Single entry point (AgentOS application)
-├── config.py                 # Environment configuration (dotenv + env vars)
-├── logger.py                 # Logging configuration (structured/text, colored output)
-├── models.py                 # Pydantic schemas (request/response/domain)
-├── ingredients.py            # Ingredient detection (pre-hook/tool)
 │
-├── agent.py                  # Agent factory function (initialize_recipe_agent)
-├── prompts.py                # System instructions (SYSTEM_INSTRUCTIONS constant)
-├── hooks.py                  # Pre-hooks factory (get_pre_hooks)
-│
-├── mcp_tools/
-│   ├── __init__.py           # Makes mcp_tools a package
-│   └── spoonacular.py        # SpoonacularMCP class with connection validation
+├── src/                      # Application source code
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── config.py         # Environment configuration (dotenv + env vars)
+│   │   └── logger.py         # Logging configuration (structured/text, colored output)
+│   │
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── models.py         # Pydantic schemas (request/response/domain)
+│   │
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   └── agent.py          # Agent factory function (initialize_recipe_agent)
+│   │
+│   ├── prompts/
+│   │   ├── __init__.py
+│   │   └── prompts.py        # System instructions (SYSTEM_INSTRUCTIONS constant)
+│   │
+│   ├── hooks/
+│   │   ├── __init__.py
+│   │   └── hooks.py          # Pre-hooks factory (get_pre_hooks)
+│   │
+│   └── mcp_tools/
+│       ├── __init__.py
+│       ├── ingredients.py    # Ingredient detection (pre-hook/tool)
+│       └── spoonacular.py    # SpoonacularMCP class with connection validation
 │
 ├── tests/
 │   ├── unit/                 # Python unit tests (pytest)
@@ -552,10 +567,10 @@ from agno.guardrails import PIIDetectionGuardrail, PromptInjectionGuardrail
 from pydantic import BaseModel
 from typing import List, Optional
 import base64
-from config import config
-from mcp.spoonacular import SpoonacularMCP
-from ingredients import extract_ingredients_pre_hook
-from logger import logger
+from src.utils.config import config
+from src.mcp_tools.spoonacular import SpoonacularMCP
+from src.mcp_tools.ingredients import extract_ingredients_pre_hook
+from src.utils.logger import logger
 ```
 
 **2. Define Schemas**
@@ -582,15 +597,15 @@ class RecipeResponse(BaseModel):
 
 **3. Define Pre-Hook for Ingredient Extraction**
 
-Create a separate `ingredients.py` module:
+Create a separate `src/mcp_tools/ingredients.py` module:
 
 ```python
-# ingredients.py
+# src/mcp_tools/ingredients.py
 from agno.run.agent import RunInput
 import base64
 import imghdr
 import google.generativeai as genai
-from config import config
+from src.utils.config import config
 
 def extract_ingredients_pre_hook(
     run_input: RunInput,
@@ -750,7 +765,7 @@ import asyncio
 # Step 1: Call async factory function to initialize agent
 # This runs all async initialization (MCP connection, database setup)
 # Retry delays during MCP init are non-blocking (asyncio.sleep)
-from agent import initialize_recipe_agent
+from src.agents.agent import initialize_recipe_agent
 
 agent = asyncio.run(initialize_recipe_agent())  # Async startup completes before serving
 
@@ -1036,7 +1051,7 @@ agent = Agent(
 import base64
 import imghdr
 from agno.tools import tool
-from config import config
+from src.utils.config import config
 import google.generativeai as genai
 
 ### Pattern 1: Pre-Hook for Ingredient Extraction (Current Implementation)
@@ -1048,7 +1063,7 @@ import google.generativeai as genai
 ```python
 from agno.run.agent import RunInput
 import google.generativeai as genai
-from config import config
+from src.utils.config import config
 
 def extract_ingredients_pre_hook(
     run_input: RunInput,
@@ -1111,7 +1126,7 @@ def extract_ingredients_pre_hook(
 **Registration in app.py:**
 
 ```python
-from ingredients import extract_ingredients_pre_hook
+from src.mcp_tools.ingredients import extract_ingredients_pre_hook
 
 agent = Agent(
     model=Gemini(id="gemini-1.5-flash"),
@@ -1574,7 +1589,7 @@ logger = get_logger("recipe_service")
 
 **Usage:**
 ```python
-from logger import logger, get_logger
+from src.utils.logger import logger, get_logger
 
 # Module-level logger
 logger.info("Application starting")
@@ -1657,7 +1672,7 @@ class IngredientDetectionOutput(BaseModel):
 **Example:**
 ```python
 import pytest
-from models import RecipeRequest, RecipeResponse
+from src.models.models import RecipeRequest, RecipeResponse
 
 def test_recipe_request_valid():
     req = RecipeRequest(ingredients=["tomato", "basil"])

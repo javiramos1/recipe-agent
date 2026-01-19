@@ -310,17 +310,29 @@ for attempt in range(max_retries):
 
 ```
 app.py              # AgentOS entry point (~50 lines, minimal orchestration)
-agent.py            # Agent factory function (initialize_recipe_agent, ~150 lines)
-prompts.py          # System instructions (SYSTEM_INSTRUCTIONS constant, ~800 lines)
-hooks.py            # Pre-hooks factory (get_pre_hooks, ~30 lines)
-config.py           # Environment variables and .env loading
-logger.py           # Structured logging configuration
-models.py           # Pydantic schemas (RecipeRequest, RecipeResponse, etc)
-ingredients.py      # Image detection (pre-hook/tool modes)
 
-mcp_tools/
+src/                # All application code organized by function
 ├── __init__.py     # Package marker
-└── spoonacular.py  # SpoonacularMCP class (connection validation, retries)
+├── utils/
+│   ├── __init__.py
+│   ├── config.py           # Environment variables and .env loading
+│   └── logger.py           # Structured logging configuration
+├── agents/
+│   ├── __init__.py
+│   └── agent.py            # Agent factory function (initialize_recipe_agent, ~150 lines)
+├── prompts/
+│   ├── __init__.py
+│   └── prompts.py          # System instructions (SYSTEM_INSTRUCTIONS constant, ~800 lines)
+├── hooks/
+│   ├── __init__.py
+│   └── hooks.py            # Pre-hooks factory (get_pre_hooks, ~30 lines)
+├── models/
+│   ├── __init__.py
+│   └── models.py           # Pydantic schemas (RecipeRequest, RecipeResponse, etc)
+└── mcp_tools/
+    ├── __init__.py         # Package marker
+    ├── ingredients.py      # Image detection (pre-hook/tool modes)
+    └── spoonacular.py      # SpoonacularMCP class (connection validation, retries)
 
 tests/
 ├── unit/           # Schema validation, config loading, MCP init (fast, isolated)
@@ -342,16 +354,16 @@ images/             # Sample test images for verification
 └── IMPLEMENTATION_PLAN.md
 ```
 
-**Factory Pattern Responsibility Map:**
-- **app.py** (50): Import factory → create AgentOS → serve
-- **agent.py** (150): MCP init → DB config → Tools → Pre-hooks → Agent
-- **prompts.py** (800): System instructions (pure data)
-- **hooks.py** (30): Pre-hook factory (ingredient extraction + guardrails)
-- **config.py**: Environment variables, validation
-- **logger.py**: Structured logging (text/JSON)
-- **models.py**: Pydantic schemas
-- **ingredients.py**: Image detection (core functions)
-- **mcp_tools/spoonacular.py**: MCP initialization
+**Module Organization - Responsibility Map:**
+- **app.py** (50): Import factory → create AgentOS → serve (root level, single entry point)
+- **src/agents/agent.py** (150): MCP init → DB config → Tools → Pre-hooks → Agent factory
+- **src/prompts/prompts.py** (800): System instructions (pure data)
+- **src/hooks/hooks.py** (30): Pre-hook factory (ingredient extraction + guardrails)
+- **src/utils/config.py**: Environment variables, validation
+- **src/utils/logger.py**: Structured logging (text/JSON)
+- **src/models/models.py**: Pydantic schemas
+- **src/mcp_tools/ingredients.py**: Image detection (core functions, async)
+- **src/mcp_tools/spoonacular.py**: MCP initialization (async, retry logic)
 
 ## Implementation Guidelines
 

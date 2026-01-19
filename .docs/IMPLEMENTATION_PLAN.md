@@ -60,9 +60,13 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 **Requirements:**
 1. Create folder structure:
    - `app.py` (root level, for AgentOS application)
-   - `config.py` (root level, for configuration)
-   - `models.py` (root level, for Pydantic schemas)
-   - `ingredients.py` (root level, for ingredient detection pre-hook)
+   - `src/` (directory for application code)
+     - `src/utils/` (config.py, logger.py)
+     - `src/models/` (models.py for Pydantic schemas)
+     - `src/agents/` (agent.py for agent factory)
+     - `src/prompts/` (prompts.py for system instructions)
+     - `src/hooks/` (hooks.py for pre-hooks factory)
+     - `src/mcp_tools/` (ingredients.py for ingredient detection, spoonacular.py for MCP)
    - `tests/unit/` (directory for unit tests)
    - `tests/integration/` (directory for integration tests)
    - `images/` (directory for test images)
@@ -163,11 +167,11 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 
 **Output:**
 - `config.py` file with Config class and module-level instance
-- Ready to be imported: `from config import config`
+- Ready to be imported: `from src.utils.config import config`
 
 **Success Criteria:**
-- `python -c "from config import config; print(config.GEMINI_API_KEY)"` raises ValueError if key not set
-- `python -c "from config import config; print(config.PORT)"` returns 7777 (default)
+- `python -c "from src.utils.config import config; print(config.GEMINI_API_KEY)"` raises ValueError if key not set
+- `python -c "from src.utils.config import config; print(config.PORT)"` returns 7777 (default)
 - Environment variables override .env values
 - All numeric conversions work correctly
 
@@ -237,10 +241,10 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - Updated .env.example with logging variables
 
 **Success Criteria:**
-- `python -c "from logger import logger; logger.info('test')"` outputs colored text (default)
-- `LOG_TYPE=json python -c "from logger import logger; logger.info('test')"` outputs JSON
-- `LOG_LEVEL=DEBUG LOG_TYPE=text python -c "from logger import logger; logger.debug('test')"` shows debug message
-- `LOG_LEVEL=WARNING python -c "from logger import logger; logger.info('info')"` does NOT show info message
+- `python -c "from src.utils.logger import logger; logger.info('test')"` outputs colored text (default)
+- `LOG_TYPE=json python -c "from src.utils.logger import logger; logger.info('test')"` outputs JSON
+- `LOG_LEVEL=DEBUG LOG_TYPE=text python -c "from src.utils.logger import logger; logger.debug('test')"` shows debug message
+- `LOG_LEVEL=WARNING python -c "from src.utils.logger import logger; logger.info('info')"` does NOT show info message
 - Logging output includes proper timestamps, levels, logger names
 - No sensitive data (keys, passwords) logged in any messages
 
@@ -252,7 +256,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - Use Python logging module (built-in, no external logging library)
 - Rich library used only for text formatting (colors and output), not for full logging
 - JSON output must be valid JSON parseable by json.loads()
-- Module-level logger instance must be immediately importable: `from logger import logger`
+- Module-level logger instance must be immediately importable: `from src.utils.logger import logger`
 - Do not log full request/response bodies (only metadata: IDs, times, error messages)
 - Text formatter must use ANSI color codes or Rich's Text class if using Rich output
 
@@ -308,7 +312,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 
 **Output:**
 - `models.py` file with all Pydantic models
-- Models ready to import: `from models import Recipe, RecipeRequest, RecipeResponse, etc.`
+- Models ready to import: `from src.models.models import Recipe, RecipeRequest, RecipeResponse, etc.`
 
 **Success Criteria:**
 - All models are valid Pydantic BaseModel subclasses
@@ -316,7 +320,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - `RecipeRequest(diet="invalid")` still creates object (string validation not strict)
 - `RecipeResponse` accepts all required and optional fields
 - Models have proper type hints
-- `python -c "from models import RecipeRequest; print(RecipeRequest.model_json_schema())"` outputs valid JSON schema
+- `python -c "from src.models.models import RecipeRequest; print(RecipeRequest.model_json_schema())"` outputs valid JSON schema
 
 **Dependencies:**
 - Task 2 (for imports only, optional)
@@ -550,7 +554,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
   - Core helper functions (fetch_image_bytes, validate_image_format, etc.)
   - extract_ingredients_pre_hook() function
   - detect_ingredients_tool() function
-- Ready to import: `from ingredients import extract_ingredients_pre_hook, detect_ingredients_tool`
+- Ready to import: `from src.mcp_tools.ingredients import extract_ingredients_pre_hook, detect_ingredients_tool`
 
 **Success Criteria:**
 - Core functions are modular and reusable
@@ -700,7 +704,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
    ```python
    from agno.tools.mcp import MCPTools
    import time
-   from logger import logger
+   from src.utils.logger import logger
    
    class SpoonacularMCP:
        """Initialize and validate Spoonacular MCP connection."""
@@ -760,8 +764,8 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 5. **Usage Pattern (in app.py later):**
 
    ```python
-   from mcp.spoonacular import SpoonacularMCP
-   from logger import logger
+   from src.mcp_tools.spoonacular import SpoonacularMCP
+   from src.utils.logger import logger
    
    # Initialize before creating agent
    logger.info("Initializing Spoonacular MCP...")
@@ -848,9 +852,9 @@ Spoonacular MCP provides these tools (agent will call them automatically):
    from agno.models.google import Gemini
    from agno.db.sqlite import SqliteDb
    from agno.tools import tool
-   from config import config
-   from ingredients import extract_ingredients_pre_hook, detect_ingredients_tool
-   from mcp.spoonacular import SpoonacularMCP
+   from src.utils.config import config
+   from src.mcp_tools.ingredients import extract_ingredients_pre_hook, detect_ingredients_tool
+   from src.mcp_tools.spoonacular import SpoonacularMCP
    
    # Initialize MCP FIRST (fail-fast if unreachable)
    logger.info("Initializing Spoonacular MCP...")
@@ -947,7 +951,7 @@ Spoonacular MCP provides these tools (agent will call them automatically):
    - `output_schema=RecipeResponse` (validate agent responses)
    - AgentOS uses these for automatic validation
    ```python
-   from models import RecipeRequest, RecipeResponse
+   from src.models.models import RecipeRequest, RecipeResponse
    
    agent = Agent(
        # ...
@@ -1215,7 +1219,7 @@ Spoonacular MCP provides these tools (agent will call them automatically):
    - No logging side effects during factory call
 
 4. **Update app.py** (~50 lines) - Minimal Orchestration:
-   - Import factory: `from agent import initialize_recipe_agent`
+   - Import factory: `from src.agents.agent import initialize_recipe_agent`
    - Call factory: `agent = initialize_recipe_agent()`
    - Create AgentOS instance with agent and AGUI interface
    - Extract FastAPI app: `app = agent_os.get_app()`
@@ -1291,7 +1295,7 @@ The Agno evals framework provides a standardized way to test agents end-to-end:
 
 ```python
 from agno.eval import Eval
-from agent import initialize_recipe_agent
+from src.agents.agent import initialize_recipe_agent
 
 # Initialize agent once for all tests
 agent = initialize_recipe_agent()

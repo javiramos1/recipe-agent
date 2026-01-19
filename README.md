@@ -485,21 +485,37 @@ When complete, tests will include:
 ```
 recipe-agent/
 ├── app.py                 # AgentOS entry point (~50 lines, minimal orchestration)
-├── agent.py               # Agent factory function (initialize_recipe_agent)
-├── prompts.py             # System instructions (SYSTEM_INSTRUCTIONS constant)
-├── hooks.py               # Pre-hooks factory (get_pre_hooks)
-├── config.py              # Environment configuration and validation
-├── logger.py              # Structured logging infrastructure
-├── models.py              # Pydantic schemas (RecipeRequest, RecipeResponse)
-├── ingredients.py         # Ingredient detection (core functions + pre-hook/tool)
 ├── requirements.txt       # Python dependencies
 ├── .env.example           # Configuration template
 ├── Makefile               # Development commands (setup, dev, test, etc.)
 ├── README.md              # This file
 │
-├── mcp_tools/
-│   ├── __init__.py        # Package marker
-│   └── spoonacular.py     # SpoonacularMCP class (MCP initialization with retry logic)
+├── src/                   # Application source code (organized by responsibility)
+│   ├── utils/
+│   │   ├── __init__.py
+│   │   ├── config.py      # Environment configuration and validation
+│   │   └── logger.py      # Structured logging infrastructure
+│   │
+│   ├── models/
+│   │   ├── __init__.py
+│   │   └── models.py      # Pydantic schemas (RecipeRequest, RecipeResponse)
+│   │
+│   ├── agents/
+│   │   ├── __init__.py
+│   │   └── agent.py       # Agent factory function (initialize_recipe_agent)
+│   │
+│   ├── prompts/
+│   │   ├── __init__.py
+│   │   └── prompts.py     # System instructions (SYSTEM_INSTRUCTIONS constant)
+│   │
+│   ├── hooks/
+│   │   ├── __init__.py
+│   │   └── hooks.py       # Pre-hooks factory (get_pre_hooks)
+│   │
+│   └── mcp_tools/
+│       ├── __init__.py
+│       ├── ingredients.py # Ingredient detection (core functions + pre-hook/tool)
+│       └── spoonacular.py # SpoonacularMCP class (MCP initialization with retry logic)
 │
 ├── tests/
 │   ├── unit/              # Unit tests (isolated, no external APIs)
