@@ -13,7 +13,12 @@
 6. **Use logger in every file**: `from logger import logger` - structured logging everywhere
 7. **Rolling status in instructions**: Update copilot-instructions.md status after each task
 8. **README as final snapshot**: README.md represents current state (not rolling updates)
-9. **Async/await for I/O**: All I/O operations (API calls, file I/O, database) must be async
+9. **⚠️ ASYNC/AWAIT REQUIRED - ALL I/O OPERATIONS**: 
+   - Network calls: `aiohttp` (not `urllib`, `requests`)
+   - Sleep/delays: `asyncio.sleep()` (not `time.sleep()`)
+   - All functions doing I/O: `async def` with `await`
+   - Sync APIs: Wrap with `asyncio.to_thread()` to prevent blocking
+   - No `time.sleep()`, `urllib`, or sync blocking calls anywhere
 10. **Never log sensitive data**: No API keys, passwords, images, or PII in logs
 11. **Commit and push after each task**: `git add -A`, `git commit -m "Task [N]: description"`, `git push origin main`
 12. **Follow Do's & Don'ts strictly** (see below)
@@ -39,7 +44,7 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ## Status Section
 
-**Current Status: Phase 2 complete (Tasks 1-10 with factory refactor), 140 unit tests passing**
+**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), 140 unit tests passing**
 
 ### Phase 1: Foundational (Tasks 1-5 + Task 2.5 logger) ✅
 - [x] Task 1: Project structure, dependencies, .gitignore
@@ -62,6 +67,13 @@ This is a code challenge implementing a production-quality GenAI system that tra
   - hooks.py (30 lines): Pre-hooks factory
   - All 140 unit tests passing
   - AgentOS/Agno UI compatibility verified
+- [x] **ASYNC REFACTOR** (date: 2026-01-19)
+  - ingredients.py: All functions async (fetch, extract, retries, tools)
+  - spoonacular.py: Async MCP initialization with asyncio.sleep()
+  - agent.py: Async factory function
+  - app.py: Uses asyncio.run() for async startup
+  - requirements.txt: Added aiohttp>=3.8.0
+  - Copilot instructions updated with async standards
 
 ### Phase 3: Testing & Docs (Tasks 11-17)
 - [ ] Task 11: Integration Tests E2E - Pending
@@ -159,9 +171,142 @@ SpoonacularMCP.initialize() → Validate API key → Test connection (retry 1s/2
 **Testing & Quality:**
 - **pytest**: Unit and integration testing framework
 - **Pydantic**: Input/output validation with OpenAPI schema generation
+- **aiohttp**: Async HTTP client for URL-based image fetching
 
 
-## Module Structure
+## Async/Await Implementation Standards
+
+**CRITICAL: All I/O operations MUST be async. No exceptions.**
+
+### Network Operations
+
+```python
+# ✅ CORRECT: Async HTTP client
+import aiohttp
+
+async def fetch_image(url: str) -> bytes:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+            return await resp.read()
+
+# ❌ WRONG: Synchronous urllib
+import urllib.request
+with urllib.request.urlopen(url) as resp:
+    return resp.read()
+
+# ❌ WRONG: Synchronous requests library
+import requests
+return requests.get(url).content
+```
+
+### Delays and Retries
+
+```python
+# ✅ CORRECT: Async sleep
+import asyncio
+await asyncio.sleep(delay_seconds)
+
+# ❌ WRONG: Synchronous sleep (blocks event loop)
+import time
+time.sleep(delay_seconds)
+```
+
+### Wrapping Synchronous APIs
+
+For third-party libraries that only provide sync APIs (Gemini client, MCPTools):
+
+```python
+# ✅ CORRECT: Use asyncio.to_thread() to prevent blocking
+result = await asyncio.to_thread(sync_function, arg1, arg2)
+
+# ✅ CORRECT: Inline with to_thread
+response = await asyncio.to_thread(
+    client.models.generate_content,
+    model=config.GEMINI_MODEL,
+    contents=[...],
+)
+
+# ❌ WRONG: Call sync function directly in async function
+response = client.models.generate_content(...)  # Blocks event loop!
+```
+
+### Pre-Hook and Tool Functions
+
+```python
+# ✅ CORRECT: Async pre-hook
+async def extract_ingredients_pre_hook(run_input, session=None, user_id=None, debug_mode=None):
+    # All I/O is awaited
+    image_bytes = await fetch_image_bytes(image_url)
+    result = await extract_ingredients_from_image(image_bytes)
+    # ... process result ...
+
+# ✅ CORRECT: Async tool function
+async def detect_ingredients_tool(image_data: str) -> dict:
+    image_bytes = await fetch_image_bytes(image_data)
+    result = await extract_ingredients_with_retries(image_bytes)
+    return result
+
+# ❌ WRONG: Sync pre-hook or tool
+def extract_ingredients_pre_hook(run_input, ...):
+    # Can't await here!
+    image_bytes = fetch_image_bytes(...)  # Blocks!
+```
+
+### Factory Functions
+
+```python
+# ✅ CORRECT: Async factory at module level
+async def initialize_recipe_agent() -> Agent:
+    mcp_tools = await spoonacular_mcp.initialize()
+    # ... more initialization ...
+    return agent
+
+# In app.py at startup:
+agent = asyncio.run(initialize_recipe_agent())
+
+# ❌ WRONG: Sync factory calling async MCP init
+def initialize_recipe_agent() -> Agent:
+    mcp_tools = spoonacular_mcp.initialize()  # Can't await in sync function!
+```
+
+### Retry Logic
+
+```python
+# ✅ CORRECT: Non-blocking exponential backoff
+async def extract_with_retries(image_bytes, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            result = await extract_ingredients_from_image(image_bytes)
+            if result:
+                return result
+        except Exception as e:
+            if attempt < max_retries - 1:
+                delay = 2 ** attempt  # Exponential backoff
+                await asyncio.sleep(delay)  # Non-blocking!
+    return None
+
+# ❌ WRONG: Blocking retry delays
+import time
+for attempt in range(max_retries):
+    try:
+        result = extract_ingredients_from_image(image_bytes)
+        if result:
+            return result
+    except Exception:
+        time.sleep(2 ** attempt)  # Blocks entire app!
+```
+
+### Summary
+
+- **Every function doing I/O**: Mark as `async def`, use `await` for I/O
+- **Network fetch**: Use `aiohttp`, not `urllib` or `requests`
+- **Delays**: Use `asyncio.sleep()`, never `time.sleep()`
+- **Sync APIs**: Wrap with `asyncio.to_thread(sync_func, args)`
+- **Startup**: Use `asyncio.run(async_factory())` at module level only
+- **Never mix**: Don't call sync I/O in async functions without `to_thread()`
+
+
+
 
 ```
 app.py              # AgentOS entry point (~50 lines, minimal orchestration)
@@ -301,7 +446,12 @@ images/             # Sample test images for verification
 - Ground responses in tool outputs (no hallucinations)
 - Test incrementally (unit → integration after each task)
 - Query Context7 MCP before implementing each task
-- Use async/await for all I/O operations
+- **Use async/await for ALL I/O operations**:
+  - Network calls: `aiohttp.ClientSession` for URL fetches
+  - Delays: `asyncio.sleep()` for all retry/backoff delays
+  - All functions with I/O: Mark as `async def`, use `await`
+  - Sync APIs: Wrap with `asyncio.to_thread()` (e.g., Gemini client, MCPTools)
+  - Example: `result = await asyncio.to_thread(sync_func, arg1, arg2)`
 - Implement comprehensive logging with structured format
 - Run `make test` and `make eval` before marking task complete
 - Update Status section after each task completion
@@ -322,6 +472,13 @@ images/             # Sample test images for verification
 - Update README.md after every task (only on architectural changes)
 - Add verbose comments or explanation comments (code should be self-documenting)
 - Skip tests or mark tasks complete without running full test suite
+- **Use synchronous I/O anywhere**:
+  - ❌ `time.sleep()` - use `asyncio.sleep()` instead
+  - ❌ `urllib.request` - use `aiohttp` instead
+  - ❌ `requests` library - use `aiohttp` instead
+  - ❌ Sync blocking calls in async functions - use `asyncio.to_thread()` wrapper
+- Call `sync_function()` instead of `await asyncio.to_thread(sync_function)`
+- Use blocking third-party libraries without wrapping in `asyncio.to_thread()`
 
 ## Configuration
 

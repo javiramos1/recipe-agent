@@ -1,10 +1,10 @@
 """Spoonacular MCP initialization with connection validation and retry logic.
 
 This module provides the SpoonacularMCP class for initializing external
-Spoonacular MCP tool with proper error handling and exponential backoff retries.
+Spoonacular MCP tool with proper error handling and exponential backoff retries (async).
 """
 
-import time
+import asyncio
 from typing import Optional
 
 from agno.tools.mcp import MCPTools
@@ -41,8 +41,8 @@ class SpoonacularMCP:
         self.max_retries = max_retries
         self.retry_delays = retry_delays or [1, 2, 4]
 
-    def initialize(self) -> MCPTools:
-        """Initialize MCP with connection validation and retries.
+    async def initialize(self) -> MCPTools:
+        """Initialize MCP with connection validation and retries (async).
 
         Validates API key and tests connection to Spoonacular MCP server
         using exponential backoff retry logic. Fails fast on startup
@@ -69,7 +69,9 @@ class SpoonacularMCP:
                 logger.debug(f"Connection attempt {attempt + 1}/{self.max_retries}...")
 
                 # Create MCPTools instance (this tests the connection)
-                mcp_tools = MCPTools(
+                # Run in thread pool since MCPTools is synchronous
+                mcp_tools = await asyncio.to_thread(
+                    MCPTools,
                     command="npx -y spoonacular-mcp",
                     env={"SPOONACULAR_API_KEY": self.api_key},
                 )
@@ -87,7 +89,7 @@ class SpoonacularMCP:
                     logger.warning(
                         f"Connection failed, retrying in {delay}s... (attempt {attempt + 1}/{self.max_retries})"
                     )
-                    time.sleep(delay)
+                    await asyncio.sleep(delay)
 
         # All retries exhausted
         error_msg = f"Failed to connect to Spoonacular MCP after {self.max_retries} attempts"

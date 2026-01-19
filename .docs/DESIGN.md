@@ -90,6 +90,62 @@ Declarative system instructions instead of imperative orchestration code. Less f
 
 ---
 
+### 3.2b Async/Await Design for Non-Blocking I/O
+
+**CRITICAL Design Requirement:** All I/O operations must be asynchronous to prevent blocking the event loop. This enables concurrent request handling and proper resource utilization in production.
+
+**Async I/O Architecture:**
+
+- **Network HTTP calls** → Use `aiohttp.ClientSession` (async HTTP client)
+  - Image fetches from URLs: `async with session.get(url) as resp: await resp.read()`
+  - Replace: `urllib.request.urlopen()` (synchronous, blocks event loop)
+
+- **Vision API calls** → Wrap sync Gemini client with `asyncio.to_thread()`
+  - Prevents blocking event loop during API calls
+  - Pattern: `result = await asyncio.to_thread(client.models.generate_content, ...)`
+  - Allows other requests to be processed concurrently
+
+- **Retry delays** → Use `asyncio.sleep()` (non-blocking waits)
+  - Exponential backoff: `await asyncio.sleep(2 ** attempt)`
+  - Replace: `time.sleep()` (synchronous, blocks all concurrent requests)
+
+- **Function signatures:**
+  - All functions doing I/O: `async def function_name(...)`
+  - All I/O operations in async functions: `await operation()`
+  - Retry logic: Async wrappers around sync operations
+
+**Implementation Points:**
+
+1. **ingredients.py** - Core image processing (async):
+   - `async def fetch_image_bytes(url)` → `aiohttp` instead of `urllib`
+   - `async def extract_ingredients_from_image(bytes)` → `asyncio.to_thread(gemini_api_call)`
+   - `async def extract_ingredients_with_retries(bytes)` → `asyncio.sleep()` for retry backoff
+   - `async def extract_ingredients_pre_hook(...)` → awaits all I/O functions
+   - `async def detect_ingredients_tool(...)` → awaits all I/O functions
+
+2. **mcp_tools/spoonacular.py** - MCP initialization (async):
+   - `async def initialize()` → MCP connection with retry logic
+   - Retry delays: `await asyncio.sleep(delay)` instead of `time.sleep()`
+   - Wrap sync MCPTools creation: `await asyncio.to_thread(MCPTools, ...)`
+
+3. **agent.py** - Agent factory (async):
+   - `async def initialize_recipe_agent()` → calls async MCP init
+   - All I/O in initialization: `mcp_tools = await spoonacular_mcp.initialize()`
+
+4. **app.py** - Application startup (uses asyncio.run):
+   - At module level: `agent = asyncio.run(initialize_recipe_agent())`
+   - Creates event loop for async startup sequence
+   - AgentOS serves synchronously thereafter
+
+**Why This Matters:**
+- ✅ **Concurrent request handling**: Multiple requests can be processed without blocking each other
+- ✅ **Resource efficiency**: Thread pool not saturated with blocked operations
+- ✅ **Production-ready**: Essential for scalability and responsiveness
+- ✅ **Modern Python patterns**: Aligns with fastapi/asyncio best practices
+- ⚠️ **Non-negotiable**: All code violating async patterns must be refactored
+
+---
+
 ### 3.3 Flexible Ingredient Detection: Pre-Hook vs. Tool Pattern
 
 The ingredient detection system is **flexible and configurable** via `IMAGE_DETECTION_MODE`:
@@ -310,7 +366,7 @@ if __name__ == "__main__":
     agent_os.serve(
         app="app:app",
         port=config.PORT,  # Default 7777
-        reload=True        # Dev mode only
+        reload=False       # MCP lifecycle requires reload=False to avoid connection issues
     )
 ```
 
@@ -614,16 +670,18 @@ def extract_ingredients_pre_hook(
 **4. Initialize Spoonacular MCP with Connection Validation**
 ```python
 # Initialize MCP before creating agent (fail-fast if unreachable)
+# IMPORTANT: This is an async operation called at module-level with asyncio.run()
 logger.info("Initializing Spoonacular MCP...")
 spoonacular_mcp = SpoonacularMCP(
     api_key=config.SPOONACULAR_API_KEY,
     max_retries=3,
-    retry_delays=[1, 2, 4]  # Exponential backoff
+    retry_delays=[1, 2, 4]  # Exponential backoff (uses asyncio.sleep, not time.sleep)
 )
 
 try:
-    # This will validate API key and test connection
-    mcp_tools = spoonacular_mcp.initialize()
+    # This will validate API key and test connection asynchronously
+    # Retry delays are non-blocking (async), allowing concurrent initialization
+    mcp_tools = await spoonacular_mcp.initialize()  # async method, awaited
     logger.info("Spoonacular MCP initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize Spoonacular MCP: {e}")
@@ -686,7 +744,17 @@ agent = Agent(
 
 **6. Create AgentOS and Serve**
 ```python
-# Create AgentOS (handles everything)
+# Module-level initialization (factory function is async)
+import asyncio
+
+# Step 1: Call async factory function to initialize agent
+# This runs all async initialization (MCP connection, database setup)
+# Retry delays during MCP init are non-blocking (asyncio.sleep)
+from agent import initialize_recipe_agent
+
+agent = asyncio.run(initialize_recipe_agent())  # Async startup completes before serving
+
+# Step 2: Create AgentOS (handles everything)
 agent_os = AgentOS(
     agents=[agent],
     interfaces=[AGUI(agent=agent)]
@@ -706,6 +774,13 @@ if __name__ == "__main__":
     # For development, manually restart the process when code changes
     agent_os.serve(app="app:app", port=config.PORT)
 ```
+
+**Async Startup Design Pattern:**
+- `initialize_recipe_agent()` is `async def` (awaits MCP init and database setup)
+- `asyncio.run()` creates event loop, waits for async initialization to complete
+- Retry delays during MCP connection use `asyncio.sleep()` (non-blocking)
+- After startup completes, AgentOS serves synchronously (no async in request handlers)
+- This pattern: **Async initialization → Synchronous serving**
 
 ### Key Implementation Points
 

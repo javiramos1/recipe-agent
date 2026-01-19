@@ -74,6 +74,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
    - pydantic (for data validation)
    - pytest (for unit tests)
    - pytest-asyncio (for async test support)
+   - aiohttp>=3.8.0 (for async HTTP requests, critical for non-blocking I/O)
 
 3. Create `.env.example` with template values:
    - GEMINI_API_KEY (required, no default)
@@ -457,7 +458,7 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 
 ### Task 6: Ingredient Detection Core Functions (ingredients.py)
 
-**Objective:** Implement reusable image processing and ingredient extraction using Gemini vision API.
+**Objective:** Implement reusable image processing and ingredient extraction using Gemini vision API with async I/O.
 
 **Context:**
 - Ingredient detection can run in two modes: pre-hook or tool (configured via IMAGE_DETECTION_MODE)
@@ -465,6 +466,11 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - Pre-hook mode (default): Runs before agent processes request, appends ingredients to message
 - Tool mode (optional): Agent calls as @tool decorator when needed, returns structured output
 - Must handle errors gracefully and call Gemini vision API efficiently
+- **CRITICAL: All I/O operations must be async** (network fetches, API calls)
+  - Network HTTP calls: Use `aiohttp.ClientSession` for async image fetches (not urllib)
+  - Vision API calls: Wrap sync Gemini client with `asyncio.to_thread()` to prevent blocking
+  - Retry delays: Use `asyncio.sleep()` (not time.sleep()) for non-blocking waits
+  - All functions doing I/O: Mark as `async def`, use `await` for all I/O operations
 
 **Requirements:**
 
@@ -580,6 +586,10 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
   1. Retry wrapper around Gemini API calls (handles transient failures)
   2. Registration logic in app.py based on IMAGE_DETECTION_MODE config
 - Both modes use the same core functions, just registered differently
+- **CRITICAL - Async Retry Design:** Backoff delays must use `asyncio.sleep()` (not `time.sleep()`)
+  - Prevents blocking the event loop during retries
+  - Allows other requests to be processed concurrently
+  - All retry wrapper functions must be `async def`
 
 **Requirements:**
 
@@ -673,6 +683,11 @@ All tasks are independent and self-contained. Most tasks have optional dependenc
 - Fail application startup if MCP unreachable
 - Use exponential backoff for connection retries
 - Separate module (mcp_tools/spoonacular.py) for clean separation and testability
+- **CRITICAL - Async Design:** MCP initialization must be async
+  - Use `asyncio.sleep()` for retry delays (not `time.sleep()`)
+  - Wrap MCPTools creation (sync operation) with `asyncio.to_thread()` to prevent blocking
+  - Initialize function signature: `async def initialize() -> MCPTools`
+  - Called in app.py with: `mcp_tools = await spoonacular_mcp.initialize()`
 
 **Requirements:**
 
@@ -1160,6 +1175,11 @@ Spoonacular MCP provides these tools (agent will call them automatically):
 - Factory pattern separates concerns into modular files: agent.py, prompts.py, hooks.py
 - MCP must be initialized BEFORE agent creation (fail-fast on startup)
 - No custom routes or memory management needed (AgentOS handles automatically)
+- **CRITICAL - Async Application Startup:**
+  - Agent factory is `async def initialize_recipe_agent()`
+  - app.py must use `asyncio.run(initialize_recipe_agent())` at module level before AgentOS setup
+  - This ensures all async I/O (MCP init, database setup) completes before serving requests
+  - Design: Async init at startup → synchronous serving thereafter
 
 **Requirements:**
 
@@ -1256,10 +1276,58 @@ Spoonacular MCP provides these tools (agent will call them automatically):
 **Objective:** Test complete request-response flows with real images and MCP connections.
 
 **Context:**
-- Integration tests use Agno evals framework
+- Integration tests use **Agno evals framework** (AgentOS built-in evaluation system)
+  - Use `from agno.eval import Eval` and agent evaluation APIs
+  - Evals run the agent end-to-end and capture results in AgentOS database
+  - Results can be viewed via AgentOS UI and programmatically
 - Real API calls to Gemini and Spoonacular (requires valid API keys)
 - Requires sample test images in images/ folder
 - Tests full conversation flows with session_id
+- Run with: `make eval` (integrates with Makefile eval target)
+
+**Agno Evals Framework - Implementation Pattern:**
+
+The Agno evals framework provides a standardized way to test agents end-to-end:
+
+```python
+from agno.eval import Eval
+from agent import initialize_recipe_agent
+
+# Initialize agent once for all tests
+agent = initialize_recipe_agent()
+
+# Create eval for a specific test case
+def test_image_to_ingredients():
+    """Test ingredient detection from image."""
+    eval_case = Eval(
+        name="image_to_ingredients",
+        description="Extract ingredients from uploaded image",
+        agent=agent,
+        input={"image_base64": encoded_image, "message": "What ingredients are in this?"},
+        expected_output_contains=["ingredients detected", "confidence"],
+    )
+    
+    # Run the eval - returns result object
+    result = eval_case.run()
+    
+    # Verify results
+    assert result.success  # Overall success
+    assert "[Detected Ingredients]" in result.response
+    assert len(result.parsed_output.ingredients) > 0
+    
+    # Access detailed information
+    print(f"Response: {result.response}")
+    print(f"Tools called: {result.tools_called}")
+    print(f"Execution time: {result.execution_time_ms}ms")
+```
+
+**Key Agno Evals Features:**
+- `Eval` class wraps agent calls with result capture
+- Automatically stores results in AgentOS database
+- Provides rich result object with: response, parsed_output, tools_called, execution_time_ms
+- Supports success/failure validation
+- Can use LLM-as-judge for semantic validation
+- Results viewable in AgentOS Web UI under Evaluations tab
 
 **Requirements:**
 

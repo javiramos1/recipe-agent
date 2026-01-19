@@ -1,7 +1,7 @@
 """AgentOS Application - Recipe Recommendation Service.
 
 Single entry point for the complete recipe recommendation system:
-- Initializes agent from agent.py factory
+- Initializes agent from agent.py factory (async)
 - Creates AgentOS instance with agent
 - Serves REST API and Web UI automatically via AgentOS
 
@@ -12,8 +12,10 @@ Features:
 - Web UI (AGUI): ChatGPT-like interface at http://localhost:PORT
 - OpenAPI docs: http://localhost:PORT/docs
 - Session management: Automatic per session_id
-- Tool lifecycle: MCPs initialized before AgentOS starts
+- Tool lifecycle: MCPs initialized before AgentOS starts (async initialization)
 """
+
+import asyncio
 
 from agno.os import AgentOS
 from agno.os.interfaces.agui import AGUI
@@ -23,9 +25,9 @@ from logger import logger
 from agent import initialize_recipe_agent
 
 
-# Initialize agent using factory pattern
+# Initialize agent using factory pattern (async)
 logger.info("Starting Recipe Recommendation Service initialization...")
-agent = initialize_recipe_agent()
+agent = asyncio.run(initialize_recipe_agent())
 
 # Create AgentOS with the agent and Web UI interface
 logger.info("Creating AgentOS instance with Web UI...")

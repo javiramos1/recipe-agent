@@ -4,6 +4,8 @@ Factory function that initializes and configures the Agno Agent
 with all orchestration settings, tools, pre-hooks, and system instructions.
 """
 
+import asyncio
+
 from agno.agent import Agent
 from agno.models.google import Gemini
 from agno.db.sqlite import SqliteDb
@@ -19,11 +21,11 @@ from prompts import SYSTEM_INSTRUCTIONS
 from hooks import get_pre_hooks
 
 
-def initialize_recipe_agent() -> Agent:
-    """Factory function to initialize and configure the recipe recommendation agent.
+async def initialize_recipe_agent() -> Agent:
+    """Factory function to initialize and configure the recipe recommendation agent (async).
     
     This function:
-    1. Initializes Spoonacular MCP with connection validation and fail-fast pattern
+    1. Initializes Spoonacular MCP with connection validation and fail-fast pattern (async)
     2. Configures database (SQLite for development, PostgreSQL optional for production)
     3. Builds tools list based on IMAGE_DETECTION_MODE configuration
     4. Registers ingredient detection tool (tool mode only)
@@ -38,7 +40,7 @@ def initialize_recipe_agent() -> Agent:
     """
     logger.info("=== Initializing Recipe Recommendation Agent ===")
     
-    # 1. Initialize MCP FIRST (fail-fast if unreachable)
+    # 1. Initialize MCP FIRST (fail-fast if unreachable) - async
     logger.info("Step 1/5: Initializing Spoonacular MCP...")
     spoonacular_mcp = SpoonacularMCP(
         api_key=config.SPOONACULAR_API_KEY,
@@ -46,7 +48,7 @@ def initialize_recipe_agent() -> Agent:
         retry_delays=[1, 2, 4],
     )
     try:
-        mcp_tools = spoonacular_mcp.initialize()
+        mcp_tools = await spoonacular_mcp.initialize()
         logger.info("✓ Spoonacular MCP initialized successfully")
     except Exception as e:
         logger.error(f"✗ MCP initialization failed: {e}")

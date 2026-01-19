@@ -402,13 +402,15 @@ Tests:
 - Pydantic model validation
 - Schema serialization/deserialization
 
-### Integration Tests (Real APIs)
+### Integration Tests (Real APIs) - Phase 3
 
 ```bash
 make eval
 ```
 
-Tests:
+**Status:** Integration tests use **Agno evals framework** (AgentOS built-in evaluation system) and are currently under development (Phase 3).
+
+When complete, tests will include:
 - End-to-end ingredient detection (requires GEMINI_API_KEY)
 - Recipe recommendation flows (requires SPOONACULAR_API_KEY)
 - Multi-turn conversations with session memory

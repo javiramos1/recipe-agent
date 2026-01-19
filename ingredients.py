@@ -21,19 +21,22 @@ This module provides two ways to extract ingredients from uploaded images:
            agent.add_tool(detect_image_ingredients)
 
 Both modes use the same core functions:
-- fetch_image_bytes(): Get image bytes from URL or directly
+- fetch_image_bytes(): Get image bytes from URL or directly (async)
 - validate_image_format(): Check JPEG/PNG only
 - validate_image_size(): Check MAX_IMAGE_SIZE_MB limit
 - parse_gemini_response(): Lenient JSON parsing
-- extract_ingredients_from_image(): Call Gemini vision API
+- extract_ingredients_from_image(): Call Gemini vision API (async)
 - filter_ingredients_by_confidence(): Apply MIN_INGREDIENT_CONFIDENCE threshold
-- extract_ingredients_with_retries(): Exponential backoff retry wrapper
+- extract_ingredients_with_retries(): Exponential backoff retry wrapper (async)
 """
 
+import asyncio
+import base64
 import json
 import re
 from typing import Optional
 
+import aiohttp
 import filetype
 from google import genai
 from google.genai import types
@@ -42,7 +45,7 @@ from config import config
 from logger import logger
 
 
-def fetch_image_bytes(image_source: str | bytes) -> Optional[bytes]:
+async def fetch_image_bytes(image_source: str | bytes) -> Optional[bytes]:
     """Fetch image bytes from URL or return directly if bytes.
 
     Args:
@@ -56,10 +59,9 @@ def fetch_image_bytes(image_source: str | bytes) -> Optional[bytes]:
 
     if isinstance(image_source, str):
         try:
-            import urllib.request
-
-            with urllib.request.urlopen(image_source, timeout=10) as response:
-                return response.read()
+            async with aiohttp.ClientSession() as session:
+                async with session.get(image_source, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                    return await response.read()
         except Exception as e:
             logger.warning(f"Failed to fetch image from URL: {image_source}, error: {e}")
             return None
@@ -126,7 +128,7 @@ def parse_gemini_response(response_text: str) -> Optional[dict]:
     return None
 
 
-def extract_ingredients_from_image(image_bytes: bytes) -> Optional[dict]:
+async def extract_ingredients_from_image(image_bytes: bytes) -> Optional[dict]:
     """Call Gemini vision API to extract ingredients from image.
 
     Args:
@@ -148,7 +150,8 @@ def extract_ingredients_from_image(image_bytes: bytes) -> Optional[dict]:
         client = genai.Client(api_key=config.GEMINI_API_KEY)
 
         # Call vision API with JSON response format
-        response = client.models.generate_content(
+        response = await asyncio.to_thread(
+            client.models.generate_content,
             model=config.GEMINI_MODEL,
             contents=[
                 "Extract all food ingredients from this image. Return ONLY valid JSON with 'ingredients' list (strings) and 'confidence_scores' dict mapping ingredient name to confidence (0.0-1.0). Example: {\"ingredients\": [\"tomato\", \"basil\"], \"confidence_scores\": {\"tomato\": 0.95, \"basil\": 0.88}}",
@@ -204,7 +207,7 @@ def filter_ingredients_by_confidence(
     return filtered
 
 
-def extract_ingredients_pre_hook(
+async def extract_ingredients_pre_hook(
     run_input,
     session=None,
     user_id: str = None,
@@ -214,7 +217,7 @@ def extract_ingredients_pre_hook(
 
     This function:
     1. Checks for images in the request
-    2. Calls Gemini vision API to extract ingredients
+    2. Calls Gemini vision API to extract ingredients (async)
     3. Filters by confidence threshold
     4. Appends detected ingredients to user message as text
     5. Clears images from input (prevents agent re-processing)
@@ -255,12 +258,12 @@ def extract_ingredients_pre_hook(
 
         all_ingredients = []
         for idx, image in enumerate(images):
-            # Get image bytes
+            # Get image bytes (async)
             image_bytes = None
             if hasattr(image, "url"):
-                image_bytes = fetch_image_bytes(image.url)
+                image_bytes = await fetch_image_bytes(image.url)
             elif hasattr(image, "content"):
-                image_bytes = fetch_image_bytes(image.content)
+                image_bytes = await fetch_image_bytes(image.content)
 
             if not image_bytes:
                 logger.warning(f"Image {idx + 1}: Failed to get image bytes")
@@ -273,8 +276,8 @@ def extract_ingredients_pre_hook(
             if not validate_image_size(image_bytes):
                 continue
 
-            # Extract ingredients from image
-            result = extract_ingredients_from_image(image_bytes)
+            # Extract ingredients from image (async)
+            result = await extract_ingredients_from_image(image_bytes)
             if not result:
                 logger.warning(f"Image {idx + 1}: Failed to extract ingredients")
                 continue
@@ -308,10 +311,10 @@ def extract_ingredients_pre_hook(
         logger.warning(f"Ingredient extraction pre-hook failed: {e}")
 
 
-def extract_ingredients_with_retries(
+async def extract_ingredients_with_retries(
     image_bytes: bytes, max_retries: int = 3
 ) -> Optional[dict]:
-    """Call Gemini vision API with exponential backoff retry logic.
+    """Call Gemini vision API with exponential backoff retry logic (async).
 
     Retries on transient failures (network errors, rate limits, 5xx errors).
     Does NOT retry on permanent failures (invalid API key, malformed request).
@@ -328,15 +331,14 @@ def extract_ingredients_with_retries(
 
     while retry_count < max_retries:
         try:
-            result = extract_ingredients_from_image(image_bytes)
+            result = await extract_ingredients_from_image(image_bytes)
             if result:
                 return result
             # If result is None but no exception, retry (might be transient API issue)
             retry_count += 1
             if retry_count < max_retries:
                 logger.debug(f"Retrying ingredient extraction (attempt {retry_count + 1}/{max_retries}) after {delay_seconds}s")
-                import time
-                time.sleep(delay_seconds)
+                await asyncio.sleep(delay_seconds)
                 delay_seconds *= 2  # Exponential backoff
         except Exception as e:
             # Check if error is transient or permanent
@@ -352,8 +354,7 @@ def extract_ingredients_with_retries(
                     f"Transient error detected, retrying (attempt {retry_count + 1}/{max_retries}) "
                     f"after {delay_seconds}s: {e}"
                 )
-                import time
-                time.sleep(delay_seconds)
+                await asyncio.sleep(delay_seconds)
                 delay_seconds *= 2
             else:
                 # Permanent failure or last retry exhausted
@@ -364,7 +365,7 @@ def extract_ingredients_with_retries(
     return None
 
 
-def detect_ingredients_tool(image_data: str) -> dict:
+async def detect_ingredients_tool(image_data: str) -> dict:
     """Tool function for ingredient detection (register with @tool decorator).
 
     This function extracts ingredients from uploaded images using Gemini vision API.
@@ -377,7 +378,7 @@ def detect_ingredients_tool(image_data: str) -> dict:
     =================
     1. Accepts image_data as Base64 string or URL
     2. Validates image format (JPEG/PNG only) and size
-    3. Calls Gemini vision API to extract ingredients
+    3. Calls Gemini vision API to extract ingredients (async)
     4. Filters results by MIN_INGREDIENT_CONFIDENCE threshold
     5. Returns structured dict or raises ValueError
 
@@ -417,14 +418,13 @@ def detect_ingredients_tool(image_data: str) -> dict:
 
     """
     try:
-        # Get image bytes (from base64 or URL)
+        # Get image bytes (from base64 or URL) - async
         image_bytes = None
         if image_data.startswith(("http://", "https://")):
             # URL-based image
-            image_bytes = fetch_image_bytes(image_data)
+            image_bytes = await fetch_image_bytes(image_data)
         else:
             # Assume base64 encoded
-            import base64
             try:
                 image_bytes = base64.b64decode(image_data)
             except Exception as e:
@@ -441,8 +441,8 @@ def detect_ingredients_tool(image_data: str) -> dict:
         if not validate_image_size(image_bytes):
             raise ValueError(f"Image too large. Maximum size is {config.MAX_IMAGE_SIZE_MB}MB")
 
-        # Extract ingredients with retry logic
-        result = extract_ingredients_with_retries(image_bytes)
+        # Extract ingredients with retry logic (async)
+        result = await extract_ingredients_with_retries(image_bytes)
         if not result:
             raise ValueError("Failed to extract ingredients from image. Please try another image.")
 
