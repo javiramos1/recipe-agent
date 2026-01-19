@@ -101,7 +101,7 @@ Edit `.env` and add your API keys:
 # Required - Get from Google Cloud Console
 GEMINI_API_KEY=your_gemini_key_here
 
-# Required - Get from spoonacular.com/food-api
+# Required - Get from spoonacular.com/food-api or rapidapi.com
 SPOONACULAR_API_KEY=your_spoonacular_key_here
 
 # Optional - Defaults shown
@@ -117,6 +117,57 @@ LOG_LEVEL=INFO
 LOG_TYPE=text
 # DATABASE_URL=postgresql://user:pass@localhost:5432/recipe_service
 ```
+
+#### Getting Spoonacular API Key
+
+**Option 1: Direct from Spoonacular (Recommended)**
+
+1. Visit [spoonacular.com/food-api](https://spoonacular.com/food-api)
+2. Click **"Get API Key"** button
+3. Sign up or log in with email
+4. Your API key appears on the dashboard
+5. Copy to `.env` as `SPOONACULAR_API_KEY`
+
+**Option 2: Via RapidAPI**
+
+1. Visit [RapidAPI Spoonacular Recipe API](https://rapidapi.com/spoonacular/api/recipe-food-nutrition/pricing)
+2. Click **"Subscribe to Test"** (free plan available)
+3. Copy API key from RapidAPI dashboard
+4. Use with `.env`: `SPOONACULAR_API_KEY=your_key_here`
+
+#### Understanding Spoonacular Quotas
+
+**Free Plan:**
+- **API Calls**: 100/day
+- **Cost**: $0/month
+- **Use Case**: Development and testing
+- **Throttle**: 1 request/second
+
+**Paid Plans:**
+- **Starter**: 500/day - $12.99/month
+- **Professional**: 5,000/day - $99.99/month
+- **Premium**: Unlimited - Contact sales
+
+**Quota Status:**
+- Check remaining quota in `.env` file or dashboard
+- When exceeded: API returns `402 Payment Required` error
+- Daily quota resets at **00:00 UTC**
+
+**Tips to Minimize Usage:**
+- Use stateless mode (`S=1`) for testing: doesn't persist or re-query
+- Cache recipe results in your database
+- Batch multiple ingredient searches into one recipe search
+- Use `get_recipe_information_bulk` for multiple recipes at once (more efficient)
+
+**Current Status:**
+If you see `402 Payment Required` errors in responses:
+```
+"API request failed: 402 Payment Required"
+```
+This means your daily quota is exhausted. Options:
+1. Upgrade to a paid plan
+2. Wait until daily reset (UTC midnight)
+3. Use test mode with different Spoonacular account
 
 ### 3. Start Development Server
 
@@ -161,6 +212,27 @@ Useful for:
 - Quick recipe lookups from the command line
 - Debugging without API overhead
 - Integration with shell scripts and automation
+
+### Debug Mode
+
+Enable debug output to see internal agent execution details including tool calls, LLM input/output, and performance metrics:
+
+```bash
+# Enable debug for web server
+make dev DEBUG=1
+make run DEBUG=1
+
+# Enable debug for query
+make query Q="What can I make with chicken?" DEBUG=1
+make query Q="What can I make with chicken?" S=1 DEBUG=1
+```
+
+**Debug output shows:**
+- 📞 **Tool Calls** - Which MCP tools were called and their arguments
+- 💬 **LLM Communication** - Complete system prompt, user input, and model output
+- ⏱️ **Performance Metrics** - Token counts, execution time, tokens/second throughput
+- 🔄 **Session Management** - Memory operations and preference tracking
+- 🎯 **Pre-Hooks** - Ingredient detection from images
 
 ### Run Tests
 
