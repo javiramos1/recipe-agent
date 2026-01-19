@@ -44,7 +44,7 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ## Status Section
 
-**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), 140 unit tests passing, Task 18-19 complete, Architecture Refactor Complete: Post-hooks removed, LLM-driven response generation implemented ✅**
+**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), 145 unit tests passing, Architecture Refactor Complete: Minimal input schema (ChatMessage) + Agent memory system for preferences ✅**
 
 ### Phase 1: Foundational (Tasks 1-5 + Task 2.5 logger) ✅
 - [x] Task 1: Project structure, dependencies, .gitignore
@@ -63,7 +63,8 @@ This is a code challenge implementing a production-quality GenAI system that tra
 - [x] **REFACTOR**: Factory pattern implementation `initialize_recipe_agent()` factory
 - [x] **ASYNC REFACTOR** (date: 2026-01-19) All functions async
 - [x] **SMOKE TEST** (date: 2026-01-19) Manual infrastructure validation complete
-- [x] **ARCHITECTURE REFACTOR** (date: 2026-01-19) Post-hooks removed, LLM response generation (140 tests passing)
+- [x] **ARCHITECTURE REFACTOR** (date: 2026-01-19) Post-hooks removed, LLM response generation (145 tests passing)
+- [x] **MEMORY SYSTEM REFACTOR** (date: 2026-01-19) Minimal input schema (ChatMessage) + Agno user memory for preferences
 
 ### Phase 3: Developer Tools & Testing (Tasks 11-18)
 - [x] Task 18 complete (date: 2026-01-18) - Ad hoc query command
