@@ -21,7 +21,9 @@ class Config:
         """Initialize configuration from environment variables."""
         self.GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
         self.SPOONACULAR_API_KEY: str = os.getenv("SPOONACULAR_API_KEY", "")
-        self.GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        # Default: gemini-3-flash-preview (fast, cost-effective)
+        # For best results: use gemini-3-pro-preview for complex recipe reasoning
+        self.GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
         self.PORT: int = int(os.getenv("PORT", "7777"))
         self.MAX_HISTORY: int = int(os.getenv("MAX_HISTORY", "3"))
         self.MAX_IMAGE_SIZE_MB: int = int(os.getenv("MAX_IMAGE_SIZE_MB", "5"))

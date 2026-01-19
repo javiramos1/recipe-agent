@@ -105,7 +105,9 @@ GEMINI_API_KEY=your_gemini_key_here
 SPOONACULAR_API_KEY=your_spoonacular_key_here
 
 # Optional - Defaults shown
-GEMINI_MODEL=gemini-1.5-flash
+# Default: gemini-3-flash-preview (fast, cost-effective)
+# For best results: gemini-3-pro-preview
+GEMINI_MODEL=gemini-3-flash-preview
 PORT=7777
 MAX_HISTORY=3
 MAX_IMAGE_SIZE_MB=5
@@ -214,7 +216,7 @@ curl -X POST http://localhost:7777/api/agents/chat \
   ],
   "metadata": {
     "tools_called": ["search_recipes", "get_recipe_information_bulk"],
-    "model": "gemini-1.5-flash",
+    "model": "gemini-3-flash-preview",
     "response_time_ms": 2340
   }
 }
@@ -265,7 +267,7 @@ curl -X POST http://localhost:7777/api/agents/chat \
 |----------|------|---------|-------------|
 | `GEMINI_API_KEY` | string | **required** | Google Gemini API key (vision model) |
 | `SPOONACULAR_API_KEY` | string | **required** | Spoonacular recipe API key |
-| `GEMINI_MODEL` | string | `gemini-1.5-flash` | Vision model to use |
+| `GEMINI_MODEL` | string | `gemini-3-flash-preview` | Vision model (fast, cost-effective). For best results: `gemini-3-pro-preview` |
 | `PORT` | int | `7777` | Server port |
 | `MAX_HISTORY` | int | `3` | Conversation turns to keep in memory |
 | `MAX_IMAGE_SIZE_MB` | int | `5` | Maximum image upload size |
