@@ -29,63 +29,6 @@ class ChatMessage(BaseModel):
         description="Optional list of base64-encoded images or image URLs (max 10 images)"
     )]
 
-
-class RecipeRequest(BaseModel):
-    """Request schema for recipe recommendations.
-    
-    Validates incoming requests with ingredient list and optional preferences.
-    Enforces constraints on ingredient count, string lengths, and format.
-    """
-    model_config = ConfigDict(str_strip_whitespace=True)
-    
-    ingredients: Annotated[List[str], Field(
-        min_length=1,
-        max_length=50,
-        description="List of ingredients (1-50 items, each 1-100 chars)"
-    )]
-    diet: Annotated[Optional[str], Field(
-        None,
-        min_length=1,
-        max_length=50,
-        description="Dietary preference (e.g., vegetarian, vegan, gluten-free)"
-    )]
-    cuisine: Annotated[Optional[str], Field(
-        None,
-        min_length=1,
-        max_length=50,
-        description="Cuisine preference (e.g., Italian, Asian, Mexican)"
-    )]
-    meal_type: Annotated[Optional[str], Field(
-        None,
-        min_length=1,
-        max_length=50,
-        description="Meal type (e.g., breakfast, lunch, dinner, dessert)"
-    )]
-    intolerances: Annotated[Optional[str], Field(
-        None,
-        min_length=1,
-        max_length=100,
-        description="Comma-separated allergies/intolerances (e.g., peanuts, dairy, gluten)"
-    )]
-    
-    @field_validator('ingredients', mode='after')
-    @classmethod
-    def validate_ingredients(cls, v: List[str]) -> List[str]:
-        """Validate ingredients list: non-empty strings, max length 100 chars each."""
-        validated = []
-        for ing in v:
-            if not isinstance(ing, str):
-                raise ValueError(f'Each ingredient must be a string, got {type(ing).__name__}')
-            ing_stripped = ing.strip()
-            if not ing_stripped:
-                raise ValueError('Ingredients cannot be empty strings')
-            if len(ing_stripped) > 100:
-                raise ValueError(f'Ingredient too long (max 100 chars)')
-            validated.append(ing_stripped)
-        
-        return validated
-
-
 class Recipe(BaseModel):
     """Domain model for a recipe.
     
