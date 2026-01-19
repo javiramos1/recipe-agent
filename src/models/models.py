@@ -46,12 +46,22 @@ class RecipeRequest(BaseModel):
         description="Comma-separated allergies/intolerances (e.g., peanuts, dairy, gluten)"
     )]
     
-    @field_validator('ingredients', mode='before')
+    @field_validator('ingredients', mode='after')
     @classmethod
     def validate_ingredients(cls, v: List[str]) -> List[str]:
         """Validate ingredients list: non-empty strings, max length 100 chars each."""
-        if not isinstance(v, list):
-            raise ValueError('ingredients must be a list')
+        validated = []
+        for ing in v:
+            if not isinstance(ing, str):
+                raise ValueError(f'Each ingredient must be a string, got {type(ing).__name__}')
+            ing_stripped = ing.strip()
+            if not ing_stripped:
+                raise ValueError('Ingredients cannot be empty strings')
+            if len(ing_stripped) > 100:
+                raise ValueError(f'Ingredient too long (max 100 chars)')
+            validated.append(ing_stripped)
+        
+        return validated
 
 
 class Ingredient(BaseModel):
@@ -192,10 +202,47 @@ class IngredientDetectionOutput(BaseModel):
         description="List of detected ingredients (1-50 items)"
     )]
     confidence_scores: Annotated[dict[str, float], Field(
-        description="Confidence scores for each ingredient (0.0-1.0)"
+        description="Confidence scores for each ingredient (0.0 < score < 1.0)"
     )]
     image_description: Annotated[Optional[str], Field(
         None,
         max_length=500,
         description="Natural language description of the image (max 500 chars)"
     )]
+    
+    @field_validator('confidence_scores', mode='before')
+    @classmethod
+    def validate_confidence_scores(cls, v: dict) -> dict:
+        """Validate confidence scores: each value must be 0.0 < score < 1.0."""
+        if not isinstance(v, dict):
+            raise ValueError('confidence_scores must be a dictionary')
+        
+        validated = {}
+        for ingredient, score in v.items():
+            if not isinstance(ingredient, str):
+                raise ValueError(f'Confidence score keys must be strings')
+            
+            try:
+                f = float(score)
+            except (ValueError, TypeError):
+                raise ValueError(f'Confidence score must be numeric for {ingredient}')
+            
+            if not (0.0 < f < 1.0):
+                raise ValueError(f'Confidence score must be 0.0 < score < 1.0, got {f} for {ingredient}')
+            
+            validated[ingredient.strip().lower()] = f
+        
+        return validated
+    
+    @model_validator(mode='after')
+    def validate_scores_match_ingredients(self) -> 'IngredientDetectionOutput':
+        """Validate that all ingredients have confidence scores."""
+        ingredient_set = set(ing.lower() for ing in self.ingredients)
+        score_keys = set(key.lower() for key in self.confidence_scores.keys())
+        
+        # Allow scores to have extra entries, but all ingredients must have scores
+        missing_scores = ingredient_set - score_keys
+        if missing_scores:
+            raise ValueError(f'Missing confidence scores for: {missing_scores}')
+        
+        return self
