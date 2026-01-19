@@ -1,0 +1,13 @@
+# Sample Ingredient Images for Testing
+# Format: URL | Description | Local File
+# Source: Unsplash (https://unsplash.com) - Free for commercial use + Local test images
+
+# Downloaded from Unsplash
+https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=600 | Fresh salad bowl ingredients | images/salad_bowl.jpg
+
+# Local test images with ingredient labels (created for testing)
+file://images/tomato_basil.jpg | Fresh tomato and basil ingredients | images/tomato_basil.jpg
+file://images/vegetables.jpg | Mixed fresh vegetables | images/vegetables.jpg
+file://images/pasta_ingredients.jpg | Fresh pasta ingredients | images/pasta_ingredients.jpg
+file://images/herbs.jpg | Fresh herbs and spices | images/herbs.jpg
+file://images/garlic_onion.jpg | Fresh garlic and onion | images/garlic_onion.jpg

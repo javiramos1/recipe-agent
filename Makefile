@@ -10,22 +10,23 @@ help:
 	@echo "Recipe Recommendation Service - Development Commands"
 	@echo ""
 	@echo "Setup and Installation:"
-	@echo "  make setup       Create virtual environment, install dependencies, create .env file"
+	@echo "  make setup           Create virtual environment, install dependencies, create .env file"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev         Start application (http://localhost:7777)"
-	@echo "  make dev-bkg     Start application in background"
-	@echo "  make run         Start application (production mode)"
-	@echo "  make stop        Stop running application server"
-	@echo "  make query Q=\"..\"  Run ad hoc query (auto-starts/stops background server)"
+	@echo "  make dev             Start application (http://localhost:7777)"
+	@echo "  make dev-bkg         Start application in background"
+	@echo "  make run             Start application (production mode)"
+	@echo "  make stop            Stop running application server"
+	@echo "  make query Q=\"..\"    Run ad hoc query (stateful - uses session memory)"
+	@echo "  make query Q=\"..\" S=1  Run stateless query (no session history)"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test        Run unit tests"
-	@echo "  make eval        Run integration tests (requires API keys)"
+	@echo "  make test            Run unit tests"
+	@echo "  make eval            Run integration tests (requires API keys)"
 	@echo ""
 	@echo "Maintenance:"
-	@echo "  make clean       Remove cache files and temporary data"
-	@echo "  make help        Show this help message"
+	@echo "  make clean           Remove cache files and temporary data"
+	@echo "  make help            Show this help message"
 
 # Check if venv exists, create if not
 venv-check:
@@ -88,16 +89,25 @@ stop:
 	@echo "✓ Application stopped"
 
 # Ad hoc Query: Run a single query (auto-manages background server)
+# Usage: make query Q="..." [S=1] where S=1 enables stateless mode
 query: venv-check dev-bkg
 	@if [ -z "$(Q)" ]; then \
-		echo "Usage: make query Q=\"<your query>\""; \
-		echo "Example: make query Q=\"What can I make with chicken and rice?\""; \
+		echo "Usage: make query Q=\"<your query>\" [S=1]"; \
+		echo "Example (stateful):   make query Q=\"What can I make with chicken and rice?\""; \
+		echo "Example (stateless):  make query Q=\"What can I make with chicken and rice?\" S=1"; \
 		exit 1; \
 	fi
-	@echo "Running ad hoc query..."
-	@echo ""
-	@sleep 1; \
-	$(PYTHON) query.py $(Q); \
+	@if [ "$(S)" = "1" ]; then \
+		echo "Running stateless ad hoc query (no session memory)..."; \
+		echo ""; \
+		sleep 1; \
+		$(PYTHON) query.py --stateless "$(Q)"; \
+	else \
+		echo "Running stateful ad hoc query (with session memory)..."; \
+		echo ""; \
+		sleep 1; \
+		$(PYTHON) query.py "$(Q)"; \
+	fi; \
 	QUERY_RESULT=$$?; \
 	echo ""; \
 	echo "Stopping background server..."; \

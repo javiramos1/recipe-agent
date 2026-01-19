@@ -7,17 +7,21 @@ Usage:
     make query Q="What can I make with chicken and rice?"
     python query.py "What are some vegetarian recipes?"
     python query.py --debug "Your query"  # Show full JSON response
+    python query.py --stateless "Your query"  # No session history (clear memory)
 
 Features:
 - Direct agent execution via arun()
 - Single query input with formatted markdown response
 - Debug mode to display full JSON with all fields
+- Stateless mode to run without session history or memory
 - Clean exit after completion
 """
 
 import asyncio
 import json
 import sys
+import tempfile
+from pathlib import Path
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -29,16 +33,30 @@ from src.agents.agent import initialize_recipe_agent
 console = Console()
 
 
-def run_query(query: str, debug: bool = False) -> None:
+def run_query(query: str, debug: bool = False, stateless: bool = False) -> None:
     """Execute a single ad hoc query and print the response.
     
     Args:
         query: The user query to send to the agent (plain text or JSON).
         debug: If True, display full JSON response with all fields.
+        stateless: If True, use a temporary database (clears memory between queries).
     """
     try:
-        logger.info("Initializing agent...")
-        agent = initialize_recipe_agent()
+        logger.info(f"Initializing agent (stateless={stateless})...")
+        
+        # For stateless mode, temporarily override DATABASE_URL to use a temp database
+        original_db_url = config.DATABASE_URL
+        if stateless:
+            temp_db = Path(tempfile.gettempdir()) / f"query_stateless_{id(asyncio)}.db"
+            config.DATABASE_URL = f"sqlite:///{temp_db}"
+            logger.info(f"Using temporary database: {temp_db}")
+        
+        try:
+            agent = initialize_recipe_agent()
+        finally:
+            # Restore original DATABASE_URL
+            if stateless:
+                config.DATABASE_URL = original_db_url
         
         logger.info(f"Running query: {query}")
         logger.info("---")
@@ -88,24 +106,35 @@ def run_query(query: str, debug: bool = False) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python query.py [--debug] \"<your query>\"")
+        print("Usage: python query.py [--debug] [--stateless] \"<your query>\"")
         print("Example: python query.py \"What can I make with chicken and rice?\"")
         print("Debug:   python query.py --debug \"What can I make with chicken and rice?\"")
+        print("Stateless: python query.py --stateless \"What can I make with chicken and rice?\"")
         sys.exit(1)
     
-    # Check for debug flag
+    # Check for debug and stateless flags
     debug_mode = False
+    stateless_mode = False
     argv_start = 1
     
-    if sys.argv[1] == "--debug":
-        debug_mode = True
-        argv_start = 2
-        if len(sys.argv) < 3:
-            print("Usage: python query.py --debug \"<your query>\"")
+    while argv_start < len(sys.argv) and sys.argv[argv_start].startswith("--"):
+        if sys.argv[argv_start] == "--debug":
+            debug_mode = True
+            argv_start += 1
+        elif sys.argv[argv_start] == "--stateless":
+            stateless_mode = True
+            argv_start += 1
+        else:
+            print(f"Unknown flag: {sys.argv[argv_start]}")
             sys.exit(1)
     
-    # Join all arguments after script name as the query (handles queries with spaces)
+    if argv_start >= len(sys.argv):
+        print("Error: No query provided")
+        print("Usage: python query.py [--debug] [--stateless] \"<your query>\"")
+        sys.exit(1)
+    
+    # Join all arguments after flags as the query (handles queries with spaces)
     query = " ".join(sys.argv[argv_start:])
     
     # Run the query function
-    run_query(query, debug=debug_mode)
+    run_query(query, debug=debug_mode, stateless=stateless_mode)
