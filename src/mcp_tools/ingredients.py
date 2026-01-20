@@ -287,19 +287,19 @@ async def extract_ingredients_pre_hook(
 ) -> None:
     """Pre-hook: Extract ingredients from images before agent processes request.
 
-    Assumes input has been normalized by normalize_input_pre_hook:
+    Works with ChatMessage input schema:
     - run_input.message: User message (str)
     - run_input.images: List of image URLs or base64 data URIs
 
     The function:
-    1. Extracts message and images (already normalized format)
+    1. Extracts message and images from ChatMessage
     2. Validates and compresses images
     3. Calls Gemini vision API to extract ingredients (async)
     4. Filters by confidence threshold
     5. Appends detected ingredients to user message as text
 
     Args:
-        run_input: Agno RunInput object with normalized message/images attributes
+        run_input: Agno RunInput object with ChatMessage attributes (message, images)
         session: Agno AgentSession providing current session context
         user_id: Optional contextual user ID for the current run
         debug_mode: Optional boolean indicating if debug mode is enabled

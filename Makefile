@@ -71,11 +71,9 @@ dev: venv-check
 
 # Development background: Start in background
 dev-bkg: venv-check
-	@nohup $(PYTHON) app.py > /tmp/agent_server.log 2>&1 &
-	@echo "Backend server started in background (PID: $$!)"
-	@echo "Logs: tail -f /tmp/agent_server.log"
-	@sleep 3
-	@curl -s http://localhost:7777/health > /dev/null && echo "✓ Server is responding" || echo "⚠ Server may still be starting..."
+	@nohup $(PYTHON) app.py > /tmp/recipe_service.log 2>&1 &
+	@sleep 2
+	@pgrep -f "python app.py" > /dev/null && echo "✓ Backend started (http://localhost:7777)" || echo "⚠ Check logs: tail -f /tmp/recipe_service.log"
 
 # Production: Start AgentOS backend
 run: venv-check
