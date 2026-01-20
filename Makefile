@@ -44,12 +44,27 @@ venv-check:
 		echo "✓ Virtual environment created"; \
 	fi
 
-# Setup: Create venv, install dependencies, create .env
+# Setup: Create venv, install dependencies, create .env, setup Agent UI
 setup: venv-check
-	@echo "Installing dependencies..."
+	@echo "Installing Python dependencies..."
 	$(PIP) install --upgrade pip
 	$(PIP) install -r requirements.txt
+	@echo ""
+	@echo "Setting up Agent UI..."
+	@if [ ! -d "agent-ui" ]; then \
+		echo "Creating Agent UI project..."; \
+		npx create-agent-ui@latest > /dev/null 2>&1; \
+		echo "✓ Agent UI project created"; \
+	else \
+		echo "✓ Agent UI project already exists"; \
+	fi
+	@if [ -d "agent-ui" ] && [ ! -d "agent-ui/node_modules" ]; then \
+		echo "Installing Agent UI dependencies..."; \
+		cd agent-ui && npm install --legacy-peer-deps > /dev/null 2>&1 && cd ..; \
+		echo "✓ Agent UI dependencies installed"; \
+	fi
 	@if [ ! -f .env ]; then \
+		echo ""; \
 		echo "Creating .env file from .env.example..."; \
 		cp .env.example .env; \
 		echo ""; \
@@ -62,45 +77,33 @@ setup: venv-check
 		echo ""; \
 		echo "  2. Run: make dev"; \
 	else \
+		echo ""; \
 		echo "✓ .env file already exists"; \
+		echo ""; \
+		echo "Setup complete! Run: make dev"; \
 	fi
 
-# Development: Start with hot-reload
+# Development: Start both AgentOS backend and Agent UI frontend
 dev: venv-check
-	@echo "Starting application in development mode..."
-	@echo ""
-	@echo "Web UI (AGUI):     http://localhost:7777"
-	@echo "REST API:          http://localhost:7777/api/agents/chat"
-	@echo "OpenAPI Docs:      http://localhost:7777/docs"
-	@echo ""
-	@echo "Press Ctrl+C to stop"
-	@echo ""
 	@if [ "$(DEBUG)" = "1" ] || [ "$(DEBUG)" = "true" ]; then \
 		export AGNO_DEBUG=True; \
 	fi; \
-	$(PYTHON) app.py
+	bash scripts/start_services.sh $(PYTHON)
 
 # Development background: Start in background using helper script
 dev-bkg: venv-check
 	@./scripts/start_bkg.sh $(PYTHON)
 
-# Production: Start without hot-reload
+# Production: Start both AgentOS backend and Agent UI frontend (production mode)
 run: venv-check
-	@echo "Starting application in production mode..."
-	@echo ""
-	@echo "Web UI (AGUI):     http://localhost:7777"
-	@echo "REST API:          http://localhost:7777/api/agents/chat"
-	@echo "OpenAPI Docs:      http://localhost:7777/docs"
-	@echo ""
 	@if [ "$(DEBUG)" = "1" ] || [ "$(DEBUG)" = "true" ]; then \
 		export AGNO_DEBUG=True; \
 	fi; \
-	$(PYTHON) app.py
+	bash scripts/start_services.sh $(PYTHON)
 
-# Stop: Kill any running app.py processes
+# Stop: Kill all running services (backend and frontend)
 stop:
-	@pkill -f "python app.py" 2>/dev/null || true
-	@echo "✓ Application stopped"
+	@bash scripts/stop_services.sh
 
 # Ad hoc Query: Run a single query (auto-manages background server)
 # Usage: make query Q="..." [S=1] [DEBUG=1] [IMG=path/to/image.png]

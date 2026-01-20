@@ -1,23 +1,21 @@
 """AgentOS Application - Recipe Recommendation Service.
 
 Single entry point for the complete recipe recommendation system:
-- Initializes agent from agent.py factory (async)
-- Creates AgentOS instance with agent
-- Serves REST API and Web UI automatically via AgentOS
+- Initializes agent from agent.py factory
+- Creates AgentOS instance with agent and AGUI interface
+- Serves REST API endpoints via FastAPI
 
 Run with: python app.py
 
 Features:
-- Web UI: ChatGPT-like interface at http://localhost:PORT
-- AGUI endpoints: POST /agui for agent interaction
+- AGUI REST API: POST /agui for agent interaction
 - OpenAPI docs: http://localhost:PORT/docs
 - Session management: Automatic per session_id
 - Tool lifecycle: MCPs initialized before AgentOS starts
+
+Frontend: Served by separate Agent UI (http://localhost:3000)
 """
 
-from pathlib import Path
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from agno.os import AgentOS
 from agno.os.interfaces.agui import AGUI
 
@@ -30,34 +28,16 @@ from src.agents.agent import initialize_recipe_agent
 logger.info("Starting Recipe Recommendation Service initialization...")
 agent = initialize_recipe_agent()
 
-# Create AgentOS with the agent and Web UI interface
-logger.info("Creating AgentOS instance with Web UI...")
+# Create AgentOS with the agent and AGUI interface
+logger.info("Creating AgentOS instance with AGUI interface...")
 agent_os = AgentOS(
     description="Recipe Recommendation Service - Transform ingredient images into recipes",
     agents=[agent],
     interfaces=[AGUI(agent=agent)],
 )
 
-# Get the FastAPI app for external serving (e.g., Docker)
+# Get the FastAPI app for external serving
 app = agent_os.get_app()
-
-# Override root path to serve web UI instead of API info
-# Remove the default "/" route from AgentOS
-ui_dir = Path(__file__).parent / "src" / "ui"
-if ui_dir.exists():
-    # Remove existing root route by filtering router.routes
-    root_routes_to_remove = [route for route in app.router.routes if hasattr(route, 'path') and route.path == '/']
-    for route in root_routes_to_remove:
-        app.router.routes.remove(route)
-    
-    # Add HTML UI at root
-    @app.get("/")
-    async def serve_ui():
-        """Serve the web UI at the root path."""
-        return FileResponse(ui_dir / "index.html")
-    
-    # Mount static assets
-    app.mount("/ui", StaticFiles(directory=str(ui_dir)), name="ui")
 
 
 if __name__ == "__main__":

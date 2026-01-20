@@ -160,7 +160,6 @@ def initialize_recipe_agent(use_db: bool = True) -> Agent:
         db=db,
         tools=tools,
         pre_hooks=pre_hooks,
-        input_schema=ChatMessage,
         output_schema=RecipeResponse,
         instructions=system_instructions,
         # Memory settings

@@ -288,7 +288,7 @@ async def extract_ingredients_pre_hook(
     """Pre-hook: Extract ingredients from images before agent processes request.
 
     This function:
-    1. Checks for images in the request
+    1. Parses message to extract images (from JSON format sent by frontend)
     2. Calls Gemini vision API to extract ingredients (async)
     3. Filters by confidence threshold
     4. Appends detected ingredients to user message as text
@@ -320,8 +320,26 @@ async def extract_ingredients_pre_hook(
             f"user_id={user_id}, debug_mode={debug_mode})"
         )
 
-        # Check for images in input
-        images = getattr(run_input, "images", [])
+        # Try to parse message as JSON to extract images
+        # Frontend sends: {message: "user message", images: [base64_urls]}
+        message_text = getattr(run_input, "input_content", "")
+        images = []
+        
+        try:
+            message_data = json.loads(message_text)
+            if isinstance(message_data, dict):
+                # Extract actual message
+                if "message" in message_data:
+                    message_text = message_data["message"]
+                # Extract images
+                if "images" in message_data and message_data["images"]:
+                    images = message_data["images"]
+                    logger.debug(f"Parsed {len(images)} image(s) from message JSON")
+        except (json.JSONDecodeError, ValueError):
+            # Message is not JSON, treat as plain text
+            logger.debug("Message is not JSON, treating as plain text")
+        
+        # Check if we have images to process
         if not images:
             logger.debug("No images in request, skipping ingredient extraction")
             return
@@ -330,9 +348,11 @@ async def extract_ingredients_pre_hook(
 
         all_ingredients = []
         for idx, image in enumerate(images):
-            # Get image bytes (async)
+            # Get image bytes from data URL or URL string (async)
             image_bytes = None
-            if hasattr(image, "url"):
+            if isinstance(image, str):
+                image_bytes = await fetch_image_bytes(image)
+            elif hasattr(image, "url"):
                 image_bytes = await fetch_image_bytes(image.url)
             elif hasattr(image, "content"):
                 image_bytes = await fetch_image_bytes(image.content)
@@ -374,14 +394,11 @@ async def extract_ingredients_pre_hook(
         if all_ingredients:
             unique_ingredients = list(dict.fromkeys(all_ingredients))  # Remove duplicates, preserve order
             ingredient_text = ", ".join(unique_ingredients)
-            original_message = getattr(run_input, "input_content", "")
+            # Update the message with detected ingredients
             run_input.input_content = (
-                f"{original_message}\n\n[Detected Ingredients] {ingredient_text}"
+                f"{message_text}\n\n[Detected Ingredients] {ingredient_text}"
             )
             logger.info(f"Appended {len(unique_ingredients)} detected ingredients to message")
-
-        # Clear images to prevent agent re-processing
-        run_input.images = []
 
     except Exception as e:
         # Pre-hooks must be resilient - log but don't crash
