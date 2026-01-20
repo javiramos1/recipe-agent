@@ -101,11 +101,12 @@ def initialize_recipe_agent(use_db: bool = True) -> Agent:
         api_key=config.SPOONACULAR_API_KEY,
         max_retries=3,
         retry_delays=[1, 2, 4],
+        include_tools=["search_recipes", "get_recipe_information_bulk"],
     )
     try:
         # Run async initialization synchronously using asyncio.run
         mcp_tools = asyncio.run(spoonacular_mcp.initialize())
-        logger.info("✓ Spoonacular MCP initialized successfully")
+        logger.info("✓ Spoonacular MCP initialized successfully (filtered to: search_recipes, get_recipe_information_bulk)")
     except Exception as e:
         logger.error(f"✗ MCP initialization failed: {e}")
         raise SystemExit(1)

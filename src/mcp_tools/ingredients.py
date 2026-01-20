@@ -289,7 +289,7 @@ async def extract_ingredients_pre_hook(
 
     Works with ChatMessage input schema:
     - run_input.message: User message (str)
-    - run_input.images: List of image URLs or base64 data URIs
+    - run_input.images: List of image URLs or base64 data URIs (parsed by validator)
 
     The function:
     1. Extracts message and images from ChatMessage
@@ -315,7 +315,7 @@ async def extract_ingredients_pre_hook(
             f"user_id={user_id}, debug_mode={debug_mode})"
         )
 
-        # Extract normalized message and images (guaranteed by normalize_input_pre_hook)
+        # Extract normalized message and images (validator parses comma-separated string to list)
         message_text = getattr(run_input, "message", "") or ""
         images = getattr(run_input, "images", []) or []
         

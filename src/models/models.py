@@ -11,23 +11,113 @@ from pydantic import BaseModel, Field, field_validator, model_validator, ConfigD
 class ChatMessage(BaseModel):
     """Minimal input schema for conversational recipe recommendation.
     
-    Accepts natural language message and optional images.
+    Accepts natural language message and optional comma-separated image URLs/base64 strings.
+    Message is optional if images are provided (defaults to "What can I cook with these ingredients?").
     Preferences and ingredients are extracted from the message or retrieved from agent memory.
     
     This minimal schema allows full conversational flexibility without pre-structuring input.
     """
     model_config = ConfigDict(str_strip_whitespace=True)
     
-    message: Annotated[str, Field(
+    message: Annotated[Optional[str], Field(
+        None,
         min_length=1,
         max_length=2000,
-        description="Natural language message from user (1-2000 chars)"
+        description="Natural language message from user (1-2000 chars, optional if images provided)"
     )]
-    images: Annotated[Optional[List[str]], Field(
+    images: Annotated[Optional[str | list[str]], Field(
         None,
-        max_length=10,
-        description="Optional list of base64-encoded images or image URLs (max 10 images)"
+        description="Optional comma-separated image URLs/base64 or list of URLs (max 10 images)"
     )]
+    
+    @field_validator('message', mode='before')
+    @classmethod
+    def set_default_message(cls, v: Optional[str], info) -> Optional[str]:
+        """Set default message if not provided but images are present, or return None if both empty."""
+        if not v or (isinstance(v, str) and not v.strip()):
+            # Check if images are provided (before they're parsed by the images validator)
+            raw_images = info.data.get('images')
+            
+            # Check if images exist in raw form
+            has_images = False
+            if raw_images:
+                if isinstance(raw_images, list) and len(raw_images) > 0:
+                    has_images = True
+                elif isinstance(raw_images, str) and raw_images.strip():
+                    has_images = True
+            
+            if has_images:
+                return "What can I cook with these ingredients?"
+            # Return None for now; model_validator will check if both are empty
+            return None
+        return v
+    
+    @model_validator(mode='after')
+    def validate_message_or_images(self) -> 'ChatMessage':
+        """Ensure either message or images are provided."""
+        if not self.message and not self.images:
+            raise ValueError('Either message or images must be provided')
+        return self
+    
+    @staticmethod
+    def _is_valid_image(image_str: str) -> bool:
+        """Check if image string is either a valid URL or base64-encoded data."""
+        if not image_str or not isinstance(image_str, str):
+            return False
+        
+        # Check if it's a URL (http:// or https://)
+        if image_str.startswith(('http://', 'https://')):
+            return True
+        
+        # Check if it's base64-encoded (data URI or plain base64)
+        if image_str.startswith('data:'):
+            # data: URL format
+            return True
+        
+        # Check if it's plain base64 (alphanumeric, +, /, and = for padding)
+        if all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=' for c in image_str):
+            # Additional check: base64 should have proper length (multiple of 4 after stripping padding)
+            clean = image_str.rstrip('=')
+            if len(clean) % 4 == 0 or (len(image_str) % 4 == 0):
+                return True
+        
+        return False
+
+    @field_validator('images', mode='before')
+    @classmethod
+    def parse_images(cls, v: Optional[str | list[str]]) -> Optional[list[str]]:
+        """Parse comma-separated images string or list into normalized list.
+        
+        Validates that each image is either a URL (http/https) or base64-encoded data.
+        """
+        if not v:
+            return []
+        
+        # If already a list, return as-is
+        if isinstance(v, list):
+            images = [img.strip() if isinstance(img, str) else str(img) for img in v if img]
+            if len(images) > 10:
+                raise ValueError('Maximum 10 images allowed')
+            # Validate each image
+            for img in images:
+                if not cls._is_valid_image(img):
+                    raise ValueError(f'Invalid image: must be a URL (http/https) or base64-encoded data. Got: {img[:50]}...')
+            return images
+        
+        # If string, split by comma
+        if isinstance(v, str):
+            if not v.strip():
+                return []
+            images = [img.strip() for img in v.split(',') if img.strip()]
+            if len(images) > 10:
+                raise ValueError('Maximum 10 images allowed')
+            # Validate each image
+            for img in images:
+                if not cls._is_valid_image(img):
+                    raise ValueError(f'Invalid image: must be a URL (http/https) or base64-encoded data. Got: {img[:50]}...')
+            return images
+        
+        return []
 
 class Recipe(BaseModel):
     """Domain model for a recipe.

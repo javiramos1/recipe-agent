@@ -221,7 +221,8 @@ The application will start with full logging and hot-reload support. This starts
 ### Start Server
 
 ```bash
-make dev     # Development mode with output
+make dev     # Development mode with debug log level
+make debug   # Full debug mode (log level + agent debug + debug level 2)
 make run     # Production mode
 make stop    # Stop running server
 ```
@@ -244,17 +245,12 @@ The query command initializes the agent and executes one-off requests from the C
 
 ### Debug Mode
 
-Enable debug output to see internal agent execution details including tool calls, LLM input/output, and performance metrics:
-
-```bash
-# Enable debug for web server
-make dev DEBUG=1
-make run DEBUG=1
-
-# Enable debug for query
-make query Q="What can I make with chicken?" DEBUG=1
-make query Q="What can I make with chicken?" S=1 DEBUG=1
-```
+**Development Server:**
+- `make dev` - Starts with debug log level (LOG_LEVEL=DEBUG)
+- `make debug` - Full debug mode with agent debugging enabled:
+  - `LOG_LEVEL=DEBUG` - Structured logging at debug level
+  - `DEBUG_MODE=1` - Enables Agno agent debug mode for detailed execution traces
+  - `DEBUG_LEVEL=2` - Maximum verbosity for agent reasoning and tool calls
 
 **Debug output shows:**
 - 📞 **Tool Calls** - Which MCP tools were called and their arguments

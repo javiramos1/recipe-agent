@@ -23,6 +23,7 @@ class SpoonacularMCP:
         api_key: str,
         max_retries: int = 3,
         retry_delays: Optional[list[int]] = None,
+        include_tools: Optional[list[str]] = None,
     ) -> None:
         """Initialize SpoonacularMCP with configuration.
 
@@ -30,6 +31,8 @@ class SpoonacularMCP:
             api_key: Spoonacular API key for authentication.
             max_retries: Maximum number of connection retry attempts (default: 3).
             retry_delays: List of delays in seconds for each retry. If None, defaults to [1, 2, 4].
+            include_tools: List of tool names to include. If None, all tools are included.
+                Default: ["search_recipes", "get_recipe_information_bulk"]
 
         Raises:
             ValueError: If api_key is None or empty string.
@@ -40,6 +43,7 @@ class SpoonacularMCP:
         self.api_key = api_key
         self.max_retries = max_retries
         self.retry_delays = retry_delays or [1, 2, 4]
+        self.include_tools = include_tools or ["search_recipes", "get_recipe_information_bulk"]
 
     async def initialize(self) -> MCPTools:
         """Initialize MCP with connection validation and retries (async).
@@ -74,6 +78,7 @@ class SpoonacularMCP:
                     MCPTools,
                     command="npx -y spoonacular-mcp",
                     env={"SPOONACULAR_API_KEY": self.api_key},
+                    include_tools=self.include_tools,
                 )
 
                 logger.info("Spoonacular MCP connected successfully")

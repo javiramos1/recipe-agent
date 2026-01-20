@@ -1,4 +1,4 @@
-.PHONY: setup dev dev-bkg run query stop test eval clean clean-memories help venv-check
+.PHONY: setup dev debug dev-bkg run query stop test eval clean clean-memories help venv-check
 
 # Virtual environment directory
 VENV_DIR := .venv
@@ -13,7 +13,8 @@ help:
 	@echo "  make setup           Create virtual environment, install dependencies, create .env file"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev             Start backend server (http://localhost:7777)"
+	@echo "  make dev             Start backend server (http://localhost:7777, debug log level)"
+	@echo "  make debug           Start backend server with full debug mode (log level + agent debug + debug level 2)"
 	@echo "  make dev-bkg         Start backend server in background"
 	@echo "  make run             Start backend server (production mode)"
 	@echo "  make stop            Stop running backend server"
@@ -65,9 +66,13 @@ setup: venv-check
 		echo "Setup complete! Run: make dev"; \
 	fi
 
-# Development: Start AgentOS backend
+# Development: Start AgentOS backend (with debug logging)
 dev: venv-check
-	@$(PYTHON) app.py
+	@LOG_LEVEL=DEBUG $(PYTHON) app.py
+
+# Debug: Start with full debug mode (debug logging + agent debug mode + debug level 2)
+debug: venv-check
+	@LOG_LEVEL=DEBUG DEBUG_MODE=1 DEBUG_LEVEL=2 $(PYTHON) app.py
 
 # Development background: Start in background
 dev-bkg: venv-check
