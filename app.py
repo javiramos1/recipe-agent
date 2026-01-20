@@ -8,13 +8,16 @@ Single entry point for the complete recipe recommendation system:
 Run with: python app.py
 
 Features:
-- REST API endpoints: POST /api/agents/chat, GET /api/agents/{session_id}/history
-- Web UI (AGUI): ChatGPT-like interface at http://localhost:PORT
+- Web UI: ChatGPT-like interface at http://localhost:PORT
+- AGUI endpoints: POST /agui for agent interaction
 - OpenAPI docs: http://localhost:PORT/docs
 - Session management: Automatic per session_id
-- Tool lifecycle: MCPs initialized before AgentOS starts (async initialization)
+- Tool lifecycle: MCPs initialized before AgentOS starts
 """
 
+from pathlib import Path
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from agno.os import AgentOS
 from agno.os.interfaces.agui import AGUI
 
@@ -23,7 +26,7 @@ from src.utils.logger import logger
 from src.agents.agent import initialize_recipe_agent
 
 
-# Initialize agent using factory pattern (sync)
+# Initialize agent using factory pattern
 logger.info("Starting Recipe Recommendation Service initialization...")
 agent = initialize_recipe_agent()
 
@@ -37,6 +40,24 @@ agent_os = AgentOS(
 
 # Get the FastAPI app for external serving (e.g., Docker)
 app = agent_os.get_app()
+
+# Override root path to serve web UI instead of API info
+# Remove the default "/" route from AgentOS
+ui_dir = Path(__file__).parent / "src" / "ui"
+if ui_dir.exists():
+    # Remove existing root route by filtering router.routes
+    root_routes_to_remove = [route for route in app.router.routes if hasattr(route, 'path') and route.path == '/']
+    for route in root_routes_to_remove:
+        app.router.routes.remove(route)
+    
+    # Add HTML UI at root
+    @app.get("/")
+    async def serve_ui():
+        """Serve the web UI at the root path."""
+        return FileResponse(ui_dir / "index.html")
+    
+    # Mount static assets
+    app.mount("/ui", StaticFiles(directory=str(ui_dir)), name="ui")
 
 
 if __name__ == "__main__":
