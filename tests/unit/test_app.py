@@ -163,7 +163,7 @@ class TestSystemInstructionsContent:
         instructions = self._get_system_instructions()
         assert "two-step" in instructions.lower() or ("step 1" in instructions.lower() and "step 2" in instructions.lower())
         assert "search_recipes" in instructions
-        assert "get_recipe_information_bulk" in instructions
+        assert "get_recipe_information" in instructions
         assert "never provide recipe instructions without" in instructions.lower()
 
     def test_system_instructions_cover_preference_management(self):

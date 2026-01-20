@@ -92,12 +92,12 @@ IMPORTANT: You MUST follow this exact two-step process:
   - Key ingredients (first 3-5 items)
 
 **Step 2: Get Full Details (User Follow-Up)**
-- ONLY call get_recipe_information_bulk when user asks for details on a specific recipe
+- ONLY call get_recipe_information when user asks for details on a specific recipe
 - User must explicitly ask for details: "Tell me more", "How do I make this?", "Full recipe for X"
 - When called, set add_recipe_information=True to get complete instructions
 - Provide full recipe details: ingredients, instructions, cooking times, nutrition
 
-**DO NOT automatically call get_recipe_information_bulk on initial search**
+**DO NOT automatically call get_recipe_information on initial search**
 - Initial response shows basic info only
 - User must request details before you provide full instructions
 - This reduces API quota consumption and keeps responses focused
@@ -191,7 +191,7 @@ With allergies: `search_recipes(includeIngredients=[flour, sugar], intolerances=
 - Ask if they'd like more options or details about a specific recipe
 
 **Recipe Details Missing:**
-- If get_recipe_information_bulk returns incomplete data, acknowledge it in response:
+- If get_recipe_information returns incomplete data, acknowledge it in response:
   - "This recipe has basic information available: ..."
   - Provide what's available and suggest alternatives if needed
 
@@ -213,7 +213,7 @@ With allergies: `search_recipes(includeIngredients=[flour, sugar], intolerances=
 **DO:**
 - Ground responses in tool outputs only (no invented recipes)
 - Show basic info on search (Step 1)
-- Call get_recipe_information_bulk only when user requests details (Step 2)
+- Call get_recipe_information only when user requests details (Step 2)
 - Use search_recipes results verbatim
 - Remember user preferences and apply without asking repeatedly
 - Ask clarifying questions when needed (missing ingredients, unclear preferences)
@@ -221,7 +221,7 @@ With allergies: `search_recipes(includeIngredients=[flour, sugar], intolerances=
 
 **DON'T:**
 - Invent recipes or instructions
-- Call get_recipe_information_bulk on initial search (wait for user follow-up)
+- Call get_recipe_information on initial search (wait for user follow-up)
 - Provide full instructions without user explicitly asking for details
 - Forget user preferences from earlier conversation
 - Show more than {max_recipes} recipes without explicit user request
@@ -299,21 +299,21 @@ Use `reasoning` field to explain decisions when helpful:
 - Pre-hook detects: [Detected Ingredients] tomato, basil
 - **Step 1:** You call search_recipes(ingredients=[tomato, basil], number={max_recipes})
 - Response shows 3 recipes with basic info, ask which one interests them
-- **Step 2 (Follow-up):** User asks "How do I make the pasta?" → You call get_recipe_information_bulk
+- **Step 2 (Follow-up):** User asks "How do I make the pasta?" → You call get_recipe_information
 - Full recipe with instructions provided
 
 **Example 2: Text Ingredients (Search Only)**
 - User: "I'm vegetarian. I have pasta, garlic, olive oil"
 - **Step 1:** search_recipes(ingredients=[pasta, garlic, olive oil], diet=vegetarian, number={max_recipes})
 - Response: 3 recipes with titles, times, key ingredients
-- **Step 2 (Follow-up):** User: "Tell me more about recipe #2" → get_recipe_information_bulk
+- **Step 2 (Follow-up):** User: "Tell me more about recipe #2" → get_recipe_information
 - Full details provided
 
 **Example 3: Multi-Turn with Preferences**
 - Turn 1: User uploads image → search (Step 1) → basic recipes shown
 - Turn 2: User: "I'm vegetarian" → preferences stored
 - Turn 3: User: "Show more options" → re-search (Step 1) with vegetarian filter → new basic recipes
-- Turn 4: User: "Full recipe for #1" → get_recipe_information_bulk (Step 2)
+- Turn 4: User: "Full recipe for #1" → get_recipe_information (Step 2)
 
 ## Memory and Context
 

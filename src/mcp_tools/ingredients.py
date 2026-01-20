@@ -288,18 +288,18 @@ async def extract_ingredients_pre_hook(
     """Pre-hook: Extract ingredients from images before agent processes request.
 
     Works with ChatMessage input schema:
-    - run_input.message: User message (str)
-    - run_input.images: List of image URLs or base64 data URIs (parsed by validator)
+    - run_input.input_content: JSON string or dict with ChatMessage data
+    - Extracts message and images from the RunInput and parses them
 
     The function:
-    1. Extracts message and images from ChatMessage
+    1. Extracts and parses message and images from RunInput
     2. Validates and compresses images
     3. Calls Gemini vision API to extract ingredients (async)
     4. Filters by confidence threshold
     5. Appends detected ingredients to user message as text
 
     Args:
-        run_input: Agno RunInput object with ChatMessage attributes (message, images)
+        run_input: Agno RunInput object containing ChatMessage data (parsed from input_content)
         session: Agno AgentSession providing current session context
         user_id: Optional contextual user ID for the current run
         debug_mode: Optional boolean indicating if debug mode is enabled
@@ -315,9 +315,14 @@ async def extract_ingredients_pre_hook(
             f"user_id={user_id}, debug_mode={debug_mode})"
         )
 
-        # Extract normalized message and images (validator parses comma-separated string to list)
-        message_text = getattr(run_input, "message", "") or ""
-        images = getattr(run_input, "images", []) or []
+        # Extract ChatMessage data from RunInput (input_content is a ChatMessage Pydantic object)
+        input_data = getattr(run_input, "input_content", None)
+        if not input_data or not hasattr(input_data, "message"):
+            logger.debug("No valid ChatMessage found in RunInput")
+            return
+        
+        message_text = input_data.message or ""
+        images = input_data.images or []
         
         logger.debug(f"Message: {len(message_text)} chars, Images: {len(images)} items")
         
@@ -368,7 +373,10 @@ async def extract_ingredients_pre_hook(
 
             if ingredients:
                 all_ingredients.extend(ingredients)
-                logger.debug(f"Image {idx + 1}: Extracted {len(ingredients)} ingredients")
+                logger.info(
+                    f"Image {idx + 1}: Extracted {len(ingredients)} ingredients "
+                    f"(confidence threshold: {config.MIN_INGREDIENT_CONFIDENCE})"
+                )
             else:
                 logger.warning(f"Image {idx + 1}: No ingredients with sufficient confidence")
 
@@ -376,13 +384,15 @@ async def extract_ingredients_pre_hook(
         if all_ingredients:
             unique_ingredients = list(dict.fromkeys(all_ingredients))  # Remove duplicates, preserve order
             ingredient_text = ", ".join(unique_ingredients)
-            # Update the message with detected ingredients
-            run_input.input_content = (
-                f"{message_text}\n\n[Detected Ingredients] {ingredient_text}"
-            )
+            updated_message = f"{message_text}\n\n[Detected Ingredients] {ingredient_text}"
+            
+            # Update ChatMessage object's message field
+            input_data.message = updated_message
+            run_input.input_content = input_data
+            
             logger.info(
                 f"Ingredients extracted from image: {unique_ingredients} "
-                f"(total: {len(unique_ingredients)})"
+                f"(total: {len(unique_ingredients)}, confidence threshold: {config.MIN_INGREDIENT_CONFIDENCE})"
             )
 
     except Exception as e:

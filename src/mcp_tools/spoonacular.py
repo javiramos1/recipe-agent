@@ -32,7 +32,7 @@ class SpoonacularMCP:
             max_retries: Maximum number of connection retry attempts (default: 3).
             retry_delays: List of delays in seconds for each retry. If None, defaults to [1, 2, 4].
             include_tools: List of tool names to include. If None, all tools are included.
-                Default: ["search_recipes", "get_recipe_information_bulk"]
+                Default: ["search_recipes", "get_recipe_information"]
 
         Raises:
             ValueError: If api_key is None or empty string.
@@ -43,7 +43,7 @@ class SpoonacularMCP:
         self.api_key = api_key
         self.max_retries = max_retries
         self.retry_delays = retry_delays or [1, 2, 4]
-        self.include_tools = include_tools or ["search_recipes", "get_recipe_information_bulk"]
+        self.include_tools = include_tools or ["search_recipes", "get_recipe_information"]
 
     async def initialize(self) -> MCPTools:
         """Initialize MCP with connection validation and retries (async).

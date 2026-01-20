@@ -18,7 +18,7 @@ from src.models.models import ChatMessage, RecipeResponse, IngredientDetectionOu
 from src.mcp_tools.ingredients import detect_ingredients_tool
 from src.mcp_tools.spoonacular import SpoonacularMCP
 from src.prompts.prompts import get_system_instructions
-from src.hooks.hooks import get_pre_hooks
+from src.hooks.hooks import get_pre_hooks, get_post_hooks
 
 
 @tool
@@ -101,12 +101,12 @@ def initialize_recipe_agent(use_db: bool = True) -> Agent:
         api_key=config.SPOONACULAR_API_KEY,
         max_retries=3,
         retry_delays=[1, 2, 4],
-        include_tools=["search_recipes", "get_recipe_information_bulk"],
+        include_tools=["search_recipes", "get_recipe_information"],
     )
     try:
         # Run async initialization synchronously using asyncio.run
         mcp_tools = asyncio.run(spoonacular_mcp.initialize())
-        logger.info("✓ Spoonacular MCP initialized successfully (filtered to: search_recipes, get_recipe_information_bulk)")
+        logger.info("✓ Spoonacular MCP initialized successfully (filtered to: search_recipes, get_recipe_information)")
     except Exception as e:
         logger.error(f"✗ MCP initialization failed: {e}")
         raise SystemExit(1)
@@ -145,6 +145,11 @@ def initialize_recipe_agent(use_db: bool = True) -> Agent:
     pre_hooks = get_pre_hooks()
     logger.info(f"✓ {len(pre_hooks)} pre-hooks registered")
     
+    # 4b. Get post-hooks (includes response field extraction for UI rendering)
+    logger.info("Step 4b/5: Registering post-hooks...")
+    post_hooks = get_post_hooks()
+    logger.info(f"✓ {len(post_hooks)} post-hooks registered: {[h.__name__ if hasattr(h, '__name__') else str(h) for h in post_hooks]}")
+    
     # 5. Configure Agno Agent
     logger.info("Step 5/5: Configuring Agno Agent...")
     # Generate system instructions with config values
@@ -161,6 +166,7 @@ def initialize_recipe_agent(use_db: bool = True) -> Agent:
         db=db,
         tools=tools,
         pre_hooks=pre_hooks,
+        post_hooks=post_hooks,
         input_schema=ChatMessage,
         output_schema=RecipeResponse,
         instructions=system_instructions,
