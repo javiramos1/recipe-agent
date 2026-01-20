@@ -8,10 +8,11 @@ A modern chat interface for AgentOS built with Next.js, Tailwind CSS, and TypeSc
 
 - 🔗 **AgentOS Integration**: Seamlessly connect to local and live AgentOS instances
 - 💬 **Modern Chat Interface**: Clean design with real-time streaming support
+- 🖼️ **Image Upload Support**: Upload multiple images for ingredient detection and vision-based tasks (custom enhancement)
 - 🧩 **Tool Calls Support**: Visualizes agent tool calls and their results
 - 🧠 **Reasoning Steps**: Displays agent reasoning process (when available)
 - 📚 **References Support**: Show sources used by the agent
-- 🖼️ **Multi-modality Support**: Handles various content types including images, video, and audio
+- 🎬 **Multi-modality Support**: Handles various content types including images, video, and audio
 - 🎨 **Customizable UI**: Built with Tailwind CSS for easy styling
 - 🧰 **Built with Modern Stack**: Next.js, TypeScript, shadcn/ui, Framer Motion, and more
 
@@ -112,6 +113,24 @@ Once you've configured the endpoint:
 1. The Agent UI will automatically attempt to connect to your AgentOS
 2. If successful, you'll see your agents available in the chat interface
 3. If there are connection issues, check that your AgentOS is running and accessible. Check out the troubleshooting guide [here](https://docs.agno.com/faq/agentos-connection)
+
+## Custom Enhancements
+
+This version of Agent UI includes the following enhancements for the Recipe Recommendation Service:
+
+### Image Upload Support
+
+- **Multiple Image Upload**: Select and upload multiple images at once
+- **Image Preview**: Thumbnail previews of selected images before sending
+- **Automatic Message**: If images are uploaded without a text message, the UI automatically sends "Show me recipes based on these ingredients"
+- **5MB File Limit**: Client-side validation prevents uploading images larger than 5MB
+- **Base64 Encoding**: Images are automatically converted to base64 for transmission
+
+### Message Format Improvements
+
+- **Session History**: Fixed display of previously saved sessions to show formatted messages instead of raw JSON
+- **Response Formatting**: Agent responses properly extract and display recipe data without JSON wrappers
+- **Input Parsing**: User input from sessions correctly parses the JSON message format from pre-hooks
 
 ## Contributing
 

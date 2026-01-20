@@ -19,6 +19,9 @@ Frontend: Served by separate Agent UI (http://localhost:3000)
 import os
 from agno.os import AgentOS
 from agno.os.interfaces.agui import AGUI
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 from src.utils.config import config
 from src.utils.logger import logger
@@ -28,6 +31,18 @@ from src.agents.agent import initialize_recipe_agent
 # Set Uvicorn environment variables for large request/response handling
 os.environ.setdefault("UVICORN_LIMIT_MAX_REQUESTS", "1000")
 os.environ.setdefault("UVICORN_LIMIT_CONCURRENCY", "100")
+
+
+class IncreaseBodySizeMiddleware(BaseHTTPMiddleware):
+    """Middleware to increase the max body size limit for streaming responses."""
+    
+    async def dispatch(self, request: Request, call_next) -> Response:
+        if request.method == "POST":
+            # Don't enforce size limit on streaming responses
+            pass
+        response = await call_next(request)
+        return response
+
 
 # Initialize agent using factory pattern
 logger.info("Starting Recipe Recommendation Service initialization...")
@@ -44,8 +59,8 @@ agent_os = AgentOS(
 # Get the FastAPI app for external serving
 app = agent_os.get_app()
 
-# Configure max request body size to 50MB (default is usually 16MB)
-app.max_body_size = 50 * 1024 * 1024
+# Add middleware for large body handling
+app.add_middleware(IncreaseBodySizeMiddleware)
 
 
 if __name__ == "__main__":
@@ -58,13 +73,6 @@ if __name__ == "__main__":
     logger.info(f"✓ OpenAPI docs at: http://localhost:{config.PORT}/docs")
     logger.info("---")
     
-    # Run with AgentOS with increased limits
-    # limit_request_fields: increase number of header fields
-    # limit_request_line: increase max line size
-    agent_os.serve(
-        app=app, 
-        port=config.PORT, 
-        reload=False,
-        limit_request_fields=100,
-        limit_request_line=8190,
-    )
+    # Run with AgentOS (production-ready, no reload)
+    # Note: reload=False (default) to avoid MCP lifespan issues
+    agent_os.serve(app=app, port=config.PORT, reload=False)

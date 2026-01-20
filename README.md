@@ -170,20 +170,75 @@ This means your daily quota is exhausted. Options:
 make dev
 ```
 
-The application will start with full logging and hot-reload support.
+The application will start with full logging and hot-reload support. This starts both:
+- **Backend**: Python/AgentOS server on port 7777
+- **Frontend**: Next.js Agent UI on port 3000
+
+## Using the Web UI
+
+### Getting Started
+
+1. Open http://localhost:3000 in your browser
+2. The Agent UI will automatically connect to http://localhost:7777 (default backend)
+3. Add optional auth token if needed (usually not required for local development)
+4. Select an agent from the dropdown
+5. Start chatting!
+
+### Uploading Images for Ingredient Detection
+
+The Agent UI supports multiple image uploads for automatic ingredient detection:
+
+#### Step-by-Step
+
+1. **Click the Image Upload Button** (📎 plus icon) in the chat input area
+2. **Select One or More Images** - You can select multiple ingredient photos at once
+3. **View Image Thumbnails** - Selected images display as previews before sending
+4. **Add a Message (Optional)**:
+   - If you upload images **without typing a message**, the UI automatically sends: *"Show me recipes based on these ingredients"*
+   - Or **type your own prompt** like: *"Make something vegetarian with these"* or *"I'm allergic to nuts, what can I make?"*
+5. **Click Send** - Images are converted to base64 and sent with your message to the agent
+
+#### Image Upload Specifications
+
+- **Max File Size**: 5MB per image (automatically validated on the client)
+- **Max Images per Request**: Unlimited (but larger batches may take longer to process)
+- **Supported Formats**: JPEG, PNG, WebP, GIF, and other common image formats
+- **Best Results**: Clear, well-lit photos of actual food items
+- **Automatic Detection**: Agent uses Gemini Vision API to identify ingredients
+
+#### Example Workflow
+
+1. **Take or Select a Photo** of your ingredients (e.g., tomatoes, basil, mozzarella)
+2. **Click Image Button** → select the photo from your device
+3. **Photo Thumbnail Appears** → review before sending
+4. **Click Send** (no message needed) → UI automatically sends default message
+5. **Agent Processes**:
+   - Detects ingredients: tomatoes, basil, mozzarella
+   - Finds matching recipes: Caprese Salad, Margherita Pizza, Tomato Basil Soup
+   - Returns recipes with full details (ingredients, instructions, cooking time)
+
+### Web UI Features
+
+- **Multi-Turn Conversations**: Talk to your agent and it remembers previous messages
+- **Session History**: Your chat history is automatically saved and can be reopened later
+- **Real-Time Streaming**: See responses as they're generated (character by character)
+- **Tool Calls**: View which tools the agent called (recipe search, ingredient detection)
+- **Reasoning Steps**: See the agent's thinking process (when available)
+- **Preferences Learning**: Agent learns and remembers your dietary preferences, cuisine preferences, and restrictions across messages in a session
+- **Image Thumbnails**: Preview uploaded images before sending
 
 ## Development Workflow
 
 ### Start Server
 
 ```bash
-make dev     # Development mode with output
+make dev     # Development mode with output (Backend + Frontend)
 make run     # Production mode
 make stop    # Stop running server
 ```
 
 **Access Points:**
-- **Interactive Web UI**: http://localhost:7777 (ChatGPT-like interface)
+- **Interactive Web UI**: http://localhost:3000 (Modern Agent UI with image upload)
 - **REST API**: http://localhost:7777/api/agents/chat
 - **API Documentation**: http://localhost:7777/docs (Swagger UI)
 
