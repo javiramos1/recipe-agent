@@ -287,30 +287,25 @@ async def extract_ingredients_pre_hook(
 ) -> None:
     """Pre-hook: Extract ingredients from images before agent processes request.
 
-    This function:
-    1. Parses message to extract images (from JSON format sent by frontend)
-    2. Calls Gemini vision API to extract ingredients (async)
-    3. Filters by confidence threshold
-    4. Appends detected ingredients to user message as text
-    5. Clears images from input (prevents agent re-processing)
+    This function handles TWO input paths:
+    1. From query.py (direct Python API): run_input has message/images attributes from ChatMessage schema
+    2. From Agno UI (HTTP FormData): run_input.input_content is JSON string {"message":"...", "images":[...]}
+
+    The function:
+    1. Detects which source the input came from
+    2. Extracts message and images appropriately
+    3. Calls Gemini vision API to extract ingredients (async)
+    4. Filters by confidence threshold
+    5. Appends detected ingredients to user message as text
 
     Args:
         run_input: Agno RunInput object containing user message and images.
         session: Agno AgentSession providing current session context.
-            Automatically injected by Agno framework during pre-hook execution.
         user_id: Optional contextual user ID for the current run.
-            Automatically injected by Agno framework if provided during agent.run().
         debug_mode: Optional boolean indicating if debug mode is enabled.
-            Automatically injected by Agno framework based on agent configuration.
 
     Returns:
         None (modifies run_input in-place).
-
-    Note:
-        All parameters (session, user_id, debug_mode) are part of the Agno pre-hook
-        contract and are automatically injected by the Agno framework. They enable
-        future extensibility (e.g., user-specific confidence thresholds, session
-        state tracking) even if not currently used in the implementation.
     """
     try:
         # Log pre-hook execution context
@@ -320,24 +315,32 @@ async def extract_ingredients_pre_hook(
             f"user_id={user_id}, debug_mode={debug_mode})"
         )
 
-        # Try to parse message as JSON to extract images
-        # Frontend sends: {message: "user message", images: [base64_urls]}
-        message_text = getattr(run_input, "input_content", "")
+        message_text = ""
         images = []
         
-        try:
-            message_data = json.loads(message_text)
-            if isinstance(message_data, dict):
-                # Extract actual message
-                if "message" in message_data:
-                    message_text = message_data["message"]
-                # Extract images
-                if "images" in message_data and message_data["images"]:
-                    images = message_data["images"]
-                    logger.debug(f"Parsed {len(images)} image(s) from message JSON")
-        except (json.JSONDecodeError, ValueError):
-            # Message is not JSON, treat as plain text
-            logger.debug("Message is not JSON, treating as plain text")
+        # DETECTION LOGIC: Determine which source this came from
+        # Try path 1: From query.py OR Agno UI with input_schema (ChatMessage attributes exist)
+        if hasattr(run_input, "message"):
+            # This is a ChatMessage object (either from query.py or Agno UI with schema)
+            logger.debug("Detected: ChatMessage schema input")
+            message_text = getattr(run_input, "message", "") or ""
+            images = getattr(run_input, "images", []) or []
+        else:
+            # Try path 2: From Agno UI without schema (raw FormData string in input_content)
+            # Parse message as JSON to extract images
+            input_content = getattr(run_input, "input_content", "")
+            logger.debug(f"Input content type: {type(input_content)}, length: {len(str(input_content))}")
+            
+            try:
+                message_data = json.loads(input_content)
+                if isinstance(message_data, dict):
+                    message_text = message_data.get("message", "")
+                    images = message_data.get("images", [])
+                    logger.debug("Detected: FormData JSON string (fallback)")
+            except (json.JSONDecodeError, ValueError, TypeError):
+                # Message is not JSON, treat entire input_content as plain text
+                message_text = str(input_content)
+                logger.debug("Detected: Plain text message (not JSON)")
         
         # Check if we have images to process
         if not images:

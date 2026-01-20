@@ -44,7 +44,13 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ## Status Section
 
-**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), 145 unit tests passing, Architecture Refactor Complete: Minimal input schema (ChatMessage) + Agent memory system for preferences ✅**
+**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed ✅**
+
+**Latest Update (2026-01-20):**
+- ✅ Integrated official Agno UI from npx (agent-ui folder)
+- ✅ Fixed FormData/JSON compatibility: Frontend sends JSON-stringified message in FormData, pre-hook parses it
+- ✅ Response extraction: RunCompleted handler now extracts 'response' field from RecipeResponse for proper formatting
+- ✅ Services running: Backend (7777) + Frontend (3000) both operational with make dev
 
 ### Phase 1: Foundational (Tasks 1-5 + Task 2.5 logger) ✅
 - [x] Task 1: Project structure, dependencies, .gitignore
