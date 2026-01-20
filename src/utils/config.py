@@ -31,6 +31,7 @@ class Config:
         self.MIN_INGREDIENT_CONFIDENCE: float = float(os.getenv("MIN_INGREDIENT_CONFIDENCE", "0.7"))
         self.IMAGE_DETECTION_MODE: str = os.getenv("IMAGE_DETECTION_MODE", "pre-hook")
         self.COMPRESS_IMG: bool = os.getenv("COMPRESS_IMG", "true").lower() in ("true", "1", "yes")
+        self.OUTPUT_FORMAT: str = os.getenv("OUTPUT_FORMAT", "json")
         self.DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
 
     def validate(self) -> None:
@@ -46,6 +47,10 @@ class Config:
         if self.IMAGE_DETECTION_MODE not in ("pre-hook", "tool"):
             raise ValueError(
                 f"IMAGE_DETECTION_MODE must be 'pre-hook' or 'tool', got: {self.IMAGE_DETECTION_MODE}"
+            )
+        if self.OUTPUT_FORMAT not in ("json", "markdown"):
+            raise ValueError(
+                f"OUTPUT_FORMAT must be 'json' or 'markdown', got: {self.OUTPUT_FORMAT}"
             )
 
 

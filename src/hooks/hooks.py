@@ -93,14 +93,17 @@ def get_post_hooks() -> List:
         List of post-hooks to register with agent in execution order.
         
     Includes:
-        - Response field extraction for UI rendering (always enabled)
+        - Response field extraction for UI rendering (only if OUTPUT_FORMAT=markdown)
     
-    Note: Post-hooks process RunResponse after agent completes.
+    Note: Post-hooks process RunOutput after agent completes.
     """
     hooks: List = []
     
-    # Always extract response field for proper UI rendering
-    hooks.append(extract_response_field_post_hook)
-    logger.info("Registered response field extraction post-hook")
+    # Only extract response field for markdown output format
+    if config.OUTPUT_FORMAT == "markdown":
+        hooks.append(extract_response_field_post_hook)
+        logger.info("Registered response field extraction post-hook (OUTPUT_FORMAT=markdown)")
+    else:
+        logger.info("Skipping response field extraction post-hook (OUTPUT_FORMAT=json)")
     
     return hooks

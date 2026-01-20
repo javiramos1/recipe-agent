@@ -221,11 +221,15 @@ The application will start with full logging and hot-reload support. This starts
 ### Start Server
 
 ```bash
-make dev     # Development mode with debug log level
-make debug   # Full debug mode (log level + agent debug + debug level 2)
-make run     # Production mode
+make dev     # Development mode (debug log level, JSON output format)
+make debug   # Full debug mode (log level + agent debug + debug level 2, JSON output)
+make run     # Production mode (markdown output format for UI rendering)
 make stop    # Stop running server
 ```
+
+**Output Formats:**
+- `make dev` and `make debug`: **JSON** - Full RecipeResponse structure (useful for testing/debugging)
+- `make run`: **Markdown** - Extracted response field only (optimized for Agno Agent UI rendering)
 
 **Access Points:**
 - **Agno OS Platform**: [https://os.agno.com](https://os.agno.com) → Connect local agent → View UI, traces, and evaluations
@@ -371,6 +375,7 @@ curl -X POST http://localhost:7777/api/agents/chat \
 | `MAX_IMAGE_SIZE_MB` | int | `5` | Maximum image upload size |
 | `MIN_INGREDIENT_CONFIDENCE` | float | `0.7` | Confidence threshold for detected ingredients (0.0-1.0) |
 | `IMAGE_DETECTION_MODE` | string | `pre-hook` | Ingredient detection mode: `pre-hook` (fast, processes before agent) or `tool` (agent control) |
+| `OUTPUT_FORMAT` | string | `json` | Response format: `json` (full RecipeResponse) or `markdown` (extracted response field for UI) |
 | `LOG_LEVEL` | string | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
 | `LOG_TYPE` | string | `text` | Log format (text, json) |
 | `DATABASE_URL` | string | *optional* | PostgreSQL connection (uses SQLite if not set) |

@@ -66,23 +66,23 @@ setup: venv-check
 		echo "Setup complete! Run: make dev"; \
 	fi
 
-# Development: Start AgentOS backend (with debug logging)
+# Development: Start AgentOS backend (with debug logging, json output format)
 dev: venv-check
-	@LOG_LEVEL=DEBUG $(PYTHON) app.py
+	@LOG_LEVEL=DEBUG OUTPUT_FORMAT=json $(PYTHON) app.py
 
-# Debug: Start with full debug mode (debug logging + agent debug mode + debug level 2)
+# Debug: Start with full debug mode (debug logging + agent debug mode + debug level 2, json output format)
 debug: venv-check
-	@LOG_LEVEL=DEBUG DEBUG_MODE=1 DEBUG_LEVEL=2 $(PYTHON) app.py
+	@LOG_LEVEL=DEBUG OUTPUT_FORMAT=json DEBUG_MODE=1 DEBUG_LEVEL=2 $(PYTHON) app.py
 
-# Development background: Start in background
+# Development background: Start in background (json output format)
 dev-bkg: venv-check
-	@nohup $(PYTHON) app.py > /tmp/recipe_service.log 2>&1 &
+	@nohup env OUTPUT_FORMAT=json LOG_LEVEL=DEBUG $(PYTHON) app.py > /tmp/recipe_service.log 2>&1 &
 	@sleep 2
 	@pgrep -f "python app.py" > /dev/null && echo "✓ Backend started (http://localhost:7777)" || echo "⚠ Check logs: tail -f /tmp/recipe_service.log"
 
-# Production: Start AgentOS backend
+# Production: Start AgentOS backend (markdown output format for UI rendering)
 run: venv-check
-	@$(PYTHON) app.py
+	@OUTPUT_FORMAT=markdown $(PYTHON) app.py
 
 # Stop: Kill all running backend processes
 stop:
