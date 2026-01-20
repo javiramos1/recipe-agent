@@ -44,10 +44,18 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ## Status Section
 
-**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed ✅**
+**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed, Task 11 Tracing implemented ✅**
 
 **Latest Update (2026-01-20):**
-- ✅ Integrated official Agno UI from npx (agent-ui folder)
+- ✅ Task 11 complete: AgentOS Tracing Configuration & Observability
+  - Moved tracing.py from src/mcp_tools/ to src/utils/ (proper architecture)
+  - Implemented initialize_tracing() async factory with graceful degradation
+  - Added tracing configuration to config.py (ENABLE_TRACING, TRACING_DB_TYPE, TRACING_DB_FILE)
+  - Updated agent.py factory to return both agent and tracing_db
+  - Updated app.py to conditionally enable tracing based on config
+  - Added OpenTelemetry packages to requirements.txt
+  - Created comprehensive unit tests for tracing (all 158 tests passing)
+  - Integrated official Agno UI from npx (agent-ui folder)
 - ✅ Fixed FormData/JSON compatibility: Frontend sends JSON-stringified message in FormData, pre-hook parses it
 - ✅ Response extraction: RunCompleted handler now extracts 'response' field from RecipeResponse for proper formatting
 - ✅ Services running: Backend (7777) + Frontend (3000) both operational with make dev
@@ -73,14 +81,15 @@ This is a code challenge implementing a production-quality GenAI system that tra
 - [x] **MEMORY SYSTEM REFACTOR** (date: 2026-01-19) Minimal input schema (ChatMessage) + Agno user memory for preferences
 
 ### Phase 3: Developer Tools & Testing (Tasks 11-18)
+- [x] Task 11 complete (date: 2026-01-20) - AgentOS Tracing Configuration & Observability
 - [x] Task 18 complete (date: 2026-01-18) - Ad hoc query command
 - [x] Task 19 complete (date: 2026-01-19) - Background server support (make dev-bkg, make query automation)
-- [ ] Task 11: Integration Tests E2E - Pending
-- [ ] Task 12: REST API Testing - Pending
-- [x] Task 13 complete (date: 2026-01-18) - Makefile with all development commands
-- [ ] Task 14: Sample Test Images - Pending
-- [x] Task 15 complete (date: 2026-01-18) - Comprehensive README.md
-- [ ] Task 16: Final Validation - Pending
+- [ ] Task 12: Integration Tests E2E - Pending
+- [ ] Task 13: REST API Testing - Pending
+- [x] Task 14 complete (date: 2026-01-18) - Makefile with all development commands
+- [ ] Task 15: Sample Test Images - Pending
+- [x] Task 16 complete (date: 2026-01-18) - Comprehensive README.md
+- [ ] Task 17: Final Validation - Pending
 
 **Update Protocol:** After completing each task, update this status section with:
 - [x] Task [N] complete (date: YYYY-MM-DD) - Description of what was completed
