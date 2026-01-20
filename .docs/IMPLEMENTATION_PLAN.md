@@ -1497,144 +1497,385 @@ agent_os = AgentOS(
 
 ### Task 12: Integration Tests - End-to-End (tests/integration/test_e2e.py)
 
-**Objective:** Test complete request-response flows with real images and MCP connections.
+**Objective:** Test complete request-response flows with real images and MCP connections using Agno Evals framework.
 
 **Context:**
-- Integration tests use **Agno evals framework** (AgentOS built-in evaluation system)
-  - Use `from agno.eval import Eval` and agent evaluation APIs
-  - Evals run the agent end-to-end and capture results in AgentOS database
-  - Results can be viewed via AgentOS UI and programmatically
+- Integration tests use **Agno Evals Framework** for multi-dimensional evaluation
+  - Four evaluation types: AccuracyEval, AgentAsJudgeEval, ReliabilityEval, PerformanceEval
+  - Evals run agents end-to-end and capture results in persistent database
+  - Results stored in local SqliteDb, viewable programmatically and via os.agno.com (AgentOS platform)
+  - Best practice: Start with simple accuracy tests, progress to complex agent-as-judge criteria
 - Real API calls to Gemini and Spoonacular (requires valid API keys)
 - Requires sample test images in images/ folder
-- Tests full conversation flows with session_id
+- Tests full conversation flows with session_id for preference persistence
 - Run with: `make eval` (integrates with Makefile eval target)
 
-**Agno Evals Framework - Implementation Pattern:**
+**Agno Evals Framework - Four Evaluation Dimensions:**
 
-The Agno evals framework provides a standardized way to test agents end-to-end:
+Agno provides four complementary evaluation approaches:
 
-```python
-from agno.eval import Eval
-from src.agents.agent import initialize_recipe_agent
+1. **AccuracyEval** - Simple correctness using LLM-as-judge:
+   ```python
+   from agno.eval.accuracy import AccuracyEval
+   
+   evaluation = AccuracyEval(
+       model=OpenAIChat(id="gpt-4o"),  # Judge model
+       agent=agent,
+       input="What ingredients are in this image?",
+       expected_output="tomatoes, basil, onions, garlic",  # Exact match expected
+       additional_guidelines="List only the main ingredients."
+   )
+   result = evaluation.run(print_results=True)
+   assert result.passed
+   ```
 
-# Initialize agent once for all tests
-agent = initialize_recipe_agent()
+2. **AgentAsJudgeEval** - Custom quality criteria with scoring:
+   ```python
+   from agno.eval.agent_as_judge import AgentAsJudgeEval
+   
+   evaluation = AgentAsJudgeEval(
+       name="Recipe Quality",
+       criteria="Response should include recipe title, ingredients, and cooking instructions",
+       scoring_strategy="numeric",  # Score 1-10
+       threshold=7,  # Pass if score >= 7
+       agent=agent,  # Optional: custom evaluator agent
+   )
+   result = evaluation.run(
+       input="Suggest recipes for tomatoes and basil",
+       output=agent_response,
+       print_results=True
+   )
+   assert result.passed
+   ```
 
-# Create eval for a specific test case
-def test_image_to_ingredients():
-    """Test ingredient detection from image."""
-    eval_case = Eval(
-        name="image_to_ingredients",
-        description="Extract ingredients from uploaded image",
-        agent=agent,
-        input={"image_base64": encoded_image, "message": "What ingredients are in this?"},
-        expected_output_contains=["ingredients detected", "confidence"],
-    )
-    
-    # Run the eval - returns result object
-    result = eval_case.run()
-    
-    # Verify results
-    assert result.success  # Overall success
-    assert "[Detected Ingredients]" in result.response
-    assert len(result.parsed_output.ingredients) > 0
-    
-    # Access detailed information
-    print(f"Response: {result.response}")
-    print(f"Tools called: {result.tools_called}")
-    print(f"Execution time: {result.execution_time_ms}ms")
-```
+3. **ReliabilityEval** - Verify tool calls and behavior:
+   ```python
+   from agno.eval.reliability import ReliabilityEval
+   
+   response = agent.run("Find recipes for chicken")  # Returns RunOutput
+   
+   evaluation = ReliabilityEval(
+       name="Tool Calls",
+       agent_response=response,
+       expected_tool_calls=["search_recipes", "get_recipe_information_bulk"],
+   )
+   result = evaluation.run(print_results=True)
+   assert result.passed
+   ```
+
+4. **PerformanceEval** - Measure latency and efficiency:
+   ```python
+   from agno.eval.performance import PerformanceEval
+   
+   response = agent.run("What recipes use these ingredients?")
+   
+   evaluation = PerformanceEval(
+       name="Response Time",
+       agent_response=response,
+       max_execution_time_ms=5000,  # Fail if takes > 5 seconds
+   )
+   result = evaluation.run(print_results=True)
+   assert result.passed
+   ```
 
 **Key Agno Evals Features:**
-- `Eval` class wraps agent calls with result capture
-- Automatically stores results in AgentOS database
-- Provides rich result object with: response, parsed_output, tools_called, execution_time_ms
-- Supports success/failure validation
-- Can use LLM-as-judge for semantic validation
-- Results viewable in AgentOS Web UI under Evaluations tab
+- Four specialized evaluation classes with dimension-specific validation
+- LLM-as-judge methodology for semantic evaluation (not just string matching)
+- Custom scoring strategies (numeric 1-10 with thresholds, pass/fail)
+- Persistent result storage in SqliteDb (queryable and trackable)
+- Rich result objects with: `.passed`, `.score`, `.feedback`, execution details
+- Results sync to os.agno.com AgentOS platform for visualization and team collaboration
+- Best practice workflow: Accuracy (simple) → AgentAsJudge (complex) → Reliability → Performance
 
 **Requirements:**
 
-1. Create test fixtures:
-   - Load sample test images: images/sample_vegetables.jpg, images/sample_fruits.jpg, images/sample_pantry.jpg
-   - Base64 encode for API requests
-   - Document image contents (what ingredients are in each)
+1. **Setup evaluation database and fixtures:**
 
-2. Test ingredient detection:
-   - `test_image_to_ingredients`: Upload image, verify ingredients detected
-   - Validate detection accuracy (>80% for clear images)
-   - Verify confidence scores present
-   - Verify [Detected Ingredients] section appears in agent context
+   ```python
+   import pytest
+   from agno.db.sqlite import SqliteDb
+   from src.agents.agent import initialize_recipe_agent
+   
+   @pytest.fixture(scope="session")
+   def eval_db():
+       """Persistent database for storing eval results."""
+       return SqliteDb(db_file="tmp/eval_results.db", id="eval_db")
+   
+   @pytest.fixture(scope="session")
+   def agent():
+       """Initialize agent once for all tests."""
+       return initialize_recipe_agent()
+   
+   @pytest.fixture
+   def test_images():
+       """Load and encode sample test images."""
+       # Load images/sample_vegetables.jpg, images/sample_fruits.jpg, images/sample_pantry.jpg
+       # Return dict with base64 encoded images and expected ingredients
+       return {
+           "vegetables": {
+               "base64": "...",
+               "expected": ["tomatoes", "basil", "onions", "garlic"],
+               "description": "Fresh vegetables: tomatoes, basil, onions, garlic"
+           },
+           "fruits": {
+               "base64": "...",
+               "expected": ["bananas", "apples", "berries"],
+               "description": "Mixed fruits: bananas, apples, berries"
+           },
+           "pantry": {
+               "base64": "...",
+               "expected": ["pasta", "rice", "beans"],
+               "description": "Pantry items: pasta, rice, canned beans"
+           }
+       }
+   ```
 
-3. Test recipe recommendation:
-   - `test_image_to_recipes`: Upload image, request recipes, verify results
-   - Validate recipes returned from Spoonacular
-   - Verify recipe objects have title, ingredients, instructions
-   - Verify prep/cook times present
+2. **Test 1 - Ingredient Detection (AccuracyEval):**
 
-4. Test conversation flow:
-   - `test_multi_turn_conversation`: Same session_id across turns
-   - Turn 1: "Show me vegetarian recipes"
-   - Verify preferences extracted: diet=vegetarian
-   - Turn 2: "What about Italian cuisine?"
-   - Verify new preference added: cuisine=italian
-   - Verify old preference preserved: diet=vegetarian
+   ```python
+   from agno.eval.accuracy import AccuracyEval
+   from agno.models.openai import OpenAIChat
+   
+   def test_ingredient_detection_accuracy(agent, eval_db, test_images):
+       """Verify ingredient detection accuracy using LLM-as-judge."""
+       veg_image = test_images["vegetables"]
+       
+       # Run agent with image
+       response = agent.run(f"What ingredients are in this image? {veg_image['description']}")
+       
+       # Evaluate with LLM judge
+       evaluation = AccuracyEval(
+           model=OpenAIChat(id="gpt-4o"),
+           agent=agent,
+           input=f"Analyze image: {veg_image['description']}",
+           expected_output=", ".join(veg_image["expected"]),
+           additional_guidelines="List only main ingredients detected with confidence > 70%",
+       )
+       result = evaluation.run(print_results=True)
+       assert result.passed, "Ingredient detection should meet expected output"
+   ```
 
-5. Test preference persistence:
-   - `test_preference_persistence`: Preferences remembered across turns
-   - User states "I'm gluten-free" in turn 1
-   - Turn 2 without mentioning gluten-free
-   - Verify agent still applies gluten-free filter to recipes
+3. **Test 2 - Recipe Quality (AgentAsJudgeEval):**
 
-6. Test guardrails:
-   - `test_off_topic_rejection`: Send off-topic request (e.g., "What's the weather?")
-   - Verify agent refuses politely
-   - Verify response indicates recipe-only domain
+   ```python
+   from agno.eval.agent_as_judge import AgentAsJudgeEval
+   
+   def test_recipe_quality(agent, eval_db):
+       """Verify recipes include required fields using custom criteria."""
+       response = agent.run("Find recipes for chicken, tomatoes, and basil")
+       
+       evaluation = AgentAsJudgeEval(
+           name="Recipe Completeness",
+           criteria="Recipe must include: title, ingredients list, cooking instructions, prep/cook time",
+           scoring_strategy="numeric",
+           threshold=8,
+           db=eval_db,
+       )
+       result = evaluation.run(
+           input="Find recipes for chicken, tomatoes, basil",
+           output=str(response.content),
+           print_results=True
+       )
+       assert result.passed, f"Recipe quality score {result.score} below threshold"
+   ```
 
-7. Test error handling:
-   - `test_invalid_image_format`: Send non-image file or invalid base64
-   - Verify appropriate error response (400 or 422)
-   - `test_oversized_image`: Send image > MAX_IMAGE_SIZE_MB
-   - Verify 413 error response
+4. **Test 3 - Tool Call Reliability (ReliabilityEval):**
 
-8. Test session management:
-   - `test_session_isolation`: Two different session_ids
-   - User A sets diet=vegetarian in session 1
-   - User B in session 2 should not see vegetarian preference
-   - Verify sessions are isolated
+   ```python
+   from agno.eval.reliability import ReliabilityEval
+   
+   def test_two_step_recipe_process(agent):
+       """Verify agent uses correct tool sequence: search_recipes → get_recipe_information_bulk."""
+       response = agent.run("What recipes can I make with tomatoes and basil?")
+       
+       evaluation = ReliabilityEval(
+           name="Two-Step Recipe Process",
+           agent_response=response,
+           expected_tool_calls=["search_recipes", "get_recipe_information_bulk"],
+       )
+       result = evaluation.run(print_results=True)
+       assert result.passed, "Agent should call search_recipes then get_recipe_information_bulk"
+   ```
+
+5. **Test 4 - Performance (PerformanceEval):**
+
+   ```python
+   from agno.eval.performance import PerformanceEval
+   
+   def test_response_time(agent):
+       """Verify response time acceptable for user experience."""
+       response = agent.run("Show me vegetarian recipes")
+       
+       evaluation = PerformanceEval(
+           name="Response Latency",
+           agent_response=response,
+           max_execution_time_ms=5000,  # Should respond within 5 seconds
+       )
+       result = evaluation.run(print_results=True)
+       assert result.passed, "Response should complete within 5 seconds"
+   ```
+
+6. **Test 5 - Preference Persistence (AgentAsJudgeEval):**
+
+   ```python
+   def test_preference_persistence_across_turns(agent, eval_db):
+       """Verify preferences extracted and applied across conversation turns."""
+       # Turn 1: Extract preference
+       response1 = agent.run(
+           "I'm vegetarian. What recipes do you recommend?",
+           session_id="session_123"
+       )
+       
+       # Turn 2: Verify preference applied without re-stating
+       response2 = agent.run(
+           "What about Italian recipes?",
+           session_id="session_123"
+       )
+       
+       # Evaluate that preference persisted
+       evaluation = AgentAsJudgeEval(
+           name="Preference Persistence",
+           criteria="Recipes in turn 2 should be vegetarian (respecting turn 1 preference) AND Italian style",
+           scoring_strategy="numeric",
+           threshold=7,
+           db=eval_db,
+       )
+       result = evaluation.run(
+           input="Previous preference: vegetarian. New request: Italian recipes",
+           output=str(response2.content),
+           print_results=True
+       )
+       assert result.passed, "Agent should remember and apply vegetarian preference"
+   ```
+
+7. **Test 6 - Guardrails (AgentAsJudgeEval):**
+
+   ```python
+   def test_off_topic_rejection(agent, eval_db):
+       """Verify agent refuses off-topic requests politely."""
+       response = agent.run("What's the weather today?")
+       
+       evaluation = AgentAsJudgeEval(
+           name="Guardrail Enforcement",
+           criteria="Response should politely decline and redirect to recipe-focused topics",
+           scoring_strategy="numeric",
+           threshold=7,
+           db=eval_db,
+       )
+       result = evaluation.run(
+           input="What's the weather today?",
+           output=str(response.content),
+           print_results=True
+       )
+       assert result.passed, "Agent should refuse off-topic requests gracefully"
+   ```
+
+8. **Test 7 - Session Isolation (AgentAsJudgeEval):**
+
+   ```python
+   def test_session_isolation(agent, eval_db):
+       """Verify preferences don't leak between different sessions."""
+       # User A: Set vegetarian preference
+       agent.run(
+           "I'm vegetarian",
+           session_id="user_a_session"
+       )
+       
+       # User B: Check that vegetarian preference not applied
+       response_b = agent.run(
+           "Show me recipes with meat",
+           session_id="user_b_session"
+       )
+       
+       evaluation = AgentAsJudgeEval(
+           name="Session Isolation",
+           criteria="Recipes should include meat-based options (User B has no vegetarian preference from User A's session)",
+           scoring_strategy="numeric",
+           threshold=7,
+           db=eval_db,
+       )
+       result = evaluation.run(
+           input="Show meat recipes for user_b_session",
+           output=str(response_b.content),
+           print_results=True
+       )
+       assert result.passed, "Sessions should be isolated, preferences should not cross-contaminate"
+   ```
+
+8. **Test 8 - Error Handling (AgentAsJudgeEval):**
+
+   ```python
+   def test_error_handling_gracefully(agent, eval_db):
+       """Verify errors handled gracefully without crashing."""
+       # Send invalid/problematic input
+       response = agent.run("")  # Empty message
+       
+       evaluation = AgentAsJudgeEval(
+           name="Error Handling",
+           criteria="Should provide helpful error message or default behavior, not crash",
+           scoring_strategy="numeric",
+           threshold=7,
+           db=eval_db,
+       )
+       result = evaluation.run(
+           input="",
+           output=str(response.content) if response else "No response",
+           print_results=True
+       )
+       assert result.passed, "Agent should handle edge cases gracefully"
+   ```
 
 **Input:**
+
 - app.py from Task 11 (complete application)
-- config.py from Task 2 (for MAX_IMAGE_SIZE_MB and other thresholds)
-- models.py from Task 3 (for response validation)
-- Sample test images (create if not present)
-- pytest and agno.evals
+- config.py from Task 2 (for configuration and thresholds)
+- models.py from Task 3 (for response schema validation)
+- Sample test images in images/ folder (sample_vegetables.jpg, sample_fruits.jpg, sample_pantry.jpg)
+- pytest framework (from Task 1)
+- Agno evals framework (AccuracyEval, AgentAsJudgeEval, ReliabilityEval, PerformanceEval)
+- Valid GEMINI_API_KEY and SPOONACULAR_API_KEY in .env
 
 **Output:**
-- `tests/integration/test_e2e.py` with all test cases
-- Test results stored in AgentOS eval database
+
+- `tests/integration/test_e2e.py` with 8 test functions covering all eval dimensions
+- Evaluation results persisted in `tmp/eval_results.db` (SqliteDb)
+- Results queryable and viewable in AgentOS UI and os.agno.com platform
+- Test report showing: pass/fail status, scores, feedback, execution times
 
 **Success Criteria:**
-- `pytest tests/integration/test_e2e.py -v` runs all tests
+
+- `pytest tests/integration/test_e2e.py -v` runs all 8 tests successfully
 - All tests pass with valid API keys configured
-- At least 8 test functions
-- Tests cover: ingredients, recipes, conversations, preferences, guardrails, errors
-- No tests hardcode API key or sensitive data
+- Test coverage includes all evaluation dimensions:
+  - AccuracyEval: Ingredient detection accuracy (LLM-as-judge)
+  - AgentAsJudgeEval: Recipe quality, preferences, guardrails (custom scoring)
+  - ReliabilityEval: Correct tool sequence (search_recipes → get_recipe_information_bulk)
+  - PerformanceEval: Response time under 5 seconds
+- Eval results stored in database, retrievable programmatically
+- No tests hardcode API keys or sensitive data
 - Response validation against RecipeResponse schema
+- Results sync to os.agno.com for team visualization
 
 **Dependencies:**
+
 - Task 11 (app.py)
 - Task 2 (config.py)
 - Task 3 (models.py)
-- Task 1 (pytest, agno)
+- Task 1 (pytest, agno evals framework)
 
 **Key Constraints:**
+
 - Use real API calls (not mocked) for integration tests
 - Require valid GEMINI_API_KEY and SPOONACULAR_API_KEY in .env
-- Tests should handle transient API failures gracefully
+- Tests should handle transient API failures gracefully (evals framework includes retries)
 - Do not hardcode recipe titles or ingredient names (API results may vary)
-- Use session_id to test conversation flows
-- Validate responses against RecipeResponse schema
+- Use session_id to test conversation flows and preference persistence
+- Store all evaluation results in persistent database (SqliteDb) for tracking
+- Each eval should use appropriate dimension (Accuracy, AgentAsJudge, Reliability, Performance)
+- Follow best practice workflow: Start simple (Accuracy) → progress to complex (AgentAsJudge)
+- Results must be queryable and sync-capable with os.agno.com platform
+- Comprehensive feedback in eval results (not just pass/fail)
+- Performance threshold reasonable for production (5s max response time)
 
 ---
 

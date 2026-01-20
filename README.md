@@ -379,6 +379,40 @@ curl -X POST http://localhost:7777/api/agents/chat \
 | `LOG_LEVEL` | string | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
 | `LOG_TYPE` | string | `text` | Log format (text, json) |
 | `DATABASE_URL` | string | *optional* | PostgreSQL connection (uses SQLite if not set) |
+| `ENABLE_TRACING` | bool | `true` | Enable distributed tracing for observability (requires OpenTelemetry) |
+| `TRACING_DB_TYPE` | string | `sqlite` | Tracing database: `sqlite` or `postgres` |
+| `TRACING_DB_FILE` | string | `agno_traces.db` | Path for SQLite tracing database |
+
+### Observability & Tracing
+
+The service includes built-in **distributed tracing** powered by OpenTelemetry and Agno's tracing infrastructure:
+
+```bash
+# Enable tracing (default)
+ENABLE_TRACING=true
+
+# View traces in Agno OS Platform
+# 1. Start backend: make dev
+# 2. Connect to Agno OS (os.agno.com)
+# 3. Go to /traces tab to see all executions
+```
+
+**What Gets Traced:**
+- Agent initialization and startup
+- Model API calls (Gemini vision, LLM calls)
+- Tool executions (Spoonacular recipe searches)
+- Pre-hook ingredient detection
+- Session and preference tracking
+- Performance metrics (response times, token usage)
+
+**Traces Stored In:**
+- **Development**: `agno_traces.db` (SQLite file, auto-created)
+- **Production**: Separate PostgreSQL database (via `TRACING_DB_TYPE=postgres`)
+
+**Disable Tracing (if needed):**
+```bash
+ENABLE_TRACING=false  # Traces still work but not stored
+```
 
 ### Database Configuration
 
