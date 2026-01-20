@@ -30,33 +30,29 @@ class ChatMessage(BaseModel):
         description="Optional comma-separated image URLs/base64 or list of URLs (max 10 images)"
     )]
     
-    @field_validator('message', mode='before')
+    @model_validator(mode='before')
     @classmethod
-    def set_default_message(cls, v: Optional[str], info) -> Optional[str]:
-        """Set default message if not provided but images are present, or return None if both empty."""
-        if not v or (isinstance(v, str) and not v.strip()):
-            # Check if images are provided (before they're parsed by the images validator)
-            raw_images = info.data.get('images')
+    def set_default_message_before(cls, data: dict) -> dict:
+        """Set default message if not provided but images are present."""
+        if isinstance(data, dict):
+            message = data.get('message')
+            images = data.get('images')
             
-            # Check if images exist in raw form
-            has_images = False
-            if raw_images:
-                if isinstance(raw_images, list) and len(raw_images) > 0:
-                    has_images = True
-                elif isinstance(raw_images, str) and raw_images.strip():
-                    has_images = True
-            
-            if has_images:
-                return "What can I cook with these ingredients?"
-            # Return None for now; model_validator will check if both are empty
-            return None
-        return v
+            # If message is missing or empty, but images are present, set default message
+            if (not message or (isinstance(message, str) and not message.strip())):
+                if images:
+                    if isinstance(images, list) and len(images) > 0:
+                        data['message'] = "What can I cook with these ingredients?"
+                    elif isinstance(images, str) and images.strip():
+                        data['message'] = "What can I cook with these ingredients?"
+        
+        return data
     
     @model_validator(mode='after')
     def validate_message_or_images(self) -> 'ChatMessage':
         """Ensure either message or images are provided."""
         if not self.message and not self.images:
-            raise ValueError('Either message or images must be provided')
+            raise ValueError('Either message or images field must be provided')
         return self
     
     @staticmethod

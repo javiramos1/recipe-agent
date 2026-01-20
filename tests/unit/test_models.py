@@ -35,10 +35,16 @@ class TestChatMessage:
         assert msg.images == []
 
     def test_invalid_missing_message(self):
-        """Test invalid message missing required message field."""
+        """Test that neither message nor images is acceptable - auto-default sets message when images present."""
+        # When images are provided, message auto-defaults
+        msg = ChatMessage(images=["https://example.com/image.jpg"])
+        assert msg.message == "What can I cook with these ingredients?"
+        assert msg.images == ["https://example.com/image.jpg"]
+        
+        # When BOTH are missing, should raise error
         with pytest.raises(ValidationError) as exc:
-            ChatMessage(images=["image1"])
-        assert "message" in str(exc.value)
+            ChatMessage(message=None, images=None)
+        assert "Either message or images" in str(exc.value)
 
     def test_invalid_empty_message(self):
         """Test invalid message with empty string."""
@@ -66,7 +72,8 @@ class TestChatMessage:
 
     def test_valid_message_max_images(self):
         """Test message with maximum number of images (10)."""
-        images = [f"image_{i}" for i in range(10)]
+        # Use valid image URLs for testing
+        images = [f"https://example.com/image_{i}.jpg" for i in range(10)]
         msg = ChatMessage(message="Show me", images=images)
         assert len(msg.images) == 10
 
@@ -79,7 +86,7 @@ class TestChatMessage:
 
     def test_json_serialization_roundtrip(self):
         """Test ChatMessage can be serialized and deserialized."""
-        original = ChatMessage(message="Test", images=["img1", "img2"])
+        original = ChatMessage(message="Test", images=["https://example.com/img1.jpg", "https://example.com/img2.jpg"])
         json_str = original.model_dump_json()
         restored = ChatMessage.model_validate_json(json_str)
         assert restored.message == original.message

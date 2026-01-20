@@ -181,18 +181,23 @@ class TestExtractIngredientsPreHook:
         image = Mock()
         image.url = "http://example.com/image.jpg"
 
+        # Create a proper ChatMessage mock object with images in the message object
+        chat_message = Mock()
+        chat_message.message = "What can I make?"
+        chat_message.images = [image]  # Images are in the ChatMessage, not RunInput
+
         run_input = Mock()
-        run_input.images = [image]
-        run_input.input_content = "What can I make?"
+        run_input.images = []  # This will be cleared by pre-hook
+        run_input.input_content = chat_message
 
         await extract_ingredients_pre_hook(run_input)
 
-        # Should append ingredients
-        assert "[Detected Ingredients]" in run_input.input_content
-        assert "tomato" in run_input.input_content
-        assert "basil" in run_input.input_content
+        # Should append ingredients to message
+        assert "[Detected Ingredients]" in chat_message.message
+        assert "tomato" in chat_message.message
+        assert "basil" in chat_message.message
 
-        # Should clear images
+        # Should clear images from run_input (even though they were in input_content)
         assert run_input.images == []
 
     @pytest.mark.asyncio
@@ -204,17 +209,22 @@ class TestExtractIngredientsPreHook:
         image = Mock()
         image.url = "http://example.com/image.jpg"
 
+        # Create a proper ChatMessage mock object with images in the message object
+        chat_message = Mock()
+        chat_message.message = "What can I make?"
+        chat_message.images = [image]  # Images are in the ChatMessage, not RunInput
+
         run_input = Mock()
-        run_input.images = [image]
-        run_input.input_content = "What can I make?"
+        run_input.images = []  # This will be cleared by pre-hook
+        run_input.input_content = chat_message
 
         await extract_ingredients_pre_hook(run_input)
 
         # Should not append ingredients
-        assert "[Detected Ingredients]" not in run_input.input_content
-        assert run_input.input_content == "What can I make?"
+        assert "[Detected Ingredients]" not in chat_message.message
+        assert chat_message.message == "What can I make?"
 
-        # Should still clear images
+        # Should still clear images from run_input
         assert run_input.images == []
 
     @pytest.mark.asyncio
@@ -240,17 +250,22 @@ class TestExtractIngredientsPreHook:
         image2 = Mock()
         image2.url = "http://example.com/image2.jpg"
 
+        # Create a proper ChatMessage mock object with images in the message object
+        chat_message = Mock()
+        chat_message.message = "What can I make?"
+        chat_message.images = [image1, image2]  # Images are in the ChatMessage, not RunInput
+
         run_input = Mock()
-        run_input.images = [image1, image2]
-        run_input.input_content = "What can I make?"
+        run_input.images = []  # This will be cleared by pre-hook
+        run_input.input_content = chat_message
 
         await extract_ingredients_pre_hook(run_input)
 
         # All ingredients should be present
-        assert "tomato" in run_input.input_content
-        assert "basil" in run_input.input_content
-        assert "mozzarella" in run_input.input_content
-        assert "olive oil" in run_input.input_content
+        assert "tomato" in chat_message.message
+        assert "basil" in chat_message.message
+        assert "mozzarella" in chat_message.message
+        assert "olive oil" in chat_message.message
 
     @pytest.mark.asyncio
     @patch("src.mcp_tools.ingredients.fetch_image_bytes", new_callable=AsyncMock)
@@ -275,14 +290,19 @@ class TestExtractIngredientsPreHook:
         image2 = Mock()
         image2.url = "http://example.com/image2.jpg"
 
+        # Create a proper ChatMessage mock object with images in the message object
+        chat_message = Mock()
+        chat_message.message = "What can I make?"
+        chat_message.images = [image1, image2]  # Images are in the ChatMessage, not RunInput
+
         run_input = Mock()
-        run_input.images = [image1, image2]
-        run_input.input_content = "What can I make?"
+        run_input.images = []  # This will be cleared by pre-hook
+        run_input.input_content = chat_message
 
         await extract_ingredients_pre_hook(run_input)
 
         # Count occurrences of 'tomato' in ingredient text
-        ingredients_section = run_input.input_content.split("[Detected Ingredients] ")[1]
+        ingredients_section = chat_message.message.split("[Detected Ingredients] ")[1]
         tomato_count = ingredients_section.count("tomato")
 
         # Should appear only once
@@ -297,14 +317,19 @@ class TestExtractIngredientsPreHook:
         image = Mock()
         image.url = "http://example.com/image.jpg"
 
+        # Create a proper ChatMessage mock object with images in the message object
+        chat_message = Mock()
+        chat_message.message = "What can I make?"
+        chat_message.images = [image]  # Images are in the ChatMessage, not RunInput
+
         run_input = Mock()
-        run_input.images = [image]
-        run_input.input_content = "What can I make?"
+        run_input.images = []  # This will be cleared by pre-hook
+        run_input.input_content = chat_message
 
         # Should not raise exception
         await extract_ingredients_pre_hook(run_input)
 
-        # Should still clear images
+        # Should still clear images from run_input
         assert run_input.images == []
 
 

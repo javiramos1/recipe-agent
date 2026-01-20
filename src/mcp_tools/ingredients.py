@@ -380,7 +380,7 @@ async def extract_ingredients_pre_hook(
             else:
                 logger.warning(f"Image {idx + 1}: No ingredients with sufficient confidence")
 
-        # Append detected ingredients to message
+        # Append detected ingredients to message if any were found
         if all_ingredients:
             unique_ingredients = list(dict.fromkeys(all_ingredients))  # Remove duplicates, preserve order
             ingredient_text = ", ".join(unique_ingredients)
@@ -394,10 +394,16 @@ async def extract_ingredients_pre_hook(
                 f"Ingredients extracted from image: {unique_ingredients} "
                 f"(total: {len(unique_ingredients)}, confidence threshold: {config.MIN_INGREDIENT_CONFIDENCE})"
             )
+        
+        # Always clear images from the request (whether extraction succeeded or failed)
+        # This prevents images from being sent to the agent after extraction
+        run_input.images = []
 
     except Exception as e:
         # Pre-hooks must be resilient - log but don't crash
         logger.warning(f"Ingredient extraction pre-hook failed: {e}")
+        # Still clear images even on error to prevent them from being sent downstream
+        run_input.images = []
 
 
 async def extract_ingredients_with_retries(
