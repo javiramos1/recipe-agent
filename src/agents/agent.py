@@ -14,6 +14,7 @@ from agno.tools import tool
 
 from src.utils.config import config
 from src.utils.logger import logger
+from src.utils.tracing import initialize_tracing
 from src.models.models import ChatMessage, RecipeResponse, IngredientDetectionOutput
 from src.mcp_tools.ingredients import detect_ingredients_tool
 from src.mcp_tools.spoonacular import SpoonacularMCP
@@ -73,16 +74,17 @@ async def detect_image_ingredients(image_data: str) -> IngredientDetectionOutput
     return await detect_ingredients_tool(image_data)
 
 
-def initialize_recipe_agent(use_db: bool = True) -> Agent:
-    """Factory function to initialize and configure the recipe recommendation agent (sync).
+async def initialize_recipe_agent(use_db: bool = True) -> Agent:
+    """Factory function to initialize and configure the recipe recommendation agent (async).
     
-    This function:
+    This async function:
     1. Initializes Spoonacular MCP with connection validation and fail-fast pattern
-    2. Configures database (SQLite for development, PostgreSQL optional for production)
-    3. Builds tools list based on IMAGE_DETECTION_MODE configuration
-    4. Registers ingredient detection tool (tool mode only)
-    5. Registers pre-hooks including ingredient extraction and guardrails
-    6. Configures Agno Agent with system instructions and memory settings
+    2. Initializes tracing with dedicated database for observability
+    3. Configures database (SQLite for development, PostgreSQL optional for production)
+    4. Builds tools list based on IMAGE_DETECTION_MODE configuration
+    5. Registers ingredient detection tool (tool mode only)
+    6. Registers pre-hooks including ingredient extraction and guardrails
+    7. Configures Agno Agent with system instructions and memory settings
     
     Args:
         use_db: If True, use persistent database. If False, run stateless without persistence.
@@ -96,7 +98,7 @@ def initialize_recipe_agent(use_db: bool = True) -> Agent:
     logger.info("=== Initializing Recipe Recommendation Agent ===")
     
     # 1. Initialize MCP FIRST (fail-fast if unreachable)
-    logger.info("Step 1/5: Initializing Spoonacular MCP...")
+    logger.info("Step 1/7: Initializing Spoonacular MCP...")
     spoonacular_mcp = SpoonacularMCP(
         api_key=config.SPOONACULAR_API_KEY,
         max_retries=3,
@@ -104,15 +106,22 @@ def initialize_recipe_agent(use_db: bool = True) -> Agent:
         include_tools=["search_recipes", "get_recipe_information"],
     )
     try:
-        # Run async initialization synchronously using asyncio.run
-        mcp_tools = asyncio.run(spoonacular_mcp.initialize())
+        mcp_tools = await spoonacular_mcp.initialize()
         logger.info("✓ Spoonacular MCP initialized successfully (filtered to: search_recipes, get_recipe_information)")
     except Exception as e:
         logger.error(f"✗ MCP initialization failed: {e}")
         raise SystemExit(1)
     
-    # 2. Configure database for session persistence
-    logger.info("Step 2/5: Configuring database for session persistence...")
+    # 2. Initialize tracing (if enabled)
+    logger.info("Step 2/7: Initializing tracing...")
+    tracing_db = await initialize_tracing()
+    if tracing_db:
+        logger.info("✓ Tracing initialized with dedicated database")
+    else:
+        logger.info("✓ Tracing disabled or not available")
+    
+    # 3. Configure database for session persistence
+    logger.info("Step 3/7: Configuring database for session persistence...")
     if use_db:
         if config.DATABASE_URL:
             logger.info(f"Using PostgreSQL: {config.DATABASE_URL.split('@')[1] if '@' in config.DATABASE_URL else '...'}")
@@ -140,18 +149,18 @@ def initialize_recipe_agent(use_db: bool = True) -> Agent:
     
     logger.info(f"✓ {len(tools)} tools registered")
     
-    # 4. Get pre-hooks (includes ingredient extraction and guardrails)
-    logger.info("Step 4/5: Registering pre-hooks and guardrails...")
+    # 5. Get pre-hooks (includes ingredient extraction and guardrails)
+    logger.info("Step 5/7: Registering pre-hooks and guardrails...")
     pre_hooks = get_pre_hooks()
     logger.info(f"✓ {len(pre_hooks)} pre-hooks registered")
     
-    # 4b. Get post-hooks (includes response field extraction for UI rendering)
-    logger.info("Step 4b/5: Registering post-hooks...")
+    # 5b. Get post-hooks (includes response field extraction for UI rendering)
+    logger.info("Step 5b/7: Registering post-hooks...")
     post_hooks = get_post_hooks()
     logger.info(f"✓ {len(post_hooks)} post-hooks registered: {[h.__name__ if hasattr(h, '__name__') else str(h) for h in post_hooks]}")
     
-    # 5. Configure Agno Agent
-    logger.info("Step 5/5: Configuring Agno Agent...")
+    # 6. Configure Agno Agent
+    logger.info("Step 6/7: Configuring Agno Agent...")
     # Generate system instructions with config values
     system_instructions = get_system_instructions(
         max_recipes=config.MAX_RECIPES,
@@ -183,4 +192,4 @@ def initialize_recipe_agent(use_db: bool = True) -> Agent:
     logger.info("✓ Agent configured successfully")
     logger.info("=== Agent initialization complete ===")
     
-    return agent
+    return agent, tracing_db

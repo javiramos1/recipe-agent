@@ -33,6 +33,10 @@ class Config:
         self.COMPRESS_IMG: bool = os.getenv("COMPRESS_IMG", "true").lower() in ("true", "1", "yes")
         self.OUTPUT_FORMAT: str = os.getenv("OUTPUT_FORMAT", "json")
         self.DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
+        # Tracing Configuration
+        self.ENABLE_TRACING: bool = os.getenv("ENABLE_TRACING", "true").lower() in ("true", "1", "yes")
+        self.TRACING_DB_TYPE: str = os.getenv("TRACING_DB_TYPE", "sqlite")
+        self.TRACING_DB_FILE: str = os.getenv("TRACING_DB_FILE", "agno_traces.db")
 
     def validate(self) -> None:
         """Validate required configuration.
@@ -51,6 +55,10 @@ class Config:
         if self.OUTPUT_FORMAT not in ("json", "markdown"):
             raise ValueError(
                 f"OUTPUT_FORMAT must be 'json' or 'markdown', got: {self.OUTPUT_FORMAT}"
+            )
+        if self.TRACING_DB_TYPE not in ("sqlite", "postgres"):
+            raise ValueError(
+                f"TRACING_DB_TYPE must be 'sqlite' or 'postgres', got: {self.TRACING_DB_TYPE}"
             )
 
 

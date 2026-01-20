@@ -15,3 +15,8 @@ Pillow>=10.0.0
 
 # Optional: For database support (SQLite/PostgreSQL with AgentOS)
 sqlalchemy>=2.0.0
+
+# OpenTelemetry packages for distributed tracing (optional but recommended)
+opentelemetry-api>=1.0.0
+opentelemetry-sdk>=1.0.0
+openinference-instrumentation-agno>=0.1.0

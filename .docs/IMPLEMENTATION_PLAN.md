@@ -1328,6 +1328,172 @@ Spoonacular MCP provides these tools (agent will call them automatically):
 
 ---
 
+### Task 11: AgentOS Tracing Configuration & Observability
+
+**Objective:** Enable comprehensive tracing and observability for agent execution, tool calls, and performance monitoring using AgentOS built-in tracing infrastructure.
+
+**Context:**
+- AgentOS provides built-in tracing support that integrates seamlessly with the AgentOS UI
+- Tracing captures all spans: agent runs, model calls, tool executions, and performance metrics
+- OpenTelemetry integration provides standardized observability
+- Traces are stored in dedicated database (separate from agent session database) for cleaner data separation
+- **Best Practice (Production-Ready):** Use dedicated `tracing_db` separate from agent `db` for:
+  - Unified observability: All traces in one queryable location
+  - Cross-agent analysis: Compare performance across agent runs
+  - Independent scaling: Trace storage doesn't affect agent data performance
+  - Cleaner separation: Traces, sessions, and memories stored separately
+- Traces viewable via AgentOS UI at dedicated `/traces` endpoint (accessible from dashboard)
+
+**Requirements:**
+
+1. **Update config.py** - Add tracing configuration:
+   - Load: `ENABLE_TRACING = os.getenv("ENABLE_TRACING", "true").lower() == "true"` (default: enabled)
+   - Load: `TRACING_DB_TYPE = os.getenv("TRACING_DB_TYPE", "sqlite")` (default: sqlite)
+   - Load: `TRACING_DB_FILE = os.getenv("TRACING_DB_FILE", "agno_traces.db")` (SQLite file path)
+   - In Config class docstring add:
+     - `ENABLE_TRACING`: Boolean to enable/disable tracing (default: true)
+     - `TRACING_DB_TYPE`: "sqlite" or "postgres" (default: sqlite)
+     - `TRACING_DB_FILE`: Path for SQLite traces database (default: agno_traces.db)
+   - Update .env.example with these new variables
+
+2. **Create tracing.py module** (~80 lines) - Tracing initialization:
+   - Export `initialize_tracing() -> SqliteDb` async factory function
+   - Steps:
+     a. Check if tracing enabled via `config.ENABLE_TRACING`
+     b. If disabled, return None (tracing skipped)
+     c. If enabled, create dedicated tracing database:
+        ```python
+        from agno.db.sqlite import SqliteDb
+        
+        tracing_db = SqliteDb(db_file=config.TRACING_DB_FILE, id="tracing_db")
+        ```
+     d. Call `setup_tracing()` with configuration:
+        ```python
+        from agno.tracing import setup_tracing
+        
+        setup_tracing(
+            db=tracing_db,
+            batch_processing=True,
+            max_queue_size=2048,
+            schedule_delay_millis=3000,
+            max_export_batch_size=256,
+        )
+        ```
+     e. Log initialization: `logger.info("Tracing enabled. Database: {db_file}")`
+     f. Return tracing_db
+   - Error handling: Log warnings if tracing initialization fails (non-fatal)
+   - **Note:** `setup_tracing()` is called at module level (not async) but import it in async context
+
+3. **Update agent.py factory** - Pass tracing_db to AgentOS:
+   - Import: `from src.utils.tracing import initialize_tracing`
+   - In `initialize_recipe_agent()` factory, add step after MCP init:
+     ```python
+     # Initialize tracing (if enabled)
+     logger.info("Initializing tracing...")
+     tracing_db = await initialize_tracing()
+     ```
+   - Pass `tracing_db` to AgentOS initialization (see requirement 5 below)
+
+4. **Update app.py** - Pass tracing_db to AgentOS:
+   - When creating AgentOS instance, add parameter:
+     ```python
+     agent_os = AgentOS(
+         agents=[agent],
+         tracing=True,  # Enable tracing in AgentOS
+         tracing_db=tracing_db if tracing_db else None,  # Pass dedicated db if available
+     )
+     ```
+   - This makes traces queryable via AgentOS API and visible in AgentOS UI
+
+5. **Update .env.example**:
+   ```bash
+   # Tracing Configuration
+   # Enable tracing for observability (requires OpenTelemetry packages)
+   ENABLE_TRACING=true
+   
+   # Tracing database type: "sqlite" or "postgres"
+   TRACING_DB_TYPE=sqlite
+   
+   # Path for SQLite tracing database (ignored if using PostgreSQL)
+   TRACING_DB_FILE=agno_traces.db
+   ```
+
+6. **Update Makefile** - Add tracing dependencies to setup target:
+   - Add OpenTelemetry packages to `make setup` pip install:
+     ```bash
+     opentelemetry-api \
+     opentelemetry-sdk \
+     openinference-instrumentation-agno
+     ```
+   - Or update requirements.txt with these packages
+
+7. **Logging Integration**:
+   - All tracing initialization steps logged (info for success, warning for issues)
+   - Trace statistics logged at startup (e.g., "Tracing enabled, batch size: 256")
+   - No trace data logged (sensitive performance information)
+
+**Input (Dependencies):**
+- config.py from Task 2 (configuration management)
+- logger.py from Task 2.5 (structured logging)
+- agent.py from Task 10 (factory function to integrate with)
+- app.py from Task 10 (to pass tracing_db to AgentOS)
+- agno library (with agno.tracing and setup_tracing)
+
+**Output:**
+- Updated config.py with tracing configuration
+- New `src/utils/tracing.py` module with initialization function
+- Updated agent.py to call initialize_tracing() and pass tracing_db
+- Updated app.py to pass tracing_db to AgentOS
+- Updated .env.example with tracing configuration
+- Updated Makefile with OpenTelemetry dependencies
+- Unit test: tests/unit/test_tracing.py for configuration validation
+
+**Success Criteria:**
+- `python app.py` starts with tracing enabled (default)
+- Tracing database created at `agno_traces.db` (or configured path)
+- Traces visible in AgentOS UI at `/traces` endpoint
+- Traces capture: agent runs, model calls, tool executions
+- Can disable tracing by setting `ENABLE_TRACING=false`
+- Unit tests verify tracing initialization and configuration
+- All existing tests still pass
+- No errors in trace initialization (graceful degradation if OpenTelemetry unavailable)
+
+**Key Constraints:**
+- **Dedicated database:** Tracing database separate from agent session database
+- **Optional feature:** Tracing can be disabled (graceful degradation)
+- **Non-blocking:** Failed tracing initialization should not crash application
+- **Production-ready:** Batch processing enabled for performance
+- **Configurable:** All tracing parameters (batch size, delays) configurable
+- **Async-safe:** Tracing initialization integrated with async factory pattern
+- **Standardized:** Use Agno's built-in `setup_tracing()` (not custom implementation)
+- Configuration validation during app startup
+- OpenTelemetry packages optional (fail gracefully if not installed)
+
+**Integration Pattern (as implemented in agent.py):**
+```python
+# Step 1: Initialize MCP
+spoonacular_mcp = SpoonacularMCP(...)
+mcp_tools = await spoonacular_mcp.initialize()
+
+# Step 2: Initialize tracing (NEW - Task 11)
+logger.info("Initializing tracing...")
+tracing_db = await initialize_tracing()
+
+# Step 3: Configure agent database
+db = SqliteDb(db_file="agno.db")
+
+# Step 4: Create agent
+agent = Agent(model=..., db=db, tools=[mcp_tools], ...)
+
+# In app.py: Pass tracing_db to AgentOS
+agent_os = AgentOS(
+    agents=[agent],
+    tracing=True,
+    tracing_db=tracing_db,  # Makes traces queryable
+)
+```
+
+---
 
 ### Task 12: Integration Tests - End-to-End (tests/integration/test_e2e.py)
 
