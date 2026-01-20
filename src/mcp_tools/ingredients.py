@@ -380,7 +380,10 @@ async def extract_ingredients_pre_hook(
             run_input.input_content = (
                 f"{message_text}\n\n[Detected Ingredients] {ingredient_text}"
             )
-            logger.info(f"Appended {len(unique_ingredients)} detected ingredients to message")
+            logger.info(
+                f"Ingredients extracted from image: {unique_ingredients} "
+                f"(total: {len(unique_ingredients)})"
+            )
 
     except Exception as e:
         # Pre-hooks must be resilient - log but don't crash

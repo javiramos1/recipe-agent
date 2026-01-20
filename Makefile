@@ -13,20 +13,15 @@ help:
 	@echo "  make setup           Create virtual environment, install dependencies, create .env file"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev             Start application (http://localhost:7777)"
-	@echo "  make dev DEBUG=1     Start with debug output enabled"
-	@echo "  make dev-bkg         Start application in background"
-	@echo "  make run             Start application (production mode)"
-	@echo "  make run DEBUG=1     Start with debug output enabled"
-	@echo "  make stop            Stop running application server"
+	@echo "  make dev             Start backend server (http://localhost:7777)"
+	@echo "  make dev-bkg         Start backend server in background"
+	@echo "  make run             Start backend server (production mode)"
+	@echo "  make stop            Stop running backend server"
 	@echo ""
 	@echo "Queries (with auto-managed background server):"
 	@echo "  make query Q=\"..\"                           Run stateful query (uses session memory)"
 	@echo "  make query Q=\"..\" S=1                       Run stateless query (no session history)"
-	@echo "  make query Q=\"..\" DEBUG=1                   Run with debug output enabled"
 	@echo "  make query Q=\"..\" IMG=path/to/image.png    Include image for ingredient detection"
-	@echo "  make query Q=\"..\" S=1 DEBUG=1              Run stateless with debug enabled"
-	@echo "  make query Q=\"..\" IMG=images/pasta.png DEBUG=1  Test with image and debug"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test            Run unit tests"
@@ -45,25 +40,11 @@ venv-check:
 		echo "✓ Virtual environment created"; \
 	fi
 
-# Setup: Create venv, install dependencies, create .env, setup Agent UI
+# Setup: Create venv, install dependencies, create .env
 setup: venv-check
 	@echo "Installing Python dependencies..."
 	$(PIP) install --upgrade pip
 	$(PIP) install -r requirements.txt
-	@echo ""
-	@echo "Setting up Agent UI..."
-	@if [ ! -d "agent-ui" ]; then \
-		echo "Creating Agent UI project..."; \
-		npx create-agent-ui@latest > /dev/null 2>&1; \
-		echo "✓ Agent UI project created"; \
-	else \
-		echo "✓ Agent UI project already exists"; \
-	fi
-	@if [ -d "agent-ui" ] && [ ! -d "agent-ui/node_modules" ]; then \
-		echo "Installing Agent UI dependencies..."; \
-		cd agent-ui && npm install --legacy-peer-deps > /dev/null 2>&1 && cd ..; \
-		echo "✓ Agent UI dependencies installed"; \
-	fi
 	@if [ ! -f .env ]; then \
 		echo ""; \
 		echo "Creating .env file from .env.example..."; \
@@ -84,96 +65,55 @@ setup: venv-check
 		echo "Setup complete! Run: make dev"; \
 	fi
 
-# Development: Start both AgentOS backend and Agent UI frontend
+# Development: Start AgentOS backend
 dev: venv-check
-	@if [ "$(DEBUG)" = "1" ] || [ "$(DEBUG)" = "true" ]; then \
-		export AGNO_DEBUG=True; \
-	fi; \
-	bash scripts/start_services.sh $(PYTHON)
+	@$(PYTHON) app.py
 
-# Development background: Start in background using helper script
+# Development background: Start in background
 dev-bkg: venv-check
-	@./scripts/start_bkg.sh $(PYTHON)
+	@nohup $(PYTHON) app.py > /tmp/agent_server.log 2>&1 &
+	@echo "Backend server started in background (PID: $$!)"
+	@echo "Logs: tail -f /tmp/agent_server.log"
+	@sleep 3
+	@curl -s http://localhost:7777/health > /dev/null && echo "✓ Server is responding" || echo "⚠ Server may still be starting..."
 
-# Production: Start both AgentOS backend and Agent UI frontend (production mode)
+# Production: Start AgentOS backend
 run: venv-check
-	@if [ "$(DEBUG)" = "1" ] || [ "$(DEBUG)" = "true" ]; then \
-		export AGNO_DEBUG=True; \
-	fi; \
-	bash scripts/start_services.sh $(PYTHON)
+	@$(PYTHON) app.py
 
-# Stop: Kill all running services (backend and frontend)
+# Stop: Kill all running backend processes
 stop:
-	@bash scripts/stop_services.sh
+	@pkill -f "python app.py" || true
+	@echo "✓ Server stopped"
 
 # Ad hoc Query: Run a single query (auto-manages background server)
-# Usage: make query Q="..." [S=1] [DEBUG=1] [IMG=path/to/image.png]
+# Usage: make query Q="..." [S=1] [IMG=path/to/image.png]
 query: venv-check dev-bkg
 	@if [ -z "$(Q)" ]; then \
-		echo "Usage: make query Q=\"<your query>\" [S=1] [DEBUG=1] [IMG=path/to/image.png]"; \
+		echo "Usage: make query Q=\"<your query>\" [S=1] [IMG=path/to/image.png]"; \
 		echo ""; \
 		echo "Options:"; \
 		echo "  S=1             Run in stateless mode (no session history)"; \
-		echo "  DEBUG=1         Enable debug output (see tool calls, LLM input/output, metrics)"; \
 		echo "  IMG=path/file   Include image for ingredient detection"; \
 		echo ""; \
 		echo "Examples:"; \
 		echo "  make query Q=\"What can I make with chicken?\""; \
 		echo "  make query Q=\"What can I make with chicken?\" S=1"; \
-		echo "  make query Q=\"What can I make with chicken?\" DEBUG=1"; \
 		echo "  make query Q=\"What can I make with this?\" IMG=images/pasta.png"; \
-		echo "  make query Q=\"What can I make with this?\" IMG=images/pasta.png DEBUG=1"; \
 		exit 1; \
 	fi
-	@if [ "$(DEBUG)" = "1" ] || [ "$(DEBUG)" = "true" ]; then \
-		export AGNO_DEBUG=True; \
-		if [ "$(S)" = "1" ]; then \
-			echo "Running stateless ad hoc query (no session memory)..."; \
-		else \
-			echo "Running stateful ad hoc query (with session memory)..."; \
-		fi; \
+	@sleep 1; \
+	if [ "$(S)" = "1" ]; then \
 		if [ -n "$(IMG)" ]; then \
-			echo "Image: $(IMG)"; \
-		fi; \
-		echo "Debug output enabled"; \
-		echo ""; \
-		sleep 1; \
-		if [ "$(S)" = "1" ]; then \
-			if [ -n "$(IMG)" ]; then \
-				$(PYTHON) query.py --stateless --image $(IMG) "$(Q)"; \
-			else \
-				$(PYTHON) query.py --stateless "$(Q)"; \
-			fi; \
+			$(PYTHON) query.py --stateless --image $(IMG) "$(Q)"; \
 		else \
-			if [ -n "$(IMG)" ]; then \
-				$(PYTHON) query.py --image $(IMG) "$(Q)"; \
-			else \
-				$(PYTHON) query.py "$(Q)"; \
-			fi; \
+			$(PYTHON) query.py --stateless "$(Q)"; \
 		fi; \
 	else \
-		if [ "$(S)" = "1" ]; then \
-			echo "Running stateless ad hoc query (no session memory)..."; \
-		else \
-			echo "Running stateful ad hoc query (with session memory)..."; \
-		fi; \
 		if [ -n "$(IMG)" ]; then \
-			echo "Image: $(IMG)"; \
-		fi; \
-		echo ""; \
-		sleep 1; \
-		if [ "$(S)" = "1" ]; then \
-			if [ -n "$(IMG)" ]; then \
-				$(PYTHON) query.py --stateless --image $(IMG) "$(Q)"; \
-			else \
-				$(PYTHON) query.py --stateless "$(Q)"; \
-			fi; \
+			$(PYTHON) query.py --image $(IMG) "$(Q)"; \
 		else \
-			if [ -n "$(IMG)" ]; then \
-				$(PYTHON) query.py --image $(IMG) "$(Q)"; \
-			else \
-				$(PYTHON) query.py "$(Q)"; \
-			fi; \
+			$(PYTHON) query.py "$(Q)"; \
 		fi; \
 	fi; \
 	QUERY_RESULT=$$?; \
