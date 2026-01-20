@@ -63,7 +63,12 @@ const ChatInput = () => {
   const handleSubmit = async () => {
     if (!inputMessage.trim() && selectedImages.length === 0) return
 
-    const currentMessage = inputMessage
+    // If images are uploaded but no message provided, use default message
+    let currentMessage = inputMessage.trim()
+    if (!currentMessage && selectedImages.length > 0) {
+      currentMessage = 'Show me recipes based on these ingredients'
+    }
+
     const currentImages = selectedImages
     setInputMessage('')
     setSelectedImages([])

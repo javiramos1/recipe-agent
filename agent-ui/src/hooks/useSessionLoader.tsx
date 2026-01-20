@@ -86,9 +86,23 @@ const useSessionLoader = () => {
               const filteredMessages: ChatMessage[] = []
 
               if (run) {
+                // Parse run_input to extract message content
+                let userContent = run.run_input ?? ''
+                if (typeof userContent === 'string') {
+                  try {
+                    // Try to parse as JSON (from pre-hook format)
+                    const parsed = JSON.parse(userContent)
+                    if (parsed && typeof parsed.message === 'string') {
+                      userContent = parsed.message
+                    }
+                  } catch {
+                    // If parsing fails, use as-is (already plain text)
+                  }
+                }
+
                 filteredMessages.push({
                   role: 'user',
-                  content: run.run_input ?? '',
+                  content: userContent,
                   created_at: run.created_at
                 })
               }
@@ -146,6 +160,17 @@ const useSessionLoader = () => {
                   }
                 }
                 if (typeof message.content !== 'string') {
+                  // Handle RecipeResponse: extract the response field if present
+                  if (
+                    message.content &&
+                    typeof message.content === 'object' &&
+                    'response' in message.content
+                  ) {
+                    return {
+                      ...message,
+                      content: (message.content as any).response || ''
+                    }
+                  }
                   return {
                     ...message,
                     content: getJsonMarkdown(message.content)
