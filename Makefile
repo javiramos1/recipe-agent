@@ -1,4 +1,4 @@
-.PHONY: setup dev dev-bkg run query stop test eval clean help venv-check
+.PHONY: setup dev dev-bkg run query stop test eval clean clean-memories help venv-check
 
 # Virtual environment directory
 VENV_DIR := .venv
@@ -34,6 +34,7 @@ help:
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  make clean           Remove cache files and temporary data"
+	@echo "  make clean-memories  Clear all user memories from database"
 	@echo "  make help            Show this help message"
 
 # Check if venv exists, create if not
@@ -209,3 +210,18 @@ clean:
 	find . -type d -name ".coverage" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".egg-info" -exec rm -rf {} + 2>/dev/null || true
 	@echo "✓ Clean complete"
+
+# Clean Memories: Clear all user memories from database
+clean-memories:
+	@if [ ! -f agno.db ]; then \
+		echo "No database found (agno.db). Nothing to clean."; \
+		exit 0; \
+	fi
+	@echo "Clearing user memories from database..."
+	@sqlite3 agno.db "DELETE FROM agno_memories;"
+	@COUNT=$$(sqlite3 agno.db "SELECT COUNT(*) FROM agno_memories;"); \
+	if [ "$$COUNT" -eq 0 ]; then \
+		echo "✓ All memories cleared (0 records remaining)"; \
+	else \
+		echo "⚠ Unexpected records found: $$COUNT"; \
+	fi

@@ -287,25 +287,25 @@ async def extract_ingredients_pre_hook(
 ) -> None:
     """Pre-hook: Extract ingredients from images before agent processes request.
 
-    This function handles TWO input paths:
-    1. From query.py (direct Python API): run_input has message/images attributes from ChatMessage schema
-    2. From Agno UI (HTTP FormData): run_input.input_content is JSON string {"message":"...", "images":[...]}
+    Assumes input has been normalized by normalize_input_pre_hook:
+    - run_input.message: User message (str)
+    - run_input.images: List of image URLs or base64 data URIs
 
     The function:
-    1. Detects which source the input came from
-    2. Extracts message and images appropriately
+    1. Extracts message and images (already normalized format)
+    2. Validates and compresses images
     3. Calls Gemini vision API to extract ingredients (async)
     4. Filters by confidence threshold
     5. Appends detected ingredients to user message as text
 
     Args:
-        run_input: Agno RunInput object containing user message and images.
-        session: Agno AgentSession providing current session context.
-        user_id: Optional contextual user ID for the current run.
-        debug_mode: Optional boolean indicating if debug mode is enabled.
+        run_input: Agno RunInput object with normalized message/images attributes
+        session: Agno AgentSession providing current session context
+        user_id: Optional contextual user ID for the current run
+        debug_mode: Optional boolean indicating if debug mode is enabled
 
     Returns:
-        None (modifies run_input in-place).
+        None (modifies run_input in-place)
     """
     try:
         # Log pre-hook execution context
@@ -315,32 +315,11 @@ async def extract_ingredients_pre_hook(
             f"user_id={user_id}, debug_mode={debug_mode})"
         )
 
-        message_text = ""
-        images = []
+        # Extract normalized message and images (guaranteed by normalize_input_pre_hook)
+        message_text = getattr(run_input, "message", "") or ""
+        images = getattr(run_input, "images", []) or []
         
-        # DETECTION LOGIC: Determine which source this came from
-        # Try path 1: From query.py OR Agno UI with input_schema (ChatMessage attributes exist)
-        if hasattr(run_input, "message"):
-            # This is a ChatMessage object (either from query.py or Agno UI with schema)
-            logger.debug("Detected: ChatMessage schema input")
-            message_text = getattr(run_input, "message", "") or ""
-            images = getattr(run_input, "images", []) or []
-        else:
-            # Try path 2: From Agno UI without schema (raw FormData string in input_content)
-            # Parse message as JSON to extract images
-            input_content = getattr(run_input, "input_content", "")
-            logger.debug(f"Input content type: {type(input_content)}, length: {len(str(input_content))}")
-            
-            try:
-                message_data = json.loads(input_content)
-                if isinstance(message_data, dict):
-                    message_text = message_data.get("message", "")
-                    images = message_data.get("images", [])
-                    logger.debug("Detected: FormData JSON string (fallback)")
-            except (json.JSONDecodeError, ValueError, TypeError):
-                # Message is not JSON, treat entire input_content as plain text
-                message_text = str(input_content)
-                logger.debug("Detected: Plain text message (not JSON)")
+        logger.debug(f"Message: {len(message_text)} chars, Images: {len(images)} items")
         
         # Check if we have images to process
         if not images:
