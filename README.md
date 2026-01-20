@@ -64,9 +64,9 @@ make dev
 ```
 
 The service will start at:
-- **Web UI (AGUI)**: http://localhost:7777
-- **REST API**: http://localhost:7777/api/agents/chat
-- **OpenAPI Docs**: http://localhost:7777/docs
+- **Backend API**: `http://localhost:7777`
+- **Agno OS Platform**: [https://os.agno.com](https://os.agno.com) (connect local agent for UI, traces, evaluations)
+- **OpenAPI Docs**: `http://localhost:7777/docs`
 
 ## Tech Stack
 
@@ -174,73 +174,62 @@ The application will start with full logging and hot-reload support. This starts
 - **Backend**: Python/AgentOS server on port 7777
 - **Frontend**: Next.js Agent UI on port 3000
 
-## Using the Web UI
+## Using the Web UI with Agno OS Platform
 
-### Getting Started
+### Quick Start with Agno OS
 
-1. Open http://localhost:3000 in your browser
-2. The Agent UI will automatically connect to http://localhost:7777 (default backend)
-3. Add optional auth token if needed (usually not required for local development)
-4. Select an agent from the dropdown
-5. Start chatting!
+1. **Create Free Account**: Visit [os.agno.com](https://os.agno.com) and sign up (free tier available)
+2. **Start Backend**: Run `make dev` (starts your local agent on http://localhost:7777)
+3. **Connect Agent**: In Agno OS platform → Click team dropdown → "Add new OS" → Select "Local" → Enter endpoint `http://localhost:7777`
+4. **Chat in Platform**: UI automatically adapts to your agent's input schema
+5. **View Traces**: Agno OS platform shows execution traces, tool calls, and reasoning
+
+### Why Agno OS Platform?
+
+- **Schema-Aware UI**: Forms and inputs automatically adapt to your agent's request schema
+- **Execution Traces**: See every step of ingredient detection and recipe search
+- **Session Persistence**: Multi-turn conversations with automatic memory management
+- **Evaluations**: Built-in framework for testing agent quality
+- **No Hosting Needed**: Connect local agents instantly; data stays on your machine
+
+### Key Features in Agno OS
+
+| Feature | Description |
+|---------|-------------|
+| **Dynamic UI Forms** | Input forms automatically generated from your agent's schema |
+| **Execution Traces** | Full visibility: agent thinking, tool calls, LLM reasoning |
+| **Session History** | Persistent multi-turn conversations |
+| **Image Support** | Upload images directly (base64 conversion handled) |
+| **Tool Inspection** | See which MCP tools were called and their outputs |
+| **Performance Metrics** | Response times, token usage, execution breakdown |
 
 ### Uploading Images for Ingredient Detection
 
-The Agent UI supports multiple image uploads for automatic ingredient detection:
+1. **Use Agno OS Upload Widget** - Click image upload in chat input
+2. **Select Ingredient Photos** - Single or multiple images
+3. **Optional Message** - Add notes like "Make it vegetarian" or just send images
+4. **Auto-Extraction** - Gemini Vision API detects ingredients automatically
+5. **View Results** - Recipes with full details returned in Agno UI
 
-#### Step-by-Step
-
-1. **Click the Image Upload Button** (📎 plus icon) in the chat input area
-2. **Select One or More Images** - You can select multiple ingredient photos at once
-3. **View Image Thumbnails** - Selected images display as previews before sending
-4. **Add a Message (Optional)**:
-   - If you upload images **without typing a message**, the UI automatically sends: *"Show me recipes based on these ingredients"*
-   - Or **type your own prompt** like: *"Make something vegetarian with these"* or *"I'm allergic to nuts, what can I make?"*
-5. **Click Send** - Images are converted to base64 and sent with your message to the agent
-
-#### Image Upload Specifications
-
-- **Max File Size**: 5MB per image (automatically validated on the client)
-- **Max Images per Request**: Unlimited (but larger batches may take longer to process)
-- **Supported Formats**: JPEG, PNG, WebP, GIF, and other common image formats
-- **Best Results**: Clear, well-lit photos of actual food items
-- **Automatic Detection**: Agent uses Gemini Vision API to identify ingredients
-
-#### Example Workflow
-
-1. **Take or Select a Photo** of your ingredients (e.g., tomatoes, basil, mozzarella)
-2. **Click Image Button** → select the photo from your device
-3. **Photo Thumbnail Appears** → review before sending
-4. **Click Send** (no message needed) → UI automatically sends default message
-5. **Agent Processes**:
-   - Detects ingredients: tomatoes, basil, mozzarella
-   - Finds matching recipes: Caprese Salad, Margherita Pizza, Tomato Basil Soup
-   - Returns recipes with full details (ingredients, instructions, cooking time)
-
-### Web UI Features
-
-- **Multi-Turn Conversations**: Talk to your agent and it remembers previous messages
-- **Session History**: Your chat history is automatically saved and can be reopened later
-- **Real-Time Streaming**: See responses as they're generated (character by character)
-- **Tool Calls**: View which tools the agent called (recipe search, ingredient detection)
-- **Reasoning Steps**: See the agent's thinking process (when available)
-- **Preferences Learning**: Agent learns and remembers your dietary preferences, cuisine preferences, and restrictions across messages in a session
-- **Image Thumbnails**: Preview uploaded images before sending
+**Image Requirements:**
+- **Max Size**: 5MB per image
+- **Formats**: JPEG, PNG, WebP, GIF
+- **Best Practice**: Clear, well-lit photos of actual food items
 
 ## Development Workflow
 
 ### Start Server
 
 ```bash
-make dev     # Development mode with output (Backend + Frontend)
+make dev     # Development mode with output
 make run     # Production mode
 make stop    # Stop running server
 ```
 
 **Access Points:**
-- **Interactive Web UI**: http://localhost:3000 (Modern Agent UI with image upload)
-- **REST API**: http://localhost:7777/api/agents/chat
-- **API Documentation**: http://localhost:7777/docs (Swagger UI)
+- **Agno OS Platform**: [https://os.agno.com](https://os.agno.com) → Connect local agent → View UI, traces, and evaluations
+- **REST API**: `http://localhost:7777/api/agents/chat`
+- **API Documentation**: `http://localhost:7777/docs` (Swagger UI)
 
 ### Run Ad Hoc Queries
 
@@ -251,17 +240,7 @@ make query Q="What can I make with chicken and rice?"
 make query Q="Show me vegetarian recipes"
 ```
 
-The query command:
-- Initializes the agent (including MCP tools)
-- Executes the query
-- Prints the response
-- Exits cleanly (no lingering processes)
-
-Useful for:
-- Testing agent behavior without the server UI
-- Quick recipe lookups from the command line
-- Debugging without API overhead
-- Integration with shell scripts and automation
+The query command initializes the agent and executes one-off requests from the CLI. Useful for testing or integration with shell scripts.
 
 ### Debug Mode
 
@@ -299,14 +278,15 @@ make clean   # Remove __pycache__, .pyc, pytest cache
 
 ## Usage Examples
 
-### Web UI (Interactive)
+### Primary: Web UI via Agno OS Platform (Recommended)
 
-1. Navigate to http://localhost:7777
-2. Upload an ingredient image or type ingredients
-3. Set preferences (dietary restrictions, cuisines)
-4. View recipe recommendations with full details
+1. Start backend: `make dev`
+2. Go to [https://os.agno.com](https://os.agno.com) (create free account if needed)
+3. Connect: "Add new OS" → Local → `http://localhost:7777`
+4. Chat: UI automatically adapts to your agent's schema
+5. View traces and executions in platform
 
-### REST API (Programmatic)
+### Secondary: REST API (Programmatic)
 
 #### Example 1: Text Ingredients → Recipes
 
