@@ -65,20 +65,20 @@ make dev
 
 The service will start at:
 - **Backend API**: `http://localhost:7777`
-- **Agno OS Platform**: [https://os.agno.com](https://os.agno.com) (connect local agent for UI, traces, evaluations)
 - **OpenAPI Docs**: `http://localhost:7777/docs`
+- **Agno OS Platform**: [https://os.agno.com](https://os.agno.com) (recommended UI - connect local agent)
 
 ## Tech Stack
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **Runtime** | AgentOS | Complete application backend (REST API, Web UI, orchestration) |
+| **Runtime** | AgentOS | Complete application backend (REST API, orchestration, tracing) |
 | **Orchestrator** | Agno Agent | Stateful agent with memory, retries, and tool routing |
-| **Vision API** | Gemini 1.5 Flash | Ingredient detection from images |
+| **Vision API** | Gemini (3-flash-preview) | Ingredient detection from images |
 | **Recipe Search** | Spoonacular MCP | 50K+ verified recipes via external service |
 | **Database** | SQLite (dev) / PostgreSQL (prod) | Session storage and memory |
 | **Validation** | Pydantic v2 | Input/output schema validation |
-| **Testing** | pytest | Unit and integration testing |
+| **Testing** | pytest + Agno Evals | Unit, integration, and evaluation testing |
 
 ## Setup Instructions
 
@@ -110,11 +110,12 @@ SPOONACULAR_API_KEY=your_spoonacular_key_here
 GEMINI_MODEL=gemini-3-flash-preview
 PORT=7777
 MAX_HISTORY=3
+MAX_RECIPES=3
 MAX_IMAGE_SIZE_MB=5
 MIN_INGREDIENT_CONFIDENCE=0.7
 IMAGE_DETECTION_MODE=pre-hook
 LOG_LEVEL=INFO
-LOG_TYPE=text
+OUTPUT_FORMAT=json
 # DATABASE_URL=postgresql://user:pass@localhost:5432/recipe_service
 ```
 
@@ -170,9 +171,10 @@ This means your daily quota is exhausted. Options:
 make dev
 ```
 
-The application will start with full logging and hot-reload support. This starts both:
-- **Backend**: Python/AgentOS server on port 7777
-- **Frontend**: Next.js Agent UI on port 3000
+The application will start at:
+- **Backend**: Python/AgentOS server on `http://localhost:7777`
+- **OpenAPI Docs**: `http://localhost:7777/docs`
+- **Agno OS UI**: [https://os.agno.com](https://os.agno.com) (connect local agent for web UI, traces, evaluations)
 
 ## Using the Web UI with Agno OS Platform
 
@@ -278,87 +280,43 @@ make clean   # Remove __pycache__, .pyc, pytest cache
 
 ## Usage Examples
 
-### Primary: Web UI via Agno OS Platform (Recommended)
+### Web UI via Agno OS Platform (Recommended)
 
 1. Start backend: `make dev`
-2. Go to [https://os.agno.com](https://os.agno.com) (create free account if needed)
-3. Connect: "Add new OS" → Local → `http://localhost:7777`
-4. Chat: UI automatically adapts to your agent's schema
-5. View traces and executions in platform
+2. Go to [https://os.agno.com](https://os.agno.com) (free account available)
+3. Add new OS: Team dropdown → "Add new OS" → Local → `http://localhost:7777`
+4. Chat: UI auto-adapts to agent schema, view traces and executions
 
-### Secondary: REST API (Programmatic)
+### REST API (Programmatic)
 
-#### Example 1: Text Ingredients → Recipes
+#### Text Query
+
+```bash
+curl -X POST http://localhost:7777/api/agents/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "I have tomatoes and basil", "session_id": "user-123"}'
+```
+
+#### Image Upload (Base64)
 
 ```bash
 curl -X POST http://localhost:7777/api/agents/chat \
   -H "Content-Type: application/json" \
-  -d '{
-    "message": "I have tomatoes, basil, and mozzarella. Show me recipes.",
-    "session_id": "user-123"
-  }'
+  -d "{\"images\": \"$(base64 -i image.jpg)\", \"session_id\": \"user-123\"}"
 ```
 
-**Response:**
-```json
-{
-  "session_id": "user-123",
-  "run_id": "run-456",
-  "response": "Great! Here are some Italian recipes using your ingredients...",
-  "ingredients": ["tomatoes", "basil", "mozzarella"],
-  "recipes": [
-    {
-      "title": "Caprese Salad",
-      "ingredients": ["tomatoes", "mozzarella", "basil", "olive oil"],
-      "instructions": ["Slice tomatoes...", "Layer with mozzarella..."],
-      "prep_time_min": 10,
-      "cook_time_min": 0,
-      "source_url": "https://spoonacular.com/recipes/..."
-    }
-  ],
-  "metadata": {
-    "tools_called": ["search_recipes", "get_recipe_information_bulk"],
-    "model": "gemini-3-flash-preview",
-    "response_time_ms": 2340
-  }
-}
-```
-
-#### Example 2: Multi-Turn Conversation with Preferences
+#### Multi-Turn Conversation (Preferences Persisted)
 
 ```bash
-# Turn 1: Express dietary preference
+# Turn 1: Express preference
 curl -X POST http://localhost:7777/api/agents/chat \
   -H "Content-Type: application/json" \
-  -d '{
-    "message": "I am vegetarian and love Italian food",
-    "session_id": "user-123"
-  }'
+  -d '{"message": "I am vegetarian", "session_id": "user-123"}'
 
-# Turn 2: Follow-up without repeating preferences
+# Turn 2: Agent remembers vegetarian preference
 curl -X POST http://localhost:7777/api/agents/chat \
   -H "Content-Type: application/json" \
-  -d '{
-    "message": "I have potatoes and garlic. What can I make?",
-    "session_id": "user-123"
-  }'
-```
-
-Agent remembers: vegetarian + Italian preferences from Turn 1, applies them in Turn 2.
-
-#### Example 3: Image Upload (Base64)
-
-```bash
-# Encode image to base64
-IMAGE_BASE64=$(base64 -i path/to/image.jpg)
-
-curl -X POST http://localhost:7777/api/agents/chat \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"image_base64\": \"${IMAGE_BASE64}\",
-    \"message\": \"What recipes can I make with these ingredients?\",
-    \"session_id\": \"user-123\"
-  }"
+  -d '{"message": "I have potatoes and garlic", "session_id": "user-123"}'
 ```
 
 ## Configuration
@@ -366,61 +324,46 @@ curl -X POST http://localhost:7777/api/agents/chat \
 ### Environment Variables
 
 | Variable | Type | Default | Description |
-|----------|------|---------|-------------|
+| --- | --- | --- | --- |
 | `GEMINI_API_KEY` | string | **required** | Google Gemini API key (vision model) |
 | `SPOONACULAR_API_KEY` | string | **required** | Spoonacular recipe API key |
-| `GEMINI_MODEL` | string | `gemini-3-flash-preview` | Vision model (fast, cost-effective). For best results: `gemini-3-pro-preview` |
+| `GEMINI_MODEL` | string | `gemini-3-flash-preview` | Vision model (fast). Options: `gemini-3-flash-preview`, `gemini-3-pro-preview` |
 | `PORT` | int | `7777` | Server port |
 | `MAX_HISTORY` | int | `3` | Conversation turns to keep in memory |
+| `MAX_RECIPES` | int | `3` | Maximum recipes to return per request |
 | `MAX_IMAGE_SIZE_MB` | int | `5` | Maximum image upload size |
 | `MIN_INGREDIENT_CONFIDENCE` | float | `0.7` | Confidence threshold for detected ingredients (0.0-1.0) |
-| `IMAGE_DETECTION_MODE` | string | `pre-hook` | Ingredient detection mode: `pre-hook` (fast, processes before agent) or `tool` (agent control) |
-| `OUTPUT_FORMAT` | string | `json` | Response format: `json` (full RecipeResponse) or `markdown` (extracted response field for UI) |
-| `LOG_LEVEL` | string | `INFO` | Logging level (DEBUG, INFO, WARNING, ERROR) |
-| `LOG_TYPE` | string | `text` | Log format (text, json) |
-| `DATABASE_URL` | string | *optional* | PostgreSQL connection (uses SQLite if not set) |
-| `ENABLE_TRACING` | bool | `true` | Enable distributed tracing for observability (requires OpenTelemetry) |
-| `TRACING_DB_TYPE` | string | `sqlite` | Tracing database: `sqlite` or `postgres` |
+| `IMAGE_DETECTION_MODE` | string | `pre-hook` | Detection mode: `pre-hook` (fast) or `tool` (agent-controlled) |
+| `OUTPUT_FORMAT` | string | `json` | Response format: `json` or `markdown` |
+| `LOG_LEVEL` | string | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
+| `DATABASE_URL` | string | *optional* | PostgreSQL connection (SQLite default) |
+| `ENABLE_TRACING` | bool | `true` | Enable distributed tracing |
+| `TRACING_DB_TYPE` | string | `sqlite` | Tracing database type: `sqlite` or `postgres` |
 | `TRACING_DB_FILE` | string | `agno_traces.db` | Path for SQLite tracing database |
 
 ### Observability & Tracing
 
-The service includes built-in **distributed tracing** powered by OpenTelemetry and Agno's tracing infrastructure:
+Built-in tracing with OpenTelemetry. View traces in Agno OS Platform:
 
 ```bash
-# Enable tracing (default)
-ENABLE_TRACING=true
+# Start backend
+make dev
 
-# View traces in Agno OS Platform
-# 1. Start backend: make dev
-# 2. Connect to Agno OS (os.agno.com)
-# 3. Go to /traces tab to see all executions
+# Connect to https://os.agno.com
+# 1. Create account (free tier available)
+# 2. Add new OS → Local → http://localhost:7777
+# 3. View traces in /traces tab
 ```
-
-**What Gets Traced:**
-- Agent initialization and startup
-- Model API calls (Gemini vision, LLM calls)
-- Tool executions (Spoonacular recipe searches)
-- Pre-hook ingredient detection
-- Session and preference tracking
-- Performance metrics (response times, token usage)
-
-**Traces Stored In:**
-- **Development**: `agno_traces.db` (SQLite file, auto-created)
-- **Production**: Separate PostgreSQL database (via `TRACING_DB_TYPE=postgres`)
 
 **Disable Tracing (if needed):**
 ```bash
-ENABLE_TRACING=false  # Traces still work but not stored
+ENABLE_TRACING=false
 ```
 
 ### Database Configuration
 
 **Development (Default):**
-```bash
-# Uses SQLite automatically
-# Database file: agno.db (created on first run)
-```
+SQLite file: `agno.db` (auto-created)
 
 **Production (PostgreSQL):**
 ```bash
@@ -496,67 +439,50 @@ DATABASE_URL=postgresql://user:password@localhost:5432/recipe_service
 
 ### POST /api/agents/chat
 
-Send a message and get recipe recommendations.
+Send a message and/or image to get recipe recommendations.
 
-**Request Schema (RecipeRequest):**
+**Request Schema (ChatMessage):**
 ```json
 {
-  "ingredients": ["string"] - Array of 1-50 ingredients, each 1-100 chars (required),
-  "diet": "string" - Dietary preference like 'vegetarian', 'vegan', etc. (1-50 chars, optional),
-  "cuisine": "string" - Cuisine preference like 'Italian', 'Asian', etc. (1-50 chars, optional),
-  "meal_type": "string" - Meal type like 'breakfast', 'dinner', etc. (1-50 chars, optional),
-  "intolerances": "string" - Comma-separated allergies like 'gluten,dairy,nuts' (1-100 chars, optional)
+  "message": "string (optional) - Natural language query like 'I have chicken and rice' (1-2000 chars, optional if images provided)",
+  "images": "string or string[] (optional) - Image URL(s) or base64-encoded image(s) (optional if message provided)"
 }
 ```
 
-**Validation Rules:**
-- `ingredients`: List with 1-50 items; each item stripped of whitespace and validated to 1-100 chars non-empty strings
-- `diet`, `cuisine`, `meal_type`: Optional; if provided, 1-50 chars
-- `intolerances`: Optional; if provided, 1-100 chars
-- All string fields: Whitespace automatically trimmed (`str_strip_whitespace=True`)
+**Notes:**
+- Either `message` or `images` must be provided
+- If only images provided, defaults to: "What can I cook with these ingredients?"
+- Images can be URLs (http://, https://) or base64-encoded strings
+- Max 10 images per request
+- Automatically extracts ingredients from images using Gemini vision API
 
 **Response Schema (RecipeResponse):**
 ```json
 {
-  "response": "string" - LLM-generated conversational response (1-5000 chars, required),
+  "response": "string - LLM-generated conversational response",
   "recipes": [
     {
-      "title": "string" - Recipe name (1-200 chars, required),
-      "description": "string" - Brief description (max 500 chars, optional),
-      "ingredients": ["string"] - Ingredient list with quantities (1-100 items, required),
-      "instructions": ["string"] - Step-by-step cooking instructions (1-100 steps, required),
-      "prep_time_min": integer - Preparation time in minutes (0-1440, i.e., 0-24 hours, required),
-      "cook_time_min": integer - Cooking time in minutes (0-1440, i.e., 0-24 hours, required),
-      "source_url": "string" - URL to original recipe source (must start with http:// or https://, optional)
+      "title": "string - Recipe name",
+      "description": "string (optional) - Brief description",
+      "ingredients": ["string"] - Ingredient list with quantities",
+      "instructions": ["string"] - Step-by-step cooking instructions",
+      "prep_time_min": integer - Preparation time in minutes (0-1440)",
+      "cook_time_min": integer - Cooking time in minutes (0-1440)",
+      "source_url": "string (optional) - URL to original recipe"
     }
-  ] - List of up to 50 recipes (optional, defaults to empty),
-  "ingredients": ["string"] - Detected/provided ingredients list (max 100 items, optional),
-  "preferences": {
-    "diet": "string",
-    "cuisine": "string",
-    "meal_type": "string",
-    "intolerances": "string"
-  } - User preferences extracted from conversation (optional),
-  "reasoning": "string" - Explanation of agent's decision-making (max 2000 chars, optional),
-  "session_id": "string" - Session identifier for conversation continuity (1-100 chars, optional),
-  "run_id": "string" - Unique ID for this agent execution (1-100 chars, optional),
-  "execution_time_ms": integer - Total execution time in milliseconds (0-300000, i.e., 0-5 min, required)
+  ],
+  "ingredients": ["string (optional)"] - Detected/provided ingredients",
+  "preferences": "object (optional) - User preferences (diet, cuisine, meal_type, intolerances)",
+  "session_id": "string (optional) - Session identifier for continuity",
+  "run_id": "string (optional) - Unique ID for this execution",
+  "execution_time_ms": integer - Total execution time in milliseconds
 }
 ```
 
-**Validation Rules:**
-- `response`: Required non-empty string (1-5000 chars); automatically trimmed
-- `recipes`: Optional list of up to 50 Recipe objects
-- Each `Recipe.prep_time_min` and `Recipe.cook_time_min`: 0-1440 minutes (0-24 hours)
-- Cross-field validation: Total cooking time (prep + cook) must not exceed 1440 minutes
-- `Recipe.source_url`: Optional; if provided, must start with `http://` or `https://`
-- All string fields: Whitespace automatically trimmed
-- `execution_time_ms`: 0-300000 milliseconds (0-5 minutes)
-
 **Error Responses:**
-- `400 Bad Request` - Malformed JSON, missing required fields
+- `400 Bad Request` - Missing both message and images, or malformed JSON
 - `413 Payload Too Large` - Image exceeds MAX_IMAGE_SIZE_MB
-- `422 Unprocessable Entity` - Off-topic request (guardrail), or other business logic error
+- `422 Unprocessable Entity` - Off-topic request (guardrail enforced)
 - `500 Internal Server Error` - Unexpected system error
 
 ## Testing
