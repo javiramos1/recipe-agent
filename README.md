@@ -572,32 +572,31 @@ Tests:
 - Pydantic model validation
 - Schema serialization/deserialization
 
-### Integration Tests (Real APIs) - Phase 3
+### Integration Evals (Agno Evals Framework)
 
 ```bash
 make eval
 ```
 
-**Status:** Integration tests use **Agno evals framework** (AgentOS built-in evaluation system) and are currently under development (Phase 3).
+Uses **Agno evals framework** (AgentOS built-in evaluation system) for multi-dimensional testing:
 
-When complete, tests will include:
-- End-to-end ingredient detection (requires GEMINI_API_KEY)
-- Recipe recommendation flows (requires SPOONACULAR_API_KEY)
-- Multi-turn conversations with session memory
-- Preference persistence
-- Guardrail behavior
-- Error handling
+- **AccuracyEval**: Ingredient detection accuracy using LLM-as-judge
+- **AgentAsJudgeEval**: Recipe quality, preference persistence, guardrails, session isolation
+- **ReliabilityEval**: Correct tool sequence (search_recipes → get_recipe_information_bulk)
+- **PerformanceEval**: Response time under 5 seconds
 
-**Note:** Integration tests require valid API keys and internet connection.
+**Coverage:** 8 comprehensive eval tests covering all dimensions.
 
-### REST API Tests (HTTP Endpoint Testing)
+**Note:** Requires valid API keys (GEMINI_API_KEY, SPOONACULAR_API_KEY) and internet connection.
+
+### REST API Integration Tests
 
 ```bash
 # Start app in one terminal
 make dev
 
 # In another terminal, run REST API tests
-make eval
+make int-tests
 ```
 
 Tests REST API endpoints directly using httpx client. Validates:
@@ -718,9 +717,10 @@ recipe-agent/
 │   │   ├── test_ingredients.py
 │   │   ├── test_mcp.py
 │   │   └── test_app.py
-│   └── integration/       # Integration tests (real APIs, Agno evals)
-│       ├── test_e2e.py
-│       └── test_api.py
+│   └── integration/       # Integration tests (evals + REST API)
+│       ├── conftest.py     # Pytest fixtures and configuration
+│       ├── test_eval.py    # Agno evals framework (8 comprehensive tests)
+│       └── test_integration.py # REST API endpoint tests (13 tests)
 │
 ├── images/                # Sample test images
 │   ├── sample_vegetables.jpg

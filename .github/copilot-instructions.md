@@ -44,10 +44,17 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ## Status Section
 
-**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed, Task 11 Tracing implemented ✅**
+**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed, Task 11 Tracing implemented, Task 12 E2E Evals complete, Task 13 REST API Tests implemented ✅**
 
-**Latest Update (2026-01-20):**
-- ✅ Task 11 complete: AgentOS Tracing Configuration & Observability
+**Latest Update (2026-01-21):**
+- ✅ Task 13 complete: REST API Integration Tests (httpx-based)
+  - Created tests/integration/test_api.py with 13 comprehensive HTTP endpoint tests
+  - Tests cover: Basic requests, session management, image uploads, error handling, preference persistence, session isolation
+  - Uses httpx client library for async HTTP testing
+  - All tests can run against live running app on port 7777
+  - Added httpx>=0.24.0 to requirements.txt
+  - Updated README.md with concise REST API tests section
+- ✅ Task 12 complete: Integration Tests E2E with Agno Evals Framework
   - Moved tracing.py from src/mcp_tools/ to src/utils/ (proper architecture)
   - Implemented initialize_tracing() async factory with graceful degradation
   - Added tracing configuration to config.py (ENABLE_TRACING, TRACING_DB_TYPE, TRACING_DB_FILE)

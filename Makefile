@@ -1,4 +1,4 @@
-.PHONY: setup dev debug dev-bkg run query stop test eval clean clean-memories help venv-check
+.PHONY: setup dev debug dev-bkg run query stop test eval int-tests clean clean-memories help venv-check
 
 # Virtual environment directory
 VENV_DIR := .venv
@@ -26,7 +26,8 @@ help:
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test            Run unit tests"
-	@echo "  make eval            Run integration tests (requires API keys)"
+	@echo "  make eval            Run integration evals (Agno evals framework, requires API keys)"
+	@echo "  make int-tests       Run REST API integration tests (requires running app)"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  make clean           Remove cache files and temporary data"
@@ -133,15 +134,26 @@ test: venv-check
 	@echo ""
 	@echo "✓ Unit tests complete"
 
-# Integration Tests (requires valid API keys)
+# Integration Evals (Agno evals framework - requires valid API keys)
 eval: venv-check
-	@echo "Running integration tests..."
+	@echo "Running integration evals (Agno evals framework)..."
 	@echo ""
 	@echo "Note: These tests require valid GEMINI_API_KEY and SPOONACULAR_API_KEY"
 	@echo ""
-	$(PYTHON) -m pytest tests/integration/ -v --tb=short
+	$(PYTHON) -m pytest tests/integration/test_eval.py -v --tb=short
 	@echo ""
-	@echo "✓ Integration tests complete"
+	@echo "✓ Integration evals complete"
+
+# REST API Integration Tests (requires running app on port 7777)
+int-tests: venv-check
+	@echo "Running REST API integration tests..."
+	@echo ""
+	@echo "Note: Requires app running on http://localhost:7777"
+	@echo "Start app in another terminal: make dev"
+	@echo ""
+	$(PYTHON) -m pytest tests/integration/test_integration.py -v --tb=short
+	@echo ""
+	@echo "✓ REST API integration tests complete"
 
 # Clean: Remove cache and temporary files
 clean:
