@@ -48,12 +48,15 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 **Latest Update (2026-01-21):**
 - ✅ Task 13 complete: REST API Integration Tests (httpx-based)
-  - Created tests/integration/test_api.py with 13 comprehensive HTTP endpoint tests
+  - Created tests/integration/test_integration.py with 13 comprehensive HTTP endpoint tests
   - Tests cover: Basic requests, session management, image uploads, error handling, preference persistence, session isolation
   - Uses httpx client library for async HTTP testing
-  - All tests can run against live running app on port 7777
+  - All tests run against live running app on port 7777 via `make int-tests`
   - Added httpx>=0.24.0 to requirements.txt
-  - Updated README.md with concise REST API tests section
+  - Reorganized integration tests: test_eval.py (Agno evals, 8 tests) + test_integration.py (REST API, 13 tests)
+  - Added `make eval` target for Agno evals framework
+  - Added `make int-tests` target for REST API endpoint tests
+  - Updated README.md with complete testing documentation
 - ✅ Task 12 complete: Integration Tests E2E with Agno Evals Framework
   - Moved tracing.py from src/mcp_tools/ to src/utils/ (proper architecture)
   - Implemented initialize_tracing() async factory with graceful degradation
