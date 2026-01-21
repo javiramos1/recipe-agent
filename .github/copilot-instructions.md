@@ -82,9 +82,18 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ### Phase 3: Developer Tools & Testing (Tasks 11-18)
 - [x] Task 11 complete (date: 2026-01-20) - AgentOS Tracing Configuration & Observability
+- [x] Task 12 complete (date: 2026-01-20) - Integration Tests E2E with Agno Evals Framework
+  - Implemented 8 comprehensive integration tests covering all eval dimensions
+  - AccuracyEval: Ingredient detection accuracy using LLM-as-judge (Gemini model)
+  - AgentAsJudgeEval (4 tests): Recipe quality, preference persistence, guardrails, session isolation
+  - ReliabilityEval: Correct tool sequence (search_recipes → get_recipe_information_bulk)
+  - PerformanceEval: Response time under 5 seconds for user experience
+  - Created conftest.py with pytest configuration and API key validation
+  - Integrated dotenv to load .env for API keys with clear messaging
+  - Results persisted in tmp/eval_results.db (SqliteDb) for queryable tracking
+  - All 8 tests collected and validated, ready for execution
 - [x] Task 18 complete (date: 2026-01-18) - Ad hoc query command
 - [x] Task 19 complete (date: 2026-01-19) - Background server support (make dev-bkg, make query automation)
-- [ ] Task 12: Integration Tests E2E - Pending
 - [ ] Task 13: REST API Testing - Pending
 - [x] Task 14 complete (date: 2026-01-18) - Makefile with all development commands
 - [ ] Task 15: Sample Test Images - Pending
