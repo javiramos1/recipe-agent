@@ -590,6 +590,29 @@ When complete, tests will include:
 
 **Note:** Integration tests require valid API keys and internet connection.
 
+### REST API Tests (HTTP Endpoint Testing)
+
+```bash
+# Start app in one terminal
+make dev
+
+# In another terminal, run REST API tests
+make eval
+```
+
+Tests REST API endpoints directly using httpx client. Validates:
+
+- **Successful requests**: HTTP 200 with proper response schema
+- **Session management**: Preference persistence across requests, session isolation
+- **Image handling**: Base64 image upload and ingredient extraction
+- **Error handling**: Missing fields (400), invalid JSON (400), off-topic (422), oversized image (413)
+- **Response validation**: RecipeResponse schema compliance
+- **Rapid requests**: Handles sequential requests without resource exhaustion
+
+**Coverage:** 13 test functions covering all HTTP status codes and edge cases.
+
+**Note:** Requires running app (`make dev` in separate terminal). Tests connect to `http://localhost:7777`.
+
 ## Troubleshooting
 
 ### "Spoonacular MCP unreachable" on startup
