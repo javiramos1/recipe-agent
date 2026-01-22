@@ -118,47 +118,56 @@ class ChatMessage(BaseModel):
 class Recipe(BaseModel):
     """Domain model for a recipe.
     
-    Represents a complete recipe with structured ingredients, instructions, and metadata.
-    Designed for API responses and structured data handling.
-    Enforces constraints on all fields for data integrity.
+    Supports both basic search results (Step 1) and full recipe details (Step 2).
+    - Step 1: Only id, title, and ready_in_minutes are required (from search_recipes)
+    - Step 2: All fields populated including ingredients/instructions (from get_recipe_information)
     """
     model_config = ConfigDict(str_strip_whitespace=True)
     
+    id: Annotated[int, Field(
+        description="Recipe ID from Spoonacular API"
+    )]
     title: Annotated[str, Field(
         min_length=1,
         max_length=200,
         description="Recipe name or title (1-200 chars)"
     )]
-    description: Annotated[Optional[str], Field(
+    ready_in_minutes: Annotated[Optional[int], Field(
+        None,
+        ge=0,
+        le=1440,
+        description="Total time (prep + cook) in minutes (0-1440)"
+    )]
+    servings: Annotated[Optional[int], Field(
+        None,
+        ge=1,
+        le=100,
+        description="Number of servings (1-100)"
+    )]
+    image: Annotated[Optional[str], Field(
         None,
         max_length=500,
-        description="Brief description of the dish (max 500 chars)"
+        description="URL to recipe image"
     )]
-    ingredients: Annotated[List[str], Field(
-        min_length=1,
+    summary: Annotated[Optional[str], Field(
+        None,
+        max_length=1000,
+        description="Brief description or summary (max 1000 chars)"
+    )]
+    ingredients: Annotated[Optional[List[str]], Field(
+        None,
         max_length=100,
-        description="List of required ingredients with quantities (1-100 items)"
+        description="List of ingredients with quantities (max 100 items, Step 2 only)"
     )]
-    instructions: Annotated[List[str], Field(
-        min_length=1,
+    instructions: Annotated[Optional[List[str]], Field(
+        None,
         max_length=100,
-        description="Step-by-step cooking instructions (1-100 steps)"
-    )]
-    prep_time_min: Annotated[int, Field(
-        ge=0,
-        le=1440,
-        description="Preparation time in minutes (0-1440, i.e., 0-24 hours)"
-    )]
-    cook_time_min: Annotated[int, Field(
-        ge=0,
-        le=1440,
-        description="Cooking time in minutes (0-1440, i.e., 0-24 hours)"
+        description="Step-by-step cooking instructions (max 100 steps, Step 2 only)"
     )]
     source_url: Annotated[Optional[str], Field(
         None,
         max_length=500,
-        pattern=r'^https?://',
-        description="URL to original recipe source (must start with http:// or https://)"
+        description="URL to original recipe source"
     )]
 
 
@@ -224,7 +233,7 @@ class IngredientDetectionOutput(BaseModel):
         description="List of detected ingredients (1-50 items)"
     )]
     confidence_scores: Annotated[dict[str, float], Field(
-        description="Confidence scores for each ingredient (0.0 < score < 1.0)"
+        description="Confidence scores for each ingredient (0.0 < score <= 1.0)"
     )]
     image_description: Annotated[Optional[str], Field(
         None,
@@ -235,7 +244,7 @@ class IngredientDetectionOutput(BaseModel):
     @field_validator('confidence_scores', mode='before')
     @classmethod
     def validate_confidence_scores(cls, v: dict) -> dict:
-        """Validate confidence scores: each value must be 0.0 < score < 1.0."""
+        """Validate confidence scores: each value must be 0.0 < score <= 1.0."""
         if not isinstance(v, dict):
             raise ValueError('confidence_scores must be a dictionary')
         
@@ -249,8 +258,8 @@ class IngredientDetectionOutput(BaseModel):
             except (ValueError, TypeError):
                 raise ValueError(f'Confidence score must be numeric for {ingredient}')
             
-            if not (0.0 < f < 1.0):
-                raise ValueError(f'Confidence score must be 0.0 < score < 1.0, got {f} for {ingredient}')
+            if not (0.0 < f <= 1.0):
+                raise ValueError(f'Confidence score must be 0.0 < score <= 1.0, got {f} for {ingredient}')
             
             validated[ingredient.strip().lower()] = f
         

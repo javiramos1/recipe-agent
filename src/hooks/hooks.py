@@ -1,13 +1,14 @@
 """Pre-hooks and post-hooks for Recipe Recommendation Agent.
 
-Implements ingredient detection pre-hooks, safety guardrails, and response extraction post-hooks.
+Implements ingredient detection pre-hooks, safety guardrails, metadata injection, and response extraction.
 
 Pre-hook Pipeline:
 1. extract_ingredients_pre_hook - Detects ingredients from images (ChatMessage format)
 2. PromptInjectionGuardrail - Safety guardrail
 
 Post-hook Pipeline:
-1. extract_response_field_post_hook - Extracts response field for UI display (markdown rendering)
+1. inject_metadata_post_hook - Injects session_id, run_id, execution_time_ms into response
+2. extract_response_field_post_hook - Extracts response field for UI display (markdown rendering)
 """
 
 from typing import List, Optional
@@ -18,6 +19,56 @@ from agno.run.agent import RunOutput
 from src.utils.config import config
 from src.utils.logger import logger
 from src.mcp_tools.ingredients import extract_ingredients_pre_hook
+
+
+def inject_metadata_post_hook(
+    run_output: RunOutput,
+    session=None,
+    user_id: Optional[str] = None,
+    debug_mode: Optional[bool] = None,
+) -> None:
+    """Post-hook: Inject session_id, run_id, and execution_time_ms into RecipeResponse.
+    
+    Extracts metadata from RunOutput and adds it to the structured response.
+    This ensures the RecipeResponse contains proper session tracking and performance metrics.
+    """
+    try:
+        if not run_output.content:
+            return
+        
+        # Extract metadata from RunOutput
+        session_id = getattr(run_output, 'session_id', None)
+        run_id = getattr(run_output, 'run_id', None)
+        
+        # Calculate execution time from metrics
+        execution_time_ms = 0
+        if hasattr(run_output, 'metrics') and run_output.metrics:
+            # Metrics object has time_taken_seconds
+            time_taken = getattr(run_output.metrics, 'time_taken_seconds', None)
+            if time_taken:
+                execution_time_ms = int(time_taken * 1000)
+        
+        # Inject into RecipeResponse content
+        if hasattr(run_output.content, '__dict__'):
+            # Pydantic model
+            if session_id:
+                run_output.content.session_id = session_id
+            if run_id:
+                run_output.content.run_id = run_id
+            if execution_time_ms > 0:
+                run_output.content.execution_time_ms = execution_time_ms
+            logger.info(f"Post-hook: Injected metadata (session_id={session_id}, run_id={run_id}, execution_time_ms={execution_time_ms})")
+        elif isinstance(run_output.content, dict):
+            # Dict representation
+            if session_id:
+                run_output.content['session_id'] = session_id
+            if run_id:
+                run_output.content['run_id'] = run_id
+            if execution_time_ms > 0:
+                run_output.content['execution_time_ms'] = execution_time_ms
+            logger.info(f"Post-hook: Injected metadata into dict (session_id={session_id}, run_id={run_id})")
+    except Exception as e:
+        logger.warning(f"Post-hook failed to inject metadata: {e}")
 
 
 def extract_response_field_post_hook(
@@ -93,11 +144,16 @@ def get_post_hooks() -> List:
         List of post-hooks to register with agent in execution order.
         
     Includes:
+        - Metadata injection (session_id, run_id, execution_time_ms) - always enabled
         - Response field extraction for UI rendering (only if OUTPUT_FORMAT=markdown)
     
     Note: Post-hooks process RunOutput after agent completes.
     """
     hooks: List = []
+    
+    # Always inject metadata first (before UI rendering)
+    hooks.append(inject_metadata_post_hook)
+    logger.info("Registered metadata injection post-hook")
     
     # Only extract response field for markdown output format
     if config.OUTPUT_FORMAT == "markdown":
