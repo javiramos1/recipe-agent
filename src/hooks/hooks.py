@@ -136,22 +136,11 @@ def store_troubleshooting_post_hook(
         elif isinstance(run_output.content, dict):
             troubleshooting = run_output.content.get("troubleshooting")
         
-        # If troubleshooting info exists, add to knowledge base
+        # If troubleshooting info exists, log it (knowledge base persistence handled by agent)
         if troubleshooting and troubleshooting.strip():
-            # Access knowledge base from the agent (passed via session)
-            if hasattr(session, 'knowledge') and session.knowledge:
-                try:
-                    # Store finding asynchronously
-                    asyncio.create_task(session.knowledge.add_content_async(
-                        name=f"Troubleshooting: {user_id or 'unknown'}",
-                        text_content=troubleshooting,
-                        metadata={"type": "troubleshooting", "user_id": user_id}
-                    ))
-                    logger.info("Post-hook: Troubleshooting findings added to knowledge base")
-                except Exception as e:
-                    logger.warning(f"Failed to store troubleshooting to knowledge base: {e}")
-            else:
-                logger.debug("Post-hook: No knowledge base available to store troubleshooting")
+            logger.info(f"Post-hook: Troubleshooting recorded - {troubleshooting[:100]}...")
+        else:
+            logger.debug("Post-hook: No troubleshooting findings to store")
     except Exception as e:
         logger.warning(f"Post-hook failed to process troubleshooting: {e}")
 

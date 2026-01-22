@@ -20,6 +20,9 @@ sqlalchemy>=2.0.0
 # LanceDB for vector search and knowledge base
 lancedb>=0.1.0
 
+# Data processing (required by LanceDB)
+pandas>=2.0.0
+
 # Lightweight embeddings for knowledge base (no API calls)
 sentence-transformers>=2.2.0
 

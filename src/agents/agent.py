@@ -6,6 +6,7 @@ with all orchestration settings, tools, pre-hooks, and system instructions.
 
 import os
 import asyncio
+import warnings
 from agno.agent import Agent
 from agno.models.google import Gemini
 from agno.db.sqlite import SqliteDb
@@ -24,12 +25,19 @@ from src.mcp_tools.spoonacular import SpoonacularMCP
 from src.prompts.prompts import get_system_instructions
 from src.hooks.hooks import get_pre_hooks, get_post_hooks
 
+# Suppress LanceDB fork-safety warning (not using multiprocessing)
+warnings.filterwarnings("ignore", message="lance is not fork-safe")
 
-async def initialize_knowledge_base() -> Knowledge:
+
+async def initialize_knowledge_base(db=None) -> Knowledge:
     """Initialize knowledge base for recipe troubleshooting and learnings.
     
     Uses LanceDB for vector storage and SentenceTransformer embeddings (lightweight, no API calls).
     Stores troubleshooting findings, failed queries, and API error patterns.
+    
+    Args:
+        db: Optional database for persisting knowledge content metadata to SQLite (for AgentOS UI display).
+           This enables knowledge to appear in the AgentOS platform's Knowledge tab.
     """
     logger.info("Initializing knowledge base...")
     try:
@@ -38,19 +46,9 @@ async def initialize_knowledge_base() -> Knowledge:
             vector_db=LanceDb(
                 uri="tmp/lancedb",
                 table_name="recipe_agent_knowledge",
-                embedder=SentenceTransformerEmbedder(model="all-MiniLM-L6-v2"),
+                embedder=SentenceTransformerEmbedder(),
             ),
-        )
-        # Add initial content about recipe searching strategies
-        await knowledge.add_content_async(
-            name="Recipe Search Strategies",
-            text_content="""Recipe Search Best Practices:
-- Group related ingredients together (vegetables, proteins, herbs)
-- Use 2-4 key ingredients maximum in search queries
-- Apply user preferences (diet, cuisine) to narrow results
-- Fallback: retry with fewer ingredients if no results
-- Document failed queries and successful fallbacks
-- Handle API errors gracefully (402 quota, 429 rate limit)""",
+            contents_db=db,  # Persist content metadata to SQLite for AgentOS UI
         )
         logger.info("✓ Knowledge base initialized")
         return knowledge
@@ -158,11 +156,7 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     else:
         logger.info("✓ Tracing disabled or not available")
     
-    # 2b. Initialize knowledge base
-    logger.info("Step 2b/7: Initializing knowledge base...")
-    knowledge = await initialize_knowledge_base()
-    
-    # 3. Configure database for session persistence
+    # 2b. Configure database for session persistence FIRST (needed for knowledge base)
     logger.info("Step 3/7: Configuring database for session persistence...")
     if use_db:
         if config.DATABASE_URL:
@@ -176,6 +170,10 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         logger.info("Database persistence disabled (stateless mode)")
         db = None
         logger.info("✓ Stateless mode configured")
+    
+    # 2c. Initialize knowledge base AFTER db is ready (uses db for content persistence)
+    logger.info("Step 2c/7: Initializing knowledge base...")
+    knowledge = await initialize_knowledge_base(db=db)
     
     # 3. Build tools list based on configuration
     logger.info("Step 3/5: Registering tools...")
@@ -238,4 +236,4 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     logger.info("✓ Agent configured successfully")
     logger.info("=== Agent initialization complete ===")
     
-    return agent, tracing_db
+    return agent, tracing_db, knowledge

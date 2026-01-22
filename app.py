@@ -22,15 +22,18 @@ from src.agents.agent import initialize_recipe_agent
 logger.info("Starting Recipe Recommendation Service initialization...")
 
 # Run async initialization at startup
-agent, tracing_db = asyncio.run(initialize_recipe_agent())
+agent, tracing_db, knowledge = asyncio.run(initialize_recipe_agent())
 
-# Create AgentOS with the agent and tracing enabled (if configured)
+# Create AgentOS with the agent, knowledge base, and tracing enabled (if configured)
 logger.info("Creating AgentOS instance...")
+logger.info(f"Knowledge base: {knowledge is not None}")
+logger.info(f"Tracing DB: {tracing_db is not None}")
 agent_os = AgentOS(
     description="Recipe Recommendation Service - Transform ingredient images into recipes",
     agents=[agent],
+    knowledge=[knowledge] if knowledge else [],
     tracing=config.ENABLE_TRACING,
-    tracing_db=tracing_db if tracing_db else None,
+    tracing_db=tracing_db,
 )
 
 # Get the FastAPI app for external serving

@@ -723,7 +723,7 @@ recipe-agent/
 
 ## License
 
-This is a code challenge project demonstrating production-quality GenAI system design.
+This is a project demonstrating production-quality GenAI system design.
 
 ---
 
