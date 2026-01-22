@@ -69,5 +69,6 @@ htmlcov/
 node_modules/
 
 # Temporary files
+tmp/
 .tmp/
 *.tmp
