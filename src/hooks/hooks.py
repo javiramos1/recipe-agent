@@ -73,46 +73,6 @@ def inject_metadata_post_hook(
         logger.warning(f"Post-hook failed to inject metadata: {e}")
 
 
-def extract_response_field_post_hook(
-    run_output: RunOutput,
-    session=None,
-    user_id: Optional[str] = None,
-    debug_mode: Optional[bool] = None,
-) -> None:
-    """Post-hook: Extract response field from RecipeResponse for UI display.
-    
-    Replaces the full structured output with just the markdown response field
-    so the Agno UI displays the response text instead of raw JSON.
-    """
-    try:
-        if not run_output.content:
-            return
-        
-        response_text = None
-        
-        # Try to get response field from RecipeResponse Pydantic model
-        if hasattr(run_output.content, "response"):
-            response_text = getattr(run_output.content, "response", None)
-        # Try dict representation
-        elif isinstance(run_output.content, dict):
-            response_text = run_output.content.get("response")
-        # Try JSON string
-        elif isinstance(run_output.content, str):
-            try:
-                import json
-                content_dict = json.loads(run_output.content)
-                response_text = content_dict.get("response")
-            except (json.JSONDecodeError, ValueError):
-                pass
-        
-        # Replace content with markdown response for UI rendering
-        if response_text:
-            run_output.content = response_text
-            logger.info("Post-hook: Extracted response field for UI rendering")
-    except Exception as e:
-        logger.warning(f"Post-hook failed to extract response field: {e}")
-
-
 def store_troubleshooting_post_hook(
     run_output: RunOutput,
     session=None,

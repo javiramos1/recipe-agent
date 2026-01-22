@@ -99,47 +99,44 @@ class TestRecipe:
     def test_valid_recipe_all_fields(self):
         """Test valid recipe with all fields populated."""
         recipe = Recipe(
+            id=12345,
             title="Tomato Pasta",
-            description="Classic Italian pasta with fresh tomatoes",
+            summary="Classic Italian pasta with fresh tomatoes",
             ingredients=["pasta", "tomato", "garlic", "olive oil"],
             instructions=["Boil water", "Cook pasta", "Make sauce", "Combine"],
-            prep_time_min=10,
-            cook_time_min=20,
+            ready_in_minutes=30,
+            servings=4,
             source_url="https://example.com/recipe",
         )
+        assert recipe.id == 12345
         assert recipe.title == "Tomato Pasta"
-        assert recipe.description == "Classic Italian pasta with fresh tomatoes"
+        assert recipe.summary == "Classic Italian pasta with fresh tomatoes"
         assert len(recipe.ingredients) == 4
         assert len(recipe.instructions) == 4
-        assert recipe.prep_time_min == 10
-        assert recipe.cook_time_min == 20
+        assert recipe.ready_in_minutes == 30
+        assert recipe.servings == 4
         assert recipe.source_url == "https://example.com/recipe"
 
     def test_valid_recipe_required_fields_only(self):
         """Test valid recipe with only required fields."""
         recipe = Recipe(
+            id=54321,
             title="Simple Salad",
-            ingredients=["lettuce", "tomato"],
-            instructions=["Chop vegetables", "Mix together"],
-            prep_time_min=5,
-            cook_time_min=0,
         )
+        assert recipe.id == 54321
         assert recipe.title == "Simple Salad"
-        assert recipe.description is None
+        assert recipe.summary is None
         assert recipe.source_url is None
 
     def test_valid_recipe_optional_fields_as_none(self):
         """Test recipe with explicitly set None for optional fields."""
         recipe = Recipe(
+            id=99999,
             title="Breakfast",
-            ingredients=["eggs"],
-            instructions=["Cook"],
-            prep_time_min=0,
-            cook_time_min=5,
-            description=None,
+            summary=None,
             source_url=None,
         )
-        assert recipe.description is None
+        assert recipe.summary is None
         assert recipe.source_url is None
 
     def test_invalid_missing_title(self):
@@ -153,28 +150,24 @@ class TestRecipe:
             )
 
     def test_valid_prep_time_string_coercion(self):
-        """Test that prep_time_min as string is coerced to int by Pydantic."""
+        """Test that ready_in_minutes as string is coerced to int by Pydantic."""
         recipe = Recipe(
+            id=111,
             title="Test",
-            ingredients=["test"],
-            instructions=["test"],
-            prep_time_min="10",
-            cook_time_min=5,
+            ready_in_minutes="30",
         )
-        assert recipe.prep_time_min == 10
-        assert isinstance(recipe.prep_time_min, int)
+        assert recipe.ready_in_minutes == 30
+        assert isinstance(recipe.ready_in_minutes, int)
 
     def test_valid_cook_time_string_coercion(self):
-        """Test that cook_time_min as string is coerced to int by Pydantic."""
+        """Test that ready_in_minutes as string is coerced to int by Pydantic."""
         recipe = Recipe(
+            id=222,
             title="Test",
-            ingredients=["test"],
-            instructions=["test"],
-            prep_time_min=5,
-            cook_time_min="10",
+            ready_in_minutes="45",
         )
-        assert recipe.cook_time_min == 10
-        assert isinstance(recipe.cook_time_min, int)
+        assert recipe.ready_in_minutes == 45
+        assert isinstance(recipe.ready_in_minutes, int)
 
 
 class TestRecipeResponse:
@@ -183,11 +176,9 @@ class TestRecipeResponse:
     def test_valid_response_with_recipes(self):
         """Test valid response with recipes and metadata."""
         recipe = Recipe(
+            id=333,
             title="Test Recipe",
-            ingredients=["ingredient1"],
-            instructions=["instruction1"],
-            prep_time_min=5,
-            cook_time_min=10,
+            ready_in_minutes=15,
         )
         response = RecipeResponse(
             response="Here are some recipes for you.",
@@ -207,11 +198,8 @@ class TestRecipeResponse:
     def test_valid_response_with_optional_fields_none(self):
         """Test valid response with optional fields as None."""
         recipe = Recipe(
+            id=444,
             title="Test",
-            ingredients=["test"],
-            instructions=["test"],
-            prep_time_min=0,
-            cook_time_min=0,
         )
         response = RecipeResponse(
             response="Here's a test recipe.",
@@ -243,11 +231,9 @@ class TestRecipeResponse:
         """Test valid response with multiple recipes."""
         recipes = [
             Recipe(
+                id=555 + i,
                 title=f"Recipe {i}",
-                ingredients=[f"ingredient{i}"],
-                instructions=[f"instruction{i}"],
-                prep_time_min=i,
-                cook_time_min=i * 2,
+                ready_in_minutes=10 + i * 5,
             )
             for i in range(3)
         ]
@@ -285,11 +271,9 @@ class TestRecipeResponse:
     def test_json_serialization_roundtrip(self):
         """Test JSON serialization and deserialization roundtrip."""
         recipe = Recipe(
+            id=666,
             title="Roundtrip Test",
-            ingredients=["test"],
-            instructions=["test"],
-            prep_time_min=5,
-            cook_time_min=10,
+            ready_in_minutes=15,
         )
         original = RecipeResponse(
             response="Roundtrip test response.",
