@@ -17,6 +17,12 @@ httpx>=0.24.0
 # Optional: For database support (SQLite/PostgreSQL with AgentOS)
 sqlalchemy>=2.0.0
 
+# LanceDB for vector search and knowledge base
+lancedb>=0.1.0
+
+# Lightweight embeddings for knowledge base (no API calls)
+sentence-transformers>=2.2.0
+
 # OpenTelemetry packages for distributed tracing (optional but recommended)
 opentelemetry-api>=1.0.0
 opentelemetry-sdk>=1.0.0

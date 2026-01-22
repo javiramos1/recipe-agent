@@ -430,6 +430,24 @@ DATABASE_URL=postgresql://user:password@localhost:5432/recipe_service
 **Production (Optional):**
 - PostgreSQL + pgvector (set DATABASE_URL)
 
+### Knowledge Base
+
+Agent maintains a searchable knowledge base (LanceDB) of recipe insights and troubleshooting findings:
+
+**Automatically Stored:**
+- Failed recipe searches (queries, failure reasons)
+- API errors and retries
+- User preferences and patterns
+- Recipe combinations that work/don't work
+
+**Used For:**
+- Avoiding repeated failed searches
+- Context for future similar requests
+- Improved recommendations over time
+- Debugging search patterns
+
+**Search Enabled:** Agent can search knowledge base for similar past issues before attempting new searches (configurable via `search_knowledge=True` in agent config).
+
 
 
 ## API Reference

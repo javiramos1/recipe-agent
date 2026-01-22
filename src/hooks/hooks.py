@@ -8,9 +8,11 @@ Pre-hook Pipeline:
 
 Post-hook Pipeline:
 1. inject_metadata_post_hook - Injects session_id, run_id, execution_time_ms into response
-2. extract_response_field_post_hook - Extracts response field for UI display (markdown rendering)
+2. store_troubleshooting_post_hook - Stores troubleshooting findings to knowledge base
+3. extract_response_field_post_hook - Extracts response field for UI display (markdown rendering)
 """
 
+import asyncio
 from typing import List, Optional
 
 from agno.guardrails import PromptInjectionGuardrail
@@ -111,6 +113,89 @@ def extract_response_field_post_hook(
         logger.warning(f"Post-hook failed to extract response field: {e}")
 
 
+def store_troubleshooting_post_hook(
+    run_output: RunOutput,
+    session=None,
+    user_id: Optional[str] = None,
+    debug_mode: Optional[bool] = None,
+) -> None:
+    """Post-hook: Store troubleshooting findings to knowledge base.
+    
+    If troubleshooting field is populated with error/retry info,
+    add it to the agent's knowledge base for future learning.
+    """
+    try:
+        if not run_output.content:
+            return
+        
+        troubleshooting = None
+        
+        # Get troubleshooting field from RecipeResponse
+        if hasattr(run_output.content, "troubleshooting"):
+            troubleshooting = getattr(run_output.content, "troubleshooting", None)
+        elif isinstance(run_output.content, dict):
+            troubleshooting = run_output.content.get("troubleshooting")
+        
+        # If troubleshooting info exists, add to knowledge base
+        if troubleshooting and troubleshooting.strip():
+            # Access knowledge base from the agent (passed via session)
+            if hasattr(session, 'knowledge') and session.knowledge:
+                try:
+                    # Store finding asynchronously
+                    asyncio.create_task(session.knowledge.add_content_async(
+                        name=f"Troubleshooting: {user_id or 'unknown'}",
+                        text_content=troubleshooting,
+                        metadata={"type": "troubleshooting", "user_id": user_id}
+                    ))
+                    logger.info("Post-hook: Troubleshooting findings added to knowledge base")
+                except Exception as e:
+                    logger.warning(f"Failed to store troubleshooting to knowledge base: {e}")
+            else:
+                logger.debug("Post-hook: No knowledge base available to store troubleshooting")
+    except Exception as e:
+        logger.warning(f"Post-hook failed to process troubleshooting: {e}")
+
+
+def extract_response_field_post_hook(
+    run_output: RunOutput,
+    session=None,
+    user_id: Optional[str] = None,
+    debug_mode: Optional[bool] = None,
+) -> None:
+    """Post-hook: Extract response field from RecipeResponse for UI display.
+    
+    Replaces the full structured output with just the markdown response field
+    so the Agno UI displays the response text instead of raw JSON.
+    """
+    try:
+        if not run_output.content:
+            return
+        
+        response_text = None
+        
+        # Try to get response field from RecipeResponse Pydantic model
+        if hasattr(run_output.content, "response"):
+            response_text = getattr(run_output.content, "response", None)
+        # Try dict representation
+        elif isinstance(run_output.content, dict):
+            response_text = run_output.content.get("response")
+        # Try JSON string
+        elif isinstance(run_output.content, str):
+            try:
+                import json
+                content_dict = json.loads(run_output.content)
+                response_text = content_dict.get("response")
+            except (json.JSONDecodeError, ValueError):
+                pass
+        
+        # Replace content with markdown response for UI rendering
+        if response_text:
+            run_output.content = response_text
+            logger.info("Post-hook: Extracted response field for UI rendering")
+    except Exception as e:
+        logger.warning(f"Post-hook failed to extract response field: {e}")
+
+
 def get_pre_hooks() -> List:
     """Get list of pre-hooks based on configuration.
     
@@ -145,6 +230,7 @@ def get_post_hooks() -> List:
         
     Includes:
         - Metadata injection (session_id, run_id, execution_time_ms) - always enabled
+        - Troubleshooting storage to knowledge base - when troubleshooting field populated
         - Response field extraction for UI rendering (only if OUTPUT_FORMAT=markdown)
     
     Note: Post-hooks process RunOutput after agent completes.
@@ -154,6 +240,10 @@ def get_post_hooks() -> List:
     # Always inject metadata first (before UI rendering)
     hooks.append(inject_metadata_post_hook)
     logger.info("Registered metadata injection post-hook")
+    
+    # Store troubleshooting findings to knowledge base
+    hooks.append(store_troubleshooting_post_hook)
+    logger.info("Registered troubleshooting storage post-hook")
     
     # Only extract response field for markdown output format
     if config.OUTPUT_FORMAT == "markdown":
