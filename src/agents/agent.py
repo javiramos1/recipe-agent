@@ -221,6 +221,10 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         input_schema=ChatMessage,
         output_schema=RecipeResponse,
         instructions=system_instructions,
+        # Retry configuration for transient failures
+        retries=3,
+        exponential_backoff=True,
+        delay_between_retries=2,
         # Memory settings
         add_history_to_context=True,
         num_history_runs=config.MAX_HISTORY,
