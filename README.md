@@ -498,6 +498,10 @@ Tests:
 ### Integration Evals (Agno Evals Framework)
 
 ```bash
+# Terminal 1: Start AgentOS
+make dev
+
+# Terminal 2: Run evaluations
 make eval
 ```
 
@@ -509,6 +513,13 @@ Uses **Agno evals framework** (AgentOS built-in evaluation system) for multi-dim
 - **PerformanceEval**: Response time under 5 seconds
 
 **Coverage:** 8 comprehensive eval tests covering all dimensions.
+
+**Viewing Results in UI:**
+1. Keep AgentOS running (`make dev`)
+2. Run evaluations (`make eval`)
+3. Connect [os.agno.com](https://os.agno.com) to `http://localhost:7777`
+4. View eval results in the "Evaluations" tab
+5. Results are persisted in `tmp/recipe_agent_sessions.db` (shared with agent)
 
 **Note:** Requires valid API keys (GEMINI_API_KEY, SPOONACULAR_API_KEY) and internet connection.
 

@@ -135,14 +135,23 @@ test: venv-check
 	@echo "✓ Unit tests complete"
 
 # Integration Evals (Agno evals framework - requires valid API keys)
+# Note: To view evals in the UI, start AgentOS first (make dev) in a separate terminal
 eval: venv-check
 	@echo "Running integration evals (Agno evals framework)..."
+	@echo ""
+	@echo "VIEWING EVALS IN UI:"
+	@echo "  1. Start AgentOS in separate terminal: make dev"
+	@echo "  2. Run this command: make eval"
+	@echo "  3. Connect os.agno.com to http://localhost:7777"
+	@echo "  4. View eval results in 'Evaluations' tab"
 	@echo ""
 	@echo "Note: These tests require valid GEMINI_API_KEY and SPOONACULAR_API_KEY"
 	@echo ""
 	$(PYTHON) -m pytest tests/integration/test_eval.py -v --tb=short
 	@echo ""
 	@echo "✓ Integration evals complete"
+	@echo ""
+	@echo "To view results in UI: Connect os.agno.com to http://localhost:7777"
 
 # REST API Integration Tests (requires running app on port 7777)
 int-tests: venv-check

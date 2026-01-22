@@ -21,6 +21,7 @@ from src.hooks.hooks import get_pre_hooks, get_post_hooks
 
 
 @tool
+# We use @tool decorator to register this function as an Agno tool, docstring used for tool description for the agent.
 async def detect_image_ingredients(image_data: str) -> IngredientDetectionOutput:
     """Extract ingredients from an uploaded image using Gemini vision API.
     
@@ -123,10 +124,10 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     if use_db:
         if config.DATABASE_URL:
             logger.info(f"Using PostgreSQL: {config.DATABASE_URL.split('@')[1] if '@' in config.DATABASE_URL else '...'}")
-            db = PostgresDb(db_url=config.DATABASE_URL)
+            db = PostgresDb(db_url=config.DATABASE_URL, id="recipe_agent_db")
         else:
-            logger.info("Using SQLite database: agno.db")
-            db = SqliteDb(db_file="agno.db")
+            logger.info("Using SQLite database: tmp/recipe_agent_sessions.db")
+            db = SqliteDb(db_file="tmp/recipe_agent_sessions.db", id="recipe_agent_db")
         logger.info("✓ Database configured")
     else:
         logger.info("Database persistence disabled (stateless mode)")

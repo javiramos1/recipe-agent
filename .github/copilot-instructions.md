@@ -44,7 +44,18 @@ This is a code challenge implementing a production-quality GenAI system that tra
 
 ## Status Section
 
-**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed, Task 11 Tracing implemented, Task 12 E2E Evals complete, Task 13 REST API Tests implemented ✅**
+**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed, Task 11 Tracing implemented, Task 12 E2E Evals complete, Task 13 REST API Tests implemented, Task 13+ Eval visibility to os.agno.com ✅**
+
+**Latest Update (2026-01-22):**
+- ✅ Eval visibility to os.agno.com platform working
+  - Agent and evals now use shared database: `tmp/recipe_agent_sessions.db` with id=`recipe_agent_db`
+  - SDK-based evals (`test_eval.py`) properly persist results to shared database
+  - Performance evals capture metrics (avg_run_time, memory usage, etc)
+  - AgentOS exposes `/eval-runs` endpoint from shared database
+  - os.agno.com can query `/eval-runs` and display eval results in UI
+  - HTTP-based eval tests work but score capture is limited (use SDK for production evals)
+  - Two-terminal workflow documented: `make dev` + `make eval`
+  - Evals now visible in os.agno.com Evaluations tab when connected to http://localhost:7777
 
 **Latest Update (2026-01-21):**
 - ✅ Task 13 complete: REST API Integration Tests (httpx-based)

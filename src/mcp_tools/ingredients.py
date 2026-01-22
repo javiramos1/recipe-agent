@@ -462,6 +462,8 @@ async def extract_ingredients_with_retries(
 
 async def detect_ingredients_tool(image_data: str) -> IngredientDetectionOutput:
     """Extract ingredients from image using Gemini vision API.
+
+    This method is meant to be called by the @tool-decorated wrapper in agent.py.
     
     Core implementation function called by the @tool-decorated wrapper in agent.py.
     Handles image validation, API calls, and confidence filtering.
