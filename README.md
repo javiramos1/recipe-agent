@@ -15,6 +15,39 @@ This service demonstrates best practices in system design by leveraging **AgentO
 - 🔄 **Session Management** - Persistent conversation history and user preferences across sessions
 - 📊 **Structured Output** - All responses validated with Pydantic schemas
 
+## Features
+
+### Core Agent Features
+
+- ✅ **Exponential Backoff Retries** (3 attempts, 2s→4s→8s delays) - Handles transient failures and rate limits
+- ✅ **Structured Output** - Pydantic schema validation for type-safe responses
+- ✅ **Multi-Model Support** - Configurable LLM selection (Gemini Flash/Pro, Claude, GPT)
+- ✅ **Automatic Memory** - User preferences and conversation history (with compression)
+- ✅ **Session Persistence** - SQLite/PostgreSQL support for production deployments
+- ✅ **Tool Integration** - MCP protocol + internal tools with pre/post hooks and guardrails
+
+### Observability & Quality
+
+- ✅ **Distributed Tracing** - AgentOS built-in OpenTelemetry integration for execution visibility
+- ✅ **Structured Logging** - Python logging with debug/info/warning levels (no sensitive data)
+- ✅ **Unit Tests** - 150+ tests for models, config, ingredients, MCP, tracing
+- ✅ **Integration Tests** - E2E evaluation tests with Agno Evals Framework (accuracy, reliability, performance)
+- ✅ **REST API Tests** - 13 endpoint tests covering session management, file uploads, error handling
+
+### Data & Knowledge
+
+- ✅ **Knowledge Graph** - LanceDB vector store with SentenceTransformer embeddings (no API cost)
+- ✅ **Semantic Search** - Troubleshooting findings stored and searchable for agent learning
+- ✅ **Error Tracking** - API errors (402 quota, 429 rate limit) documented for diagnostics
+
+### System Design
+
+- ✅ **MCP Tools** - Spoonacular recipe API with custom retry logic and connection validation
+- ✅ **Internal Tools** - Ingredient detection tool (image→ingredients with confidence scores)
+- ✅ **Pre/Post Hooks** - Image processing, guardrails, metadata injection, troubleshooting tracking
+- ✅ **Templated Prompts** - Configurable system instructions with dynamic parameters (MAX_RECIPES, MIN_CONFIDENCE, etc)
+- ✅ **AgentOS Integration** - REST API + Web UI + chat interface provided out-of-the-box
+
 ### Architecture Overview
 
 ```mermaid
