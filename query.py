@@ -23,7 +23,6 @@ import asyncio
 import base64
 import json
 import sys
-import tempfile
 from pathlib import Path
 
 from rich.console import Console
@@ -39,6 +38,38 @@ console = Console()
 # This keeps compression centralized and works for both query and run modes
 
 
+def extract_response_text(response) -> str:
+    """Extract markdown response text from agent response object.
+    
+    Handles multiple response formats:
+    - RecipeResponse with 'response' field
+    - Response with 'content' containing 'response' field
+    - Dict responses with 'response' key
+    - Fallback to string representation
+    
+    Args:
+        response: Agent response object (RecipeResponse, dict, or other)
+    
+    Returns:
+        Extracted response text or empty string if not found
+    """
+    # Try RecipeResponse object with response field
+    if hasattr(response, 'response') and response.response:
+        return response.response
+    
+    # Try response.content with nested response field
+    if hasattr(response, 'content') and response.content:
+        if hasattr(response.content, 'response'):
+            return response.content.response
+        elif isinstance(response.content, dict) and 'response' in response.content:
+            return response.content['response']
+        elif isinstance(response.content, str):
+            return response.content
+    
+    # Fallback to string representation
+    return str(response) if response else ""
+
+
 def run_query(query: str, debug: bool = False, stateless: bool = False, image_path: str = None) -> None:
     """Execute a single ad hoc query and print the response.
     
@@ -51,11 +82,9 @@ def run_query(query: str, debug: bool = False, stateless: bool = False, image_pa
     try:
         logger.info(f"Initializing agent (stateless={stateless})...")
         
-        try:
-            # Initialize agent with persistence disabled for stateless queries
-            agent = initialize_recipe_agent(use_db=not stateless)
-        finally:
-            pass
+        # Initialize agent with persistence disabled for stateless queries
+        # initialize_recipe_agent is async and returns (agent, tracing_db) tuple
+        agent, _ = asyncio.run(initialize_recipe_agent(use_db=not stateless))
         
         logger.info(f"Running query: {query}")
         if image_path:
@@ -107,10 +136,10 @@ def run_query(query: str, debug: bool = False, stateless: bool = False, image_pa
         response = asyncio.run(agent.arun(input=json.dumps(request_data)))
         
         logger.info("---")
+        console.print()  # Blank line for separation
         
-        # Display response
+        # Display debug info if requested
         if debug:
-            # Debug mode: show full JSON with all fields
             console.print("[bold cyan]Debug Mode: Full Response[/bold cyan]")
             console.print("[dim]" + "=" * 60 + "[/dim]")
             response_dict = response.model_dump() if hasattr(response, 'model_dump') else response.__dict__
@@ -118,23 +147,15 @@ def run_query(query: str, debug: bool = False, stateless: bool = False, image_pa
             console.print("[dim]" + "=" * 60 + "[/dim]")
             console.print()
         
-        # Formatted markdown output
-        if hasattr(response, 'content'):
-            # If response.content is a Pydantic model or dict, extract the 'response' field
-            if hasattr(response.content, 'response'):
-                markdown_content = Markdown(response.content.response)
-            elif isinstance(response.content, dict) and 'response' in response.content:
-                markdown_content = Markdown(response.content['response'])
-            else:
-                # Convert to string if it's a model
-                markdown_content = Markdown(str(response.content))
-            console.print(markdown_content)
-        elif hasattr(response, 'response'):
-            # Response itself has a response field (RecipeResponse object)
-            markdown_content = Markdown(response.response)
-            console.print(markdown_content)
+        # Display response with proper markdown formatting and colors
+        response_text = extract_response_text(response)
+        
+        if response_text:
+            # Render as markdown with rich formatting (colors, bold, etc.)
+            console.print(Markdown(response_text))
         else:
-            console.print(response)
+            # Fallback: print the response as-is
+            console.print("[yellow]No response text found[/yellow]")
         
     except KeyboardInterrupt:
         logger.info("\nQuery interrupted by user.")

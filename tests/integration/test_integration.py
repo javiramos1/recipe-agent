@@ -29,6 +29,7 @@ from src.utils.logger import logger
 # Base URL for API tests (default AgentOS port)
 API_BASE_URL = f"http://localhost:{config.PORT}"
 API_TIMEOUT = 30  # Seconds per request
+AGENT_ID = "recipe-recommendation-agent"  # Agent ID from agent.py
 
 
 @pytest.fixture(scope="module")
@@ -66,33 +67,36 @@ def app_health_check(http_client):
 # ============================================================================
 
 def test_post_chat_successful_basic(http_client, app_health_check):
-    """Test successful POST /api/agents/chat with basic message.
+    """Test successful POST /agents/{agent_id}/runs with basic message.
     
     Validates:
     - HTTP 200 status code
     - Response contains content field
     - Response is properly formatted
     """
-    logger.info("Test: POST /api/agents/chat - basic successful request")
+    logger.info("Test: POST /agents/{agent_id}/runs - basic successful request")
     
-    payload = {
+    # Create ChatMessage JSON input
+    request_data = {
         "message": "What can I make with chicken and rice?"
     }
+    message_json = json.dumps(request_data)
     
-    # Send request
+    # Send request with message as form field containing JSON
+    data = {"message": message_json}
+    
     response = http_client.post(
-        "/api/agents/chat",
-        json=payload,
+        f"/agents/{AGENT_ID}/runs",
+        data=data,
     )
     
     logger.info(f"Response status: {response.status_code}")
     
     # Validate HTTP status
-    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text[:200]}"
     
-    # Validate response structure
-    response_data = response.json()
-    assert "content" in response_data, f"Missing 'content' field in response: {response_data.keys()}"
+    # Response is Server-Sent Events (streaming)
+    assert "RunStarted" in response.text or "event:" in response.text, f"Unexpected response format: {response.text[:200]}"
     
     logger.info("✓ Basic successful request test passed")
 
@@ -116,8 +120,8 @@ def test_post_chat_with_session_id(http_client, app_health_check):
     
     # Send request
     response = http_client.post(
-        "/api/agents/chat",
-        json=payload,
+        f"/agents/{AGENT_ID}/runs",
+        data=payload,
     )
     
     logger.info(f"Response status: {response.status_code}")
@@ -177,8 +181,8 @@ def test_post_chat_with_image_base64(http_client, app_health_check):
     
     # Send request
     response = http_client.post(
-        "/api/agents/chat",
-        json=payload,
+        f"/agents/{AGENT_ID}/runs",
+        data=payload,
     )
     
     logger.info(f"Response status: {response.status_code}")
@@ -212,8 +216,8 @@ def test_post_chat_missing_message_and_images(http_client, app_health_check):
     
     # Send request
     response = http_client.post(
-        "/api/agents/chat",
-        json=payload,
+        f"/agents/{AGENT_ID}/runs",
+        data=payload,
     )
     
     logger.info(f"Response status: {response.status_code}")
@@ -238,7 +242,7 @@ def test_post_chat_invalid_json(http_client, app_health_check):
     
     # Send malformed JSON
     response = http_client.post(
-        "/api/agents/chat",
+        f"/agents/{AGENT_ID}/runs",
         content="{invalid json}",
         headers={"Content-Type": "application/json"}
     )
@@ -270,8 +274,8 @@ def test_post_chat_off_topic_request(http_client, app_health_check):
     
     # Send request
     response = http_client.post(
-        "/api/agents/chat",
-        json=payload,
+        f"/agents/{AGENT_ID}/runs",
+        data=payload,
     )
     
     logger.info(f"Response status: {response.status_code}")
@@ -310,8 +314,8 @@ def test_post_chat_oversized_image(http_client, app_health_check):
     
     # Send request
     response = http_client.post(
-        "/api/agents/chat",
-        json=payload,
+        f"/agents/{AGENT_ID}/runs",
+        data=payload,
     )
     
     logger.info(f"Response status: {response.status_code}")
@@ -346,8 +350,8 @@ def test_session_preference_persistence(http_client, app_health_check):
     }
     
     response1 = http_client.post(
-        "/api/agents/chat",
-        json=payload1,
+        f"/agents/{AGENT_ID}/runs",
+        data=payload1,
     )
     
     assert response1.status_code == 200, f"Request 1 failed: {response1.status_code}"
@@ -361,8 +365,8 @@ def test_session_preference_persistence(http_client, app_health_check):
     }
     
     response2 = http_client.post(
-        "/api/agents/chat",
-        json=payload2,
+        f"/agents/{AGENT_ID}/runs",
+        data=payload2,
     )
     
     assert response2.status_code == 200, f"Request 2 failed: {response2.status_code}"
@@ -394,8 +398,8 @@ def test_session_isolation(http_client, app_health_check):
     }
     
     response_a = http_client.post(
-        "/api/agents/chat",
-        json=payload_a,
+        f"/agents/{AGENT_ID}/runs",
+        data=payload_a,
     )
     
     assert response_a.status_code == 200, f"User A request failed: {response_a.status_code}"
@@ -409,8 +413,8 @@ def test_session_isolation(http_client, app_health_check):
     }
     
     response_b = http_client.post(
-        "/api/agents/chat",
-        json=payload_b,
+        f"/agents/{AGENT_ID}/runs",
+        data=payload_b,
     )
     
     assert response_b.status_code == 200, f"User B request failed: {response_b.status_code}"
@@ -442,8 +446,8 @@ def test_error_response_format(http_client, app_health_check):
     }
     
     response = http_client.post(
-        "/api/agents/chat",
-        json=payload,
+        f"/agents/{AGENT_ID}/runs",
+        data=payload,
     )
     
     logger.info(f"Response status: {response.status_code}")
@@ -505,8 +509,8 @@ def test_post_chat_multiple_images(http_client, app_health_check):
     
     # Send request
     response = http_client.post(
-        "/api/agents/chat",
-        json=payload,
+        f"/agents/{AGENT_ID}/runs",
+        data=payload,
     )
     
     logger.info(f"Response status: {response.status_code}")
@@ -541,8 +545,8 @@ def test_response_content_structure(http_client, app_health_check):
     
     # Send request
     response = http_client.post(
-        "/api/agents/chat",
-        json=payload,
+        f"/agents/{AGENT_ID}/runs",
+        data=payload,
     )
     
     assert response.status_code == 200, f"Request failed: {response.status_code}"
@@ -593,8 +597,8 @@ def test_rapid_sequential_requests(http_client, app_health_check):
         }
         
         response = http_client.post(
-            "/api/agents/chat",
-            json=payload,
+            f"/agents/{AGENT_ID}/runs",
+            data=payload,
         )
         
         assert response.status_code == 200, f"Request {i+1} failed with status {response.status_code}"

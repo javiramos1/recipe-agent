@@ -133,3 +133,7 @@ def get_logger(name: str) -> logging.Logger:
 
 # Create module-level logger instance
 logger = get_logger("recipe_service")
+
+# Suppress verbose informational warnings from external libraries
+# (these are debug-level messages that clutter output)
+logging.getLogger("google.genai").setLevel(logging.WARNING)  # Suppress Gemini debug logs

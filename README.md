@@ -235,7 +235,7 @@ make stop    # Stop running server
 
 **Access Points:**
 - **Agno OS Platform**: [https://os.agno.com](https://os.agno.com) → Connect local agent → View UI, traces, and evaluations
-- **REST API**: `http://localhost:7777/api/agents/chat`
+- **REST API**: `http://localhost:7777/agents/recipe-recommendation-agent/runs` (AgentOS API)
 - **API Documentation**: `http://localhost:7777/docs` (Swagger UI)
 
 ### Run Ad Hoc Queries
@@ -292,31 +292,27 @@ make clean   # Remove __pycache__, .pyc, pytest cache
 #### Text Query
 
 ```bash
-curl -X POST http://localhost:7777/api/agents/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "I have tomatoes and basil", "session_id": "user-123"}'
+curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
+  -d 'message={"message": "I have tomatoes and basil", "session_id": "user-123"}'
 ```
 
 #### Image Upload (Base64)
 
 ```bash
-curl -X POST http://localhost:7777/api/agents/chat \
-  -H "Content-Type: application/json" \
-  -d "{\"images\": \"$(base64 -i image.jpg)\", \"session_id\": \"user-123\"}"
+curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
+  -d "message={\"images\": \"data:image/jpeg;base64,...\"}"
 ```
 
 #### Multi-Turn Conversation (Preferences Persisted)
 
 ```bash
 # Turn 1: Express preference
-curl -X POST http://localhost:7777/api/agents/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "I am vegetarian", "session_id": "user-123"}'
+curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
+  -d "message={\"message\": \"I am vegetarian\", \"session_id\": \"user-123\"}"
 
 # Turn 2: Agent remembers vegetarian preference
-curl -X POST http://localhost:7777/api/agents/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "I have potatoes and garlic", "session_id": "user-123"}'
+curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
+  -d "message={\"message\": \"I have potatoes and garlic\", \"session_id\": \"user-123\"}"
 ```
 
 ## Configuration
@@ -334,6 +330,7 @@ curl -X POST http://localhost:7777/api/agents/chat \
 | `MAX_IMAGE_SIZE_MB` | int | `5` | Maximum image upload size |
 | `MIN_INGREDIENT_CONFIDENCE` | float | `0.7` | Confidence threshold for detected ingredients (0.0-1.0) |
 | `IMAGE_DETECTION_MODE` | string | `pre-hook` | Detection mode: `pre-hook` (fast) or `tool` (agent-controlled) |
+| `TOOL_CALL_LIMIT` | int | `6` | Maximum tool calls per agent request (prevents excessive API usage) |
 | `OUTPUT_FORMAT` | string | `json` | Response format: `json` or `markdown` |
 | `LOG_LEVEL` | string | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
 | `DATABASE_URL` | string | *optional* | PostgreSQL connection (SQLite default) |

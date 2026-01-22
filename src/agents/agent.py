@@ -4,8 +4,6 @@ Factory function that initializes and configures the Agno Agent
 with all orchestration settings, tools, pre-hooks, and system instructions.
 """
 
-import asyncio
-
 from agno.agent import Agent
 from agno.models.google import Gemini
 from agno.db.sqlite import SqliteDb
@@ -185,6 +183,8 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         enable_user_memories=True,
         enable_session_summaries=True,
         compress_tool_results=True,
+        # Tool call limit to prevent excessive API calls
+        tool_call_limit=config.TOOL_CALL_LIMIT,
         # Agent metadata
         name="Recipe Recommendation Agent",
         description="Transforms ingredient images into recipe recommendations with conversational memory",

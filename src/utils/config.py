@@ -37,6 +37,8 @@ class Config:
         self.ENABLE_TRACING: bool = os.getenv("ENABLE_TRACING", "true").lower() in ("true", "1", "yes")
         self.TRACING_DB_TYPE: str = os.getenv("TRACING_DB_TYPE", "sqlite")
         self.TRACING_DB_FILE: str = os.getenv("TRACING_DB_FILE", "agno_traces.db")
+        # Tool Call Limit: Maximum number of tool calls agent can make per request
+        self.TOOL_CALL_LIMIT: int = int(os.getenv("TOOL_CALL_LIMIT", "6"))
 
     def validate(self) -> None:
         """Validate required configuration.
