@@ -1,4 +1,4 @@
-.PHONY: setup dev debug dev-bkg run query stop test eval int-tests clean clean-memories help venv-check
+.PHONY: setup dev debug dev-bkg run query stop test eval int-tests clean clean-memories zip help venv-check
 
 # Virtual environment directory
 VENV_DIR := .venv
@@ -32,6 +32,7 @@ help:
 	@echo "Maintenance:"
 	@echo "  make clean           Remove cache files and temporary data"
 	@echo "  make clean-memories  Clear all user memories from database"
+	@echo "  make zip             Create a ZIP archive of source code (excludes files in .gitignore)"
 	@echo "  make help            Show this help message"
 
 # Check if venv exists, create if not
@@ -189,3 +190,12 @@ clean-memories:
 	else \
 		echo "⚠ Unexpected records found: $$COUNT"; \
 	fi
+
+# Zip: Create a ZIP archive of source code excluding files in .gitignore
+zip:
+	@echo "Creating ZIP archive..."
+	@TIMESTAMP=$$(date +%Y%m%d_%H%M%S); \
+	ZIPFILE="recipe-agent_$$TIMESTAMP.zip"; \
+	git archive --format=zip --output="$$ZIPFILE" HEAD && \
+	SIZE=$$(du -h "$$ZIPFILE" | cut -f1); \
+	echo "✓ ZIP archive created: $$ZIPFILE ($$SIZE)"
