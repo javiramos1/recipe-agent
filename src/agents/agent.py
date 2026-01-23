@@ -196,7 +196,7 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     
     # 5b. Get post-hooks (includes response field extraction for UI rendering)
     logger.info("Step 5b/7: Registering post-hooks...")
-    post_hooks = get_post_hooks()
+    post_hooks = get_post_hooks(knowledge_base=knowledge)
     logger.info(f"✓ {len(post_hooks)} post-hooks registered: {[h.__name__ if hasattr(h, '__name__') else str(h) for h in post_hooks]}")
     
     # 6. Configure Agno Agent

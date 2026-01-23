@@ -8,10 +8,11 @@ Pre-hook Pipeline:
 
 Post-hook Pipeline:
 1. inject_metadata_post_hook - Injects session_id, run_id, execution_time_ms into response
-2. store_troubleshooting_post_hook - Stores troubleshooting findings to knowledge base
+2. store_troubleshooting_post_hook - Stores troubleshooting findings to knowledge base (closure)
 3. extract_response_field_post_hook - Extracts response field for UI display (markdown rendering)
 """
 
+import asyncio
 from typing import List, Optional
 
 from agno.guardrails import PromptInjectionGuardrail
@@ -72,61 +73,70 @@ def inject_metadata_post_hook(
         logger.warning(f"Post-hook failed to inject metadata: {e}")
 
 
-def store_troubleshooting_post_hook(
-    run_output: RunOutput,
-    session=None,
-    user_id: Optional[str] = None,
-    debug_mode: Optional[bool] = None,
-) -> None:
-    """Post-hook: Store troubleshooting findings to knowledge base.
+def create_store_troubleshooting_post_hook(knowledge_base):
+    """Factory function to create post-hook closure with knowledge base access.
     
-    If troubleshooting field is populated with error/retry info,
-    add it to the agent's knowledge base for future learning.
-    Knowledge base is accessed via session.agent.knowledge.
+    Creates a post-hook that captures the knowledge_base object from the parent scope,
+    enabling direct writes to the knowledge base without relying on session parameter.
+    
+    Args:
+        knowledge_base: Knowledge instance (or None if knowledge base is disabled)
+        
+    Returns:
+        Closure function that stores troubleshooting to knowledge base
     """
-    try:
-        if not run_output.content:
-            return
+    async def store_troubleshooting_post_hook(
+        run_output: RunOutput,
+        session=None,
+        user_id: Optional[str] = None,
+        debug_mode: Optional[bool] = None,
+    ) -> None:
+        """Post-hook: Store troubleshooting findings to knowledge base (closure-captured).
         
-        troubleshooting = None
-        
-        # Get troubleshooting field from RecipeResponse
-        if hasattr(run_output.content, "troubleshooting"):
-            troubleshooting = getattr(run_output.content, "troubleshooting", None)
-        elif isinstance(run_output.content, dict):
-            troubleshooting = run_output.content.get("troubleshooting")
-        
-        # If troubleshooting info exists, add to knowledge base
-        if troubleshooting and troubleshooting.strip():
-            # Try to access knowledge base from session → agent → knowledge
-            knowledge_base = None
-            if session and hasattr(session, 'agent') and session.agent:
-                knowledge_base = getattr(session.agent, 'knowledge', None)
+        If troubleshooting field is populated with error/retry info,
+        add it to the agent's knowledge base for future learning.
+        Knowledge base is captured from parent scope (not session parameter).
+        """
+        try:
+            if not run_output.content:
+                return
             
-            if knowledge_base:
-                try:
-                    # Add troubleshooting finding to knowledge base
-                    # Knowledge.add_content() stores to AgentOS and syncs to os.agno.com
-                    knowledge_base.add_content(
-                        text_content=troubleshooting,
-                        metadata={
-                            "type": "troubleshooting",
-                            "session_id": getattr(session, "session_id", None) if session else None,
-                            "run_id": getattr(run_output, "run_id", None),
-                            "user_id": user_id,
-                        }
-                    )
-                    logger.info(f"Post-hook: Troubleshooting stored to knowledge base - {troubleshooting[:100]}...")
-                except Exception as kb_error:
-                    # If knowledge base add fails, just log (don't crash)
-                    logger.warning(f"Failed to add troubleshooting to knowledge base: {kb_error}. Troubleshooting was: {troubleshooting[:100]}...")
+            troubleshooting = None
+            
+            # Get troubleshooting field from RecipeResponse
+            if hasattr(run_output.content, "troubleshooting"):
+                troubleshooting = getattr(run_output.content, "troubleshooting", None)
+            elif isinstance(run_output.content, dict):
+                troubleshooting = run_output.content.get("troubleshooting")
+            
+            # If troubleshooting info exists, add to knowledge base
+            if troubleshooting and troubleshooting.strip():
+                if knowledge_base:
+                    try:
+                        # Add troubleshooting finding to knowledge base (async-safe via to_thread)
+                        # Knowledge.add_content() stores to AgentOS and syncs to os.agno.com
+                        await asyncio.to_thread(
+                            knowledge_base.add_content,
+                            text_content=troubleshooting,
+                            metadata={
+                                "type": "troubleshooting",
+                                "run_id": getattr(run_output, "run_id", None),
+                                "user_id": user_id,
+                            }
+                        )
+                        logger.info(f"Post-hook: Troubleshooting stored to knowledge base - {troubleshooting[:100]}...")
+                    except Exception as kb_error:
+                        # If knowledge base add fails, just log (don't crash)
+                        logger.warning(f"Failed to add troubleshooting to knowledge base: {kb_error}. Troubleshooting was: {troubleshooting[:100]}...")
+                else:
+                    # Knowledge base not available, just log
+                    logger.debug(f"Post-hook: Knowledge base not available. Troubleshooting recorded in logs - {troubleshooting[:100]}...")
             else:
-                # Knowledge base not available, just log
-                logger.info(f"Post-hook: Knowledge base not available. Troubleshooting recorded in logs - {troubleshooting[:100]}...")
-        else:
-            logger.debug("Post-hook: No troubleshooting findings to store")
-    except Exception as e:
-        logger.warning(f"Post-hook failed to process troubleshooting: {e}")
+                logger.debug("Post-hook: No troubleshooting findings to store")
+        except Exception as e:
+            logger.warning(f"Post-hook failed to process troubleshooting: {e}")
+    
+    return store_troubleshooting_post_hook
 
 
 def extract_response_field_post_hook(
@@ -195,15 +205,18 @@ def get_pre_hooks() -> List:
     return hooks
 
 
-def get_post_hooks() -> List:
+def get_post_hooks(knowledge_base=None) -> List:
     """Get list of post-hooks to process responses after agent execution.
+    
+    Args:
+        knowledge_base: Knowledge instance for storing troubleshooting (optional)
     
     Returns:
         List of post-hooks to register with agent in execution order.
         
     Includes:
         - Metadata injection (session_id, run_id, execution_time_ms) - always enabled
-        - Troubleshooting storage to knowledge base - when troubleshooting field populated
+        - Troubleshooting storage to knowledge base - when troubleshooting field populated (with closure)
         - Response field extraction for UI rendering (only if OUTPUT_FORMAT=markdown)
     
     Note: Post-hooks process RunOutput after agent completes.
@@ -214,8 +227,9 @@ def get_post_hooks() -> List:
     hooks.append(inject_metadata_post_hook)
     logger.info("Registered metadata injection post-hook")
     
-    # Store troubleshooting findings to knowledge base
-    hooks.append(store_troubleshooting_post_hook)
+    # Store troubleshooting findings to knowledge base (factory creates closure with knowledge_base)
+    store_troubleshooting_hook = create_store_troubleshooting_post_hook(knowledge_base)
+    hooks.append(store_troubleshooting_hook)
     logger.info("Registered troubleshooting storage post-hook")
     
     # Only extract response field for markdown output format
