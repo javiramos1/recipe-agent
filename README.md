@@ -31,6 +31,7 @@ This service demonstrates best practices in agentic system design by leveraging 
 - ✅ **Exponential Backoff Retries** (3 attempts, 2s→4s→8s delays) - Handles transient failures and rate limits
 - ✅ **Structured Output** - Pydantic schema validation for type-safe responses
 - ✅ **Multi-Model Support** - Configurable LLM selection (Gemini Flash/Pro, Claude, GPT)
+- ✅ **Image Compression** - Automatic image compression (JPEG quality optimization) reduces upload size by ~70% while maintaining quality for ingredient detection
 - ✅ **Automatic Memory** - User preferences and conversation history (with compression)
 - ✅ **Session Persistence** - SQLite/PostgreSQL support for production deployments
 - ✅ **Tool Integration** - MCP protocol + internal tools with pre/post hooks and guardrails
