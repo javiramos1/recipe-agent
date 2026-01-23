@@ -12,7 +12,6 @@ Post-hook Pipeline:
 3. extract_response_field_post_hook - Extracts response field for UI display (markdown rendering)
 """
 
-import asyncio
 from typing import List, Optional
 
 from agno.guardrails import PromptInjectionGuardrail
