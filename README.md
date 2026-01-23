@@ -70,6 +70,20 @@ graph TD
     F -.->|Load History| C
 ```
 
+## Development Process
+
+This project demonstrates a **modern AI-powered SDLC** using GitHub Copilot throughout the entire development lifecycle:
+
+- 🔍 **Discovery** (ChatGPT) - Gathered requirements and selected Agno AI framework
+- 📋 **Design** (Claude Sonnet 4.5) - Created comprehensive PRD, architecture, and implementation plan
+- 💻 **Implementation** (Claude Haiku 4.5) - Built application incrementally using task specifications
+- ✅ **Testing & Refinement** - Iterative improvements with unit, integration, and evaluation tests
+- 📚 **Documentation** - Maintained living documentation across all phases
+
+**See [.docs/PROCESS.md](.docs/PROCESS.md) for detailed workflow documentation.**
+
+---
+
 ## Quick Start
 
 ### Prerequisites
