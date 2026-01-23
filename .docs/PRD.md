@@ -7,11 +7,61 @@
 
 ## Purpose & Vision
 
-This project demonstrates **production-quality GenAI system design** using modern orchestration patterns (AgentOS, Agno Agent, MCP).
+**Learning & Demonstration Project**
 
-**Core Goal:** Transform ingredient images into structured recipe recommendations with full conversational memory and preference tracking.
+This is an intentionally comprehensive GenAI application designed to **demonstrate best practices and advanced patterns in agentic system design**. The recipe recommendation domain is deliberately simple—a straightforward problem that would normally require only a basic API call—but it serves as a vehicle to showcase **all capabilities of modern agentic frameworks**: memory management, knowledge graphs, tool calling, structured outputs, tracing, monitoring, and the complete development lifecycle.
 
-**Key Design Principle:** Keep the system **simple, explicit, and reviewable** by leveraging AgentOS as the complete runtime backbone. This means no custom orchestration code, no manual memory management, and no infrastructure boilerplate—just configuration and business logic.
+**What This Project Teaches:**
+- ✅ Requirements gathering and PRD development for AI systems
+- ✅ Architecture design for complex orchestration patterns
+- ✅ Implementation of agentic applications with AgentOS + Agno Agent
+- ✅ Testing strategies (unit, integration, evaluation)
+- ✅ Observability and tracing in production systems
+- ✅ Knowledge base design with semantic search
+- ✅ Memory management and preference tracking
+- ✅ Hook systems (pre/post hooks, guardrails)
+- ✅ Tool design and MCP integration
+- ✅ Structured outputs and validation
+
+**Intentional Complexity:** This solution demonstrates that simple problems become rich learning opportunities when you apply professional engineering practices. The application is *deliberately over-engineered* to showcase each architectural pattern and best practice.
+
+**Core Principle:** Keep the system **simple, explicit, and reviewable** by leveraging AgentOS as the complete runtime backbone. This means no custom orchestration code, no manual memory management, and no infrastructure boilerplate—just configuration and business logic layered on established patterns.
+
+---
+
+## Demonstrated Capabilities & Patterns
+
+This project intentionally showcases a comprehensive set of agentic application patterns. While a simple recipe API would suffice for the problem domain, this solution demonstrates **production-grade architectural decisions**:
+
+### Agent Capabilities Demonstrated
+- **Memory Management**: Session-based chat history with automatic summarization and FIFO eviction
+- **User Preferences**: Agentic extraction and persistence of dietary restrictions, allergies, cuisines
+- **Knowledge Base**: Semantic search with vector embeddings for troubleshooting and learning
+- **Structured Output**: Pydantic v2 validation with Field constraints for type safety
+- **Tool Calling**: Internal @tool functions and external MCP integration
+- **Retry Logic**: Exponential backoff with configurable delays for transient failures
+- **Guardrails**: Pre-hooks for PII detection, prompt injection protection, domain enforcement
+- **Context Compression**: Automatic summarization for long conversations
+- **State Management**: Session persistence across restarts (SQLite dev / PostgreSQL prod)
+
+### Architecture & Orchestration Patterns
+- **Factory Pattern**: Async initialization with multi-step setup and validation
+- **Hook System**: Pre-hooks (ingredient extraction, guardrails) and post-hooks (response formatting)
+- **MCP Integration**: External service integration with startup validation and fail-fast pattern
+- **Dependency Injection**: Configuration-driven behavior via environment variables
+- **Separation of Concerns**: Each module has single, focused responsibility
+
+### Testing & Quality Patterns
+- **Unit Tests** (140+): Models, config, logging, MCP, ingredients, tracing
+- **Integration Tests**: E2E evaluation with real APIs (Agno Evals framework)
+- **REST API Tests**: Endpoint coverage for session management, error handling, file uploads
+- **Type Safety**: Full Pydantic validation and type hints throughout
+
+### Observability & Monitoring Patterns
+- **Structured Logging**: Text/JSON output with configurable levels and formatting
+- **Distributed Tracing**: OpenTelemetry integration with execution timeline visibility
+- **Evaluation Metrics**: Accuracy (ingredient detection), reliability (tool sequencing), performance (response time)
+- **Knowledge Tracking**: Semantic search for API errors and troubleshooting patterns
 
 ---
 
@@ -245,10 +295,10 @@ The system integrates an **external recipe service via MCP** for generating reci
 
 **Why This Approach:**
 - ✅ Always up-to-date recipes (Spoonacular maintains database)
-- ✅ 50K+ verified recipes
+- ✅ 50K+ verified recipes with professional curation
 - ✅ Simple integration (single MCP call)
 - ✅ Zero data pipeline overhead (no ETL, vectorization, or maintenance)
-- ⚠️ Tradeoff: Requires internet connection and API key
+- ⚠️ Tradeoff: Requires internet connection and API key (consider caching for offline deployment)
 
 ---
 
@@ -558,31 +608,32 @@ This single command:
 - ✅ Simple integration (single MCP call)
 - ✅ Minimal infrastructure (just API key)
 - ✅ No maintenance (Spoonacular maintains recipes)
-- ✅ Fast time-to-value
+- ✅ Fast time-to-market for MVP
 
 **Tradeoff:**
 - Requires internet connection
-- Per-call costs (free tier limited)
-- Limited customization vs. self-hosted
+- Per-call costs (free tier has limits)
+- Limited customization vs. self-hosted recipes
 
 **Alternative:** RAG pipeline with semantic search
 - Would require: Recipe collection, ETL, vectorization, vector database, ongoing maintenance
 - **Trade-off:** More control but 3-5x more infrastructure complexity
-- **When to use:** Only if you need semantic nuance or proprietary recipes
+- **When to use:** For enterprise deployments with proprietary recipes or offline operation requirements
 
-**Decision:** MCP approach chosen for simplicity and time-to-value appropriate for code challenge.
+**Decision:** MCP approach chosen for simplicity and rapid development. Self-hosted recipes can be migrated later if needed.
 
 ---
 
-### Why SQLite for Development (PostgreSQL Optional for Production)
+### Why SQLite for Development (PostgreSQL for Production)
 
-**Code Challenge / Development (Default):**
+**Development (Default):**
 - SQLite + LanceDB (file-based, zero setup)
-- Perfect for: Rapid development, code reviews, running anywhere
+- Perfect for: Rapid development, local testing, running anywhere
 - Benefits: Clone repo → `make setup && make dev` → works immediately
 
-**Production (Optional Enhancement):**
-- PostgreSQL + pgvector (optional, not required for code challenge)
+**Production Deployments:**
+- PostgreSQL + pgvector (recommended for multi-user scenarios)
+- Provides: ACID guarantees, horizontal scaling, connection pooling
 - Configured via `DATABASE_URL` environment variable
 - Benefits: ACID compliance, concurrent writes, standard practices
 - Switch: Config only, no code changes

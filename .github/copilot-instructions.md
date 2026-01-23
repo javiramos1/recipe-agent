@@ -1,7 +1,5 @@
 # Copilot Instructions - Recipe Recommendation Service
 
-**Code Challenge Project: Production-Quality GenAI System**
-
 ## ⚡ CRITICAL - Read First
 
 **Before implementing any task:**
@@ -38,9 +36,21 @@
 
 ## Project Overview
 
-This is a code challenge implementing a production-quality GenAI system that transforms ingredient images into recipe recommendations using modern orchestration patterns (AgentOS, Agno Agent, MCP). The service demonstrates best practices in system design, testing, and implementation.
+**Learning & Demonstration Project**
 
-**Core Value Proposition:** Single-command startup (`python app.py`) providing REST API + Web UI + stateful conversational agent with automatic memory, retries, and guardrails.
+This is a comprehensive GenAI application designed to **demonstrate best practices and advanced patterns in agentic system design**. The recipe recommendation domain is deliberately simple—a straightforward problem that would normally require only a basic API call—but it serves as a vehicle to showcase **all capabilities of modern agentic frameworks**.
+
+**What This Project Teaches:**
+- Complete development lifecycle: Requirements → Design → Implementation → Testing → Monitoring
+- Modern agentic framework patterns using AgentOS and Agno Agent
+- Advanced memory management, knowledge bases, and preference tracking
+- Tool design and external service integration via MCP protocol
+- Structured outputs, validation, and type safety
+- Hook systems for pre/post processing and guardrails
+- Observability, tracing, and evaluation frameworks
+- Testing strategies from unit to integration to evaluation
+
+**Core Value Proposition:** Single-command startup (`python app.py`) providing REST API + Web UI + stateful conversational agent with comprehensive pattern demonstrations.
 
 ## Status Section
 
@@ -445,7 +455,7 @@ images/             # Sample test images for verification
 4. **Update README.md** (Only if needed):
    - README.md is the FINAL state documentation (not a rolling status)
    - Update only if architectural details, APIs, or setup changed
-   - Audience: developers and code challenge reviewers
+   - Audience: developers and reviewers
    - No other documentation files should be created
 
 5. **Commit and Push to GitHub** (REQUIRED):

@@ -1,10 +1,19 @@
 # Image-Based Recipe Recommendation Service
 
-A production-quality GenAI system that transforms ingredient images into structured recipe recommendations using modern orchestration patterns (AgentOS, Agno Agent, MCP).
+**Learning & Demonstration Project** showcasing comprehensive agentic application patterns.
+
+A simple recipe recommendation problem intentionally solved with production-grade patterns to demonstrate how to build professional GenAI systems. Shows all key capabilities: memory management, knowledge bases, tool calling, structured outputs, tracing, testing, and the complete development lifecycle.
 
 ## Overview
 
-This service demonstrates best practices in system design by leveraging **AgentOS** as the complete runtime backbone, **Agno Agent** as the intelligent orchestrator, and **Gemini Vision API** for ingredient detection from images.
+This service demonstrates best practices in agentic system design by leveraging **AgentOS** as the complete runtime, **Agno Agent** as the orchestrator, and **Gemini Vision API** for ingredient detection. The simple domain is a vehicle for learning comprehensive architectural patterns applicable to complex real-world systems.
+
+**What You'll Learn:**
+- How to architect stateful agentic applications with memory and preferences
+- Tool design (internal @tool functions + external MCP services)
+- Production patterns: retries, guardrails, structured validation, observability
+- Testing strategies: unit, integration, and evaluation frameworks
+- Complete development lifecycle: requirements → design → implementation → monitoring
 
 ### Key Capabilities
 
@@ -59,13 +68,6 @@ graph TD
     
     C -.->|Session Memory| F["SQLite/PostgreSQL<br/>Database"]
     F -.->|Load History| C
-    
-    style A fill:#e1f5ff
-    style B fill:#fff3e0
-    style C fill:#f3e5f5
-    style D fill:#e8f5e9
-    style E fill:#e1f5ff
-    style F fill:#f5f5f5
 ```
 
 ## Quick Start
@@ -154,20 +156,11 @@ OUTPUT_FORMAT=json
 
 #### Getting Spoonacular API Key
 
-**Option 1: Direct from Spoonacular (Recommended)**
-
 1. Visit [spoonacular.com/food-api](https://spoonacular.com/food-api)
 2. Click **"Get API Key"** button
 3. Sign up or log in with email
 4. Your API key appears on the dashboard
 5. Copy to `.env` as `SPOONACULAR_API_KEY`
-
-**Option 2: Via RapidAPI**
-
-1. Visit [RapidAPI Spoonacular Recipe API](https://rapidapi.com/spoonacular/api/recipe-food-nutrition/pricing)
-2. Click **"Subscribe to Test"** (free plan available)
-3. Copy API key from RapidAPI dashboard
-4. Use with `.env`: `SPOONACULAR_API_KEY=your_key_here`
 
 #### Understanding Spoonacular Quotas
 
@@ -182,22 +175,6 @@ OUTPUT_FORMAT=json
 - When exceeded: API returns `402 Payment Required` error
 - Daily quota resets at **00:00 UTC**
 
-**Tips to Minimize Usage:**
-- Use stateless mode (`S=1`) for testing: doesn't persist or re-query
-- Cache recipe results in your database
-- Batch multiple ingredient searches into one recipe search
-- Use `get_recipe_information_bulk` for multiple recipes at once (more efficient)
-
-**Current Status:**
-If you see `402 Payment Required` errors in responses:
-```
-"API request failed: 402 Payment Required"
-```
-This means your daily quota is exhausted. Options:
-1. Upgrade to a paid plan
-2. Wait until daily reset (UTC midnight)
-3. Use test mode with different Spoonacular account
-
 ### 3. Start Development Server
 
 ```bash
@@ -205,16 +182,15 @@ make dev
 ```
 
 The application will start at:
-- **Backend**: Python/AgentOS server on `http://localhost:7777`
+- **Backend API**: `http://localhost:7777`
 - **OpenAPI Docs**: `http://localhost:7777/docs`
-- **Agno OS UI**: [https://os.agno.com](https://os.agno.com) (connect local agent for web UI, traces, evaluations)
 
 ## Using the Web UI with Agno OS Platform
 
 ### Quick Start with Agno OS
 
 1. **Create Free Account**: Visit [os.agno.com](https://os.agno.com) and sign up (free tier available)
-2. **Start Backend**: Run `make dev` (starts your local agent on http://localhost:7777)
+2. **Start Backend**: Run `make dev` in terminal
 3. **Connect Agent**: In Agno OS platform → Click team dropdown → "Add new OS" → Select "Local" → Enter endpoint `http://localhost:7777`
 4. **Chat in Platform**: UI automatically adapts to your agent's input schema
 5. **View Traces**: Agno OS platform shows execution traces, tool calls, and reasoning

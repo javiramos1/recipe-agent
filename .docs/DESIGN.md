@@ -5,16 +5,31 @@
 
 ## 1. Purpose of This Document
 
-This document provides a **detailed solution design** for the Image-Based Recipe Recommendation Service described in the PRD.
+**Learning & Reference Implementation**
+
+This document provides a **comprehensive design reference for agentic applications**. The recipe recommendation service is intentionally used as a learning vehicle—a simple problem domain enhanced with **production-grade patterns, capabilities, and architectural decisions** to demonstrate professional practices in GenAI system design.
+
+**What This Design Teaches:**
+- Complete development lifecycle: Requirements → Design → Implementation → Testing → Monitoring
+- Modern agentic framework patterns using AgentOS and Agno Agent
+- Advanced memory management, knowledge bases, and preference tracking
+- Tool design and external service integration via MCP protocol
+- Structured outputs, validation, and type safety
+- Hook systems for pre/post processing and guardrails
+- Observability, tracing, and evaluation frameworks
+- Testing strategies from unit to integration to evaluation
+
+**Intentional Complexity for Learning:**
+This solution demonstrates that even simple problems become rich case studies when applying professional engineering practices. The application is *deliberately over-engineered* to showcase each architectural pattern in a real, working system.
 
 Its primary goals are to:
-- Guide a **coding agent inside an IDE** step-by-step
-- Make **intent, constraints, and trade-offs explicit**
-- Clarify *why* certain design decisions were made
-- Reduce ambiguity during implementation
-- Enable maintainable, production-quality code
+- Document **production-grade architecture and design decisions**
+- Explain **intent, constraints, and trade-offs** for each pattern
+- Provide a **reference for agentic application design**
+- Enable **code review and architectural understanding**
+- Serve as **learning material for framework best practices**
 
-This document intentionally goes beyond "what" and explains **"why" and "how"**, while avoiding full code listings.
+This document goes beyond "what" and explains **"why" and "how"** each decision was made, while avoiding full code listings (see IMPLEMENTATION_PLAN.md for detailed task specifications).
 
 ---
 
@@ -22,13 +37,54 @@ This document intentionally goes beyond "what" and explains **"why" and "how"**,
 
 ### 2.1 Design Goals
 
-- Demonstrate **real-world GenAI system design** using AgentOS
-- Showcase **tool-based orchestration** (local @tool + external MCP)
-- Use **structured outputs everywhere** (Pydantic validation)
+- Build a **production-ready reference implementation** using AgentOS
+- Demonstrate **tool-based orchestration** (internal @tool + external MCP)
+- Showcase **structured outputs everywhere** (Pydantic validation)
 - Leverage **built-in Agno features** (memory, retries, guardrails, compression)
-- Keep the system **simple, explicit, and reviewable**
-- Optimize for **clarity over cleverness**
-- **Zero external dependencies** for development (SQLite/LanceDB)
+- Keep the system **simple, explicit, and maintainable**
+- Optimize for **clarity and long-term extensibility**
+- Support both **local development** (SQLite/LanceDB) and **enterprise deployment** (PostgreSQL + pgvector)
+- **Intentionally demonstrate comprehensive agentic patterns** even though the problem domain is simple
+
+### 2.1a Intentional Over-Engineering for Learning
+
+This solution is **deliberately over-engineered** to be an effective learning vehicle:
+
+**The Problem Domain is Simple**
+A recipe recommendation system could be built in:
+- ✅ 50 lines: Basic API call → parse JSON → return results
+- ✅ 200 lines: Add image processing + caching
+
+**Why 2000+ Lines with Comprehensive Patterns?**
+
+This project demonstrates that **professional engineering practices create value** even for simple problems:
+
+1. **Memory Management**: Users get personalized experience across conversations
+2. **Knowledge Base**: System learns from past failures, improves over time
+3. **Structured Outputs**: Type-safe responses prevent integration bugs
+4. **Observability**: Production support teams debug issues with full context
+5. **Testing**: Confidence in behavior across refactoring and scaling
+6. **State Management**: Handle multi-user deployments with consistency
+7. **Tool Orchestration**: Pattern applicable to complex multi-step workflows
+8. **Guardrails**: Prevent hallucinations and domain violations
+
+**What Gets Taught Through Over-Engineering**
+
+| Pattern | Simple Version | Production Version | Learning Value |
+|---------|---|---|---|
+| **Input Handling** | String → string | Pydantic v2 with Field constraints | Type safety, validation, OpenAPI |
+| **Memory** | None | Session-based with persistence | User experience, state management |
+| **Preferences** | Hardcoded | Agentic extraction + persistence | Preference learning, personalization |
+| **Tools** | Function calls | MCP + @tool decorator | Integration patterns, modularity |
+| **Testing** | Manual | 140+ unit + integration + evaluation tests | Quality assurance processes |
+| **Logging** | print() | Structured JSON/text with levels | Production debugging |
+| **Tracing** | None | OpenTelemetry with AgentOS | Performance analysis |
+| **Error Handling** | try/except | Retries, guardrails, graceful degradation | Reliability patterns |
+| **Knowledge** | None | LanceDB semantic search | Learning systems |
+
+**The Payoff**: Someone studying this codebase learns not just "how to build recipe apps" but **how to architect production agentic systems**.
+
+---
 
 ### 2.2 Non-Goals
 
@@ -146,56 +202,36 @@ Declarative system instructions instead of imperative orchestration code. Less f
 
 ---
 
-### 3.3 Flexible Ingredient Detection: Pre-Hook vs. Tool Pattern
+### 3.3 Ingredient Detection: Tool-Based Pattern
 
-The ingredient detection system is **flexible and configurable** via `IMAGE_DETECTION_MODE`:
+The ingredient detection is implemented as an **internal Agno @tool** that the agent can call during orchestration.
 
-**Architecture: Shared Core Functions**
-- Core logic lives in `ingredients.py` with reusable functions:
-  - `fetch_image_bytes()`: Get image bytes from URL or directly
+**Architecture: Core Functions in ingredients.py**
+- Reusable helper functions for image processing:
+  - `fetch_image_bytes(image_data)`: Get image bytes from URL or base64
   - `validate_image_format()`: Check for JPEG/PNG format
   - `validate_image_size()`: Enforce MAX_IMAGE_SIZE_MB limit
-  - `extract_ingredients_from_image()`: Call Gemini vision API
-  - `parse_gemini_response()`: Extract JSON from response
+  - `extract_ingredients_from_image()`: Call Gemini vision API with retries
+  - `parse_gemini_response()`: Extract structured ingredient data
   - `filter_ingredients_by_confidence()`: Apply confidence threshold
-- These functions are **mode-agnostic** (work for both patterns)
 
-**Pre-Hook Mode** (Default: `IMAGE_DETECTION_MODE=pre-hook`)
-- Runs **before** agent processes request
-- Function: `extract_ingredients_pre_hook(run_input, ...)`
-- Processes images immediately
-- Appends detected ingredients to user message as text
-- Clears images to prevent re-processing
-- **Benefits:** Eliminates LLM round-trip, faster, cleaner history
+**Tool Pattern** (Current Implementation)
+- Registered as `@tool` decorator: `detect_image_ingredients(image_data: str)`
+- Returns `IngredientDetectionOutput` with ingredients and confidence scores
+- Agent decides when to call based on user message and system instructions
+- Integrated with agent memory and conversation history
+- **Benefits:** Agent has visibility, can ask clarifying questions, full orchestration control
 
-**Tool Mode** (Optional: `IMAGE_DETECTION_MODE=tool`)
-- Registered as `@tool` decorator in agent
-- Function: `detect_ingredients_tool(image_data: str) -> IngredientDetectionOutput`
-- Agent calls tool when needed (visible in orchestration)
-- Agent decides when/if to call based on context
-- **Benefits:** Agent has visibility, can refine/ask questions, full control
+**Why Tool Pattern:**
+- ✅ **Agent visibility**: Tool calls appear in execution trace
+- ✅ **Smart activation**: Agent decides when image analysis is needed
+- ✅ **Conversation flow**: Naturally fits conversational patterns
+- ✅ **Error handling**: Agent can retry or ask for better images
+- ✅ **Memory integration**: Tool outputs stored in session history
+- ⚠️ **Trade-off**: One additional LLM call per image (vs. pre-hook)
 
-**Trade-off:**  
-- Pre-hook: Faster (no extra LLM call), but less agent visibility
-- Tool: More agent flexibility, but adds one orchestration round-trip
-
-**Configuration:**
-```python
-# config.py
-IMAGE_DETECTION_MODE: str = os.getenv("IMAGE_DETECTION_MODE", "pre-hook")  # "pre-hook" or "tool"
-
-# In app.py, register based on mode:
-if config.IMAGE_DETECTION_MODE == "pre-hook":
-    agent.add_pre_hook(extract_ingredients_pre_hook)
-elif config.IMAGE_DETECTION_MODE == "tool":
-    agent.add_tool(detect_ingredients_tool)
-```
-
-**Why This Matters:**  
-- **Same code, different modes**: No duplication, easier maintenance
-- **Flexible orchestration**: Supports both patterns without rewriting
-- **Easy A/B testing**: Switch modes via environment variable
-- **Clear separation**: Shared core functions vs. orchestration wrapper
+**Historical Note:**
+Earlier designs explored a pre-hook pattern (processing before agent executes) for faster responses, but the tool pattern provides better agent visibility and more natural conversational flow, making it the preferred choice for production deployments.
 
 ---
 
@@ -212,12 +248,40 @@ External tools have different requirements:
 
 **Why This Matters:**  
 - Recipe search leverages existing maintained API (no data pipeline)
-- Clear separation: Image handling (pre-hook) vs. recipe orchestration (agent)
-- Extracted ingredients automatically part of chat history as text
+- Clear separation: Image handling (internal @tool) vs. recipe orchestration (external MCP)
+- Detected ingredients automatically part of chat history as text
+
+---
+
+### 3.3c Knowledge Base: Semantic Learning & Troubleshooting
+
+The system includes an optional **knowledge base** for capturing learnings and troubleshooting information.
+
+**Knowledge Base Architecture:**
+- **Vector Store**: LanceDB with SentenceTransformer embeddings (lightweight, no API costs)
+- **Content Storage**: SQLite for metadata (enables AgentOS platform UI display)
+- **Purpose**: Store API errors, troubleshooting findings, edge cases
+- **Agent Usage**: Agent can search knowledge for past solutions to similar issues
+- **Observability**: Knowledge appears in AgentOS platform's Knowledge tab
+
+**What Gets Stored:**
+- API errors and their resolutions (402 quota exceeded, 429 rate limited)
+- Failed recipe searches and workarounds
+- Edge cases and unexpected inputs
+- Performance optimization insights
+- User preference patterns
+
+**Why Knowledge Base:**
+- ✅ **Agent learning**: Can reference previous solutions without prompting
+- ✅ **Debugging**: Developers can search for past issues
+- ✅ **Minimal overhead**: SentenceTransformer embeddings (free, local)
+- ✅ **Platform integration**: Visible in AgentOS UI for team learning
+- ⚠️ **Optional**: Can be disabled for simpler deployments
 
 ---
 
 ### 3.4 Why Session-Based Memory with Database Persistence
+
 
 Agno provides **automatic session management** with persistent storage:
 
@@ -251,18 +315,18 @@ Using external recipe API via MCP instead of building semantic search pipeline:
 **Advantages:**
 - ✅ Zero data pipeline overhead (no ETL, no vectorization)
 - ✅ Always up-to-date recipes (Spoonacular maintains database)
-- ✅ 15 minutes to implement vs. 3-5 hours for RAG
+- ✅ Fast implementation with focus on orchestration patterns
 - ✅ 50K+ recipes maintained externally
 - ✅ Simple MCP integration
-- ✅ Focus on Agno orchestration patterns, not data engineering
+- ✅ Minimal infrastructure required
 
 **Trade-offs:**
 - ⚠️ External API dependency (requires internet)
-- ⚠️ Per-call costs (Spoonacular free tier limited)
+- ⚠️ Per-call costs (free tier with limits)
 - ⚠️ Less customization than self-hosted database
 
 **Why This Matters:**  
-For this code challenge, simplicity and time-to-value matter more than semantic sophistication. RAG pipeline can be added later if needed.
+MCP approach provides simplicity and rapid time-to-market. For enterprise deployments with offline requirements or proprietary recipes, a RAG pipeline can be added later without refactoring the agent orchestration layer.
 
 ---
 
@@ -389,82 +453,90 @@ if __name__ == "__main__":
 
 ```
 .
-├── app.py                    # Single entry point (AgentOS application)
+├── app.py                    # Single entry point (AgentOS application, async initialization)
 │
 ├── src/                      # Application source code
 │   ├── utils/
 │   │   ├── __init__.py
 │   │   ├── config.py         # Environment configuration (dotenv + env vars)
-│   │   └── logger.py         # Logging configuration (structured/text, colored output)
+│   │   ├── logger.py         # Logging configuration (structured/text, colored output)
+│   │   └── tracing.py        # OpenTelemetry tracing setup (AgentOS integration)
 │   │
 │   ├── models/
 │   │   ├── __init__.py
-│   │   └── models.py         # Pydantic schemas (request/response/domain)
+│   │   └── models.py         # Pydantic v2 schemas (ChatMessage, RecipeResponse, etc)
 │   │
 │   ├── agents/
 │   │   ├── __init__.py
-│   │   └── agent.py          # Agent factory function (initialize_recipe_agent)
+│   │   └── agent.py          # Agent factory function (initialize_recipe_agent, async)
 │   │
 │   ├── prompts/
 │   │   ├── __init__.py
-│   │   └── prompts.py        # System instructions (SYSTEM_INSTRUCTIONS constant)
+│   │   └── prompts.py        # System instructions and dynamic prompts
 │   │
 │   ├── hooks/
 │   │   ├── __init__.py
-│   │   └── hooks.py          # Pre-hooks factory (get_pre_hooks)
+│   │   └── hooks.py          # Pre-hooks and post-hooks factories
 │   │
 │   └── mcp_tools/
 │       ├── __init__.py
-│       ├── ingredients.py    # Ingredient detection (pre-hook/tool)
-│       └── spoonacular.py    # SpoonacularMCP class with connection validation
+│       ├── ingredients.py    # Ingredient detection @tool (Gemini vision API)
+│       └── spoonacular.py    # SpoonacularMCP class with connection validation & retries
 │
 ├── tests/
 │   ├── unit/                 # Python unit tests (pytest)
-│   │   ├── test_models.py
-│   │   ├── test_config.py
-│   │   ├── test_logger.py
-│   │   ├── test_ingredients.py
-│   │   ├── test_mcp.py
-│   │   └── test_app.py
-│   └── integration/          # Agno evals (integration tests)
-│       ├── test_e2e.py
-│       └── test_api.py
+│   │   ├── test_models.py         # Pydantic schema validation
+│   │   ├── test_config.py         # Environment configuration loading
+│   │   ├── test_logger.py         # Logging output formats
+│   │   ├── test_ingredients.py    # Image detection logic
+│   │   ├── test_mcp.py            # MCP initialization & retries
+│   │   ├── test_app.py            # Application startup validation
+│   │   └── test_tracing.py        # Tracing initialization
+│   └── integration/               # Agno evals (E2E tests with real APIs)
+│       ├── conftest.py            # Pytest configuration and fixtures
+│       ├── test_eval.py           # Agno SDK-based evaluations
+│       └── test_integration.py    # REST API endpoint tests
 │
-├── images/                   # Sample test images
-│   ├── sample_vegetables.jpg
-│   ├── sample_fruits.jpg
-│   └── sample_pantry.jpg
+├── tmp/                      # Runtime artifacts (git-ignored)
+│   ├── lancedb/              # LanceDB vector database for knowledge base
+│   ├── recipe_agent_sessions.db  # SQLite session storage (optional)
+│   └── eval_results.db       # Evaluation metrics and results
 │
-├── .env.example              # Template environment file
-├── .gitignore                # Excludes .env, *.db, __pycache__
-├── Makefile
-├── requirements.txt
-├── README.md
+├── .env.example              # Template environment file (no secrets)
+├── .gitignore                # Excludes .env, *.db, tmp/, __pycache__
+├── Makefile                  # Build/test/deploy commands
+├── requirements.txt          # Python dependencies with versions
+├── pytest.ini                # Pytest configuration
+├── README.md                 # Project documentation
 └── .github/
-    └── copilot-instructions.md
+    └── copilot-instructions.md  # Development guidelines
 ```
 
 ### Module Responsibilities
 
 **app.py** (AgentOS Entry Point - Minimal Orchestration)
-- ~50 lines: Clean, focused orchestration
-- Import and call factory function: `agent = initialize_recipe_agent()`
-- Create AgentOS instance with agent and AGUI interface
+- ~50-60 lines: Clean, focused orchestration
+- Call async factory: `agent, tracing_db, knowledge = asyncio.run(initialize_recipe_agent())`
+- Create AgentOS instance with agent, knowledge base, and tracing
+- Extract FastAPI app: `app = agent_os.get_app()`
 - Extract FastAPI app: `app = agent_os.get_app()`
 - Serve application: `agent_os.serve(app="app:app", port=config.PORT)`
 - Logging for startup status and URLs
 - Single entry point: `python app.py`
 
-**agent.py** (Agent Factory Function)
-- `initialize_recipe_agent() -> Agent` factory function (~150 lines)
-- 5-step initialization with logging:
-  - Step 1: MPC initialization with fail-fast validation
-  - Step 2: Database configuration (SQLite/PostgreSQL)
-  - Step 3: Tool registration (MCP + optional ingredient tool)
-  - Step 4: Pre-hook registration (via hooks.py factory)
-  - Step 5: Agent configuration with all settings
-- Imports from: config, logger, models, ingredients, SpoonacularMCP, prompts, hooks
-- Returns fully configured Agent ready for AgentOS
+**agent.py** (Agent Factory Function - Async)
+- `async def initialize_recipe_agent() -> tuple[Agent, tracing_db, knowledge]` async factory (~240 lines)
+- 7-step initialization with detailed logging:
+  - Step 1: Spoonacular MCP initialization with fail-fast validation and exponential backoff
+  - Step 2: Tracing initialization (OpenTelemetry, optional based on config)
+  - Step 3: Database configuration for session persistence (SQLite dev / PostgreSQL prod)
+  - Step 2c: Knowledge base initialization (LanceDB vector store + SQLite metadata)
+  - Step 4: Tools registration (Spoonacular MCP + optional ingredient detection tool based on IMAGE_DETECTION_MODE)
+  - Step 5: Pre-hooks and post-hooks registration (ingredient extraction, guardrails, response formatting)
+  - Step 6: Agno Agent configuration with all settings, retries, memory, guardrails
+- Imports from: config, logger, models, ingredients, SpoonacularMCP, prompts, hooks, tracing
+- Returns: (agent, tracing_db, knowledge) ready for AgentOS
+- Async pattern: All I/O operations await properly, including MCP and tracing initialization
 
 **prompts.py** (System Instructions)
 - `SYSTEM_INSTRUCTIONS` constant (~800 lines, pure data)
@@ -477,13 +549,18 @@ if __name__ == "__main__":
   - Edge case handling and critical guardrails
   - Response guidelines and example interactions
 
-**hooks.py** (Pre-Hooks Factory)
-- `get_pre_hooks() -> List` factory function (~30 lines)
-- Returns list of pre-hooks to register with agent:
-  - Ingredient extraction pre-hook (pre-hook mode only)
+**hooks.py** (Pre-Hooks and Post-Hooks Factories)
+- `get_pre_hooks() -> List` factory function (~50 lines)
+  - Returns list of pre-hooks to register with agent
+  - Ingredient extraction pre-hook (when IMAGE_DETECTION_MODE="pre-hook")
   - Prompt injection guardrail (always enabled)
-- Configuration-driven: Checks IMAGE_DETECTION_MODE
+  - Configuration-driven based on IMAGE_DETECTION_MODE
+- `get_post_hooks() -> List` factory function (~30 lines)
+  - Returns list of post-hooks to register with agent
+  - Response field extraction for UI rendering (extracts 'response' from RecipeResponse)
+  - Error recovery and formatting hooks
 - Structured logging for hook registration
+- Both factories return empty lists if conditions not met (graceful degradation)
 
 **config.py** (Configuration)
 - Load .env file using python-dotenv
