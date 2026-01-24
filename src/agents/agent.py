@@ -204,13 +204,15 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     # Generate system instructions with config values
     system_instructions = get_system_instructions(
         max_recipes=config.MAX_RECIPES,
-        max_history=config.MAX_HISTORY,
-        min_ingredient_confidence=config.MIN_INGREDIENT_CONFIDENCE,
+        max_tool_calls=config.TOOL_CALL_LIMIT,
     )
     agent = Agent(
         model=Gemini(
             id=config.GEMINI_MODEL,
             api_key=config.GEMINI_API_KEY,
+            temperature=config.TEMPERATURE,
+            max_output_tokens=config.MAX_OUTPUT_TOKENS,
+            thinking_level=config.THINKING_LEVEL,
         ),
         db=db,
         knowledge=knowledge,
@@ -227,6 +229,9 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         delay_between_retries=2,
         # Memory settings
         add_history_to_context=True,
+        read_tool_call_history=True,
+        update_knowledge=True,
+        read_chat_history=True,
         num_history_runs=config.MAX_HISTORY,
         enable_user_memories=True,
         enable_session_summaries=True,

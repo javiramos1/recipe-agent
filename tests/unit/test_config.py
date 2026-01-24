@@ -31,6 +31,7 @@ class TestConfigInitialization:
         assert config.MAX_IMAGE_SIZE_MB == 5
         assert config.MIN_INGREDIENT_CONFIDENCE == 0.7
         assert config.GEMINI_MODEL == "gemini-3-flash-preview"
+        assert config.IMAGE_DETECTION_MODEL == "gemini-3-flash-preview"
         assert config.DATABASE_URL is None
 
     def test_config_loads_from_environment(self, monkeypatch):
@@ -40,6 +41,7 @@ class TestConfigInitialization:
         monkeypatch.setenv("MAX_IMAGE_SIZE_MB", "10")
         monkeypatch.setenv("MIN_INGREDIENT_CONFIDENCE", "0.85")
         monkeypatch.setenv("GEMINI_MODEL", "custom-model")
+        monkeypatch.setenv("IMAGE_DETECTION_MODEL", "vision-model")
         monkeypatch.setenv("GEMINI_API_KEY", "test_gemini_key")
         monkeypatch.setenv("SPOONACULAR_API_KEY", "test_spoonacular_key")
 
@@ -50,6 +52,7 @@ class TestConfigInitialization:
         assert config.MAX_IMAGE_SIZE_MB == 10
         assert config.MIN_INGREDIENT_CONFIDENCE == 0.85
         assert config.GEMINI_MODEL == "custom-model"
+        assert config.IMAGE_DETECTION_MODEL == "vision-model"
         assert config.GEMINI_API_KEY == "test_gemini_key"
         assert config.SPOONACULAR_API_KEY == "test_spoonacular_key"
 
@@ -214,6 +217,42 @@ class TestImageDetectionMode:
         config = Config()
         with pytest.raises(ValueError, match="IMAGE_DETECTION_MODE"):
             config.validate()
+
+
+class TestImageDetectionModel:
+    """Test IMAGE_DETECTION_MODEL configuration."""
+
+    def test_default_image_detection_model(self, monkeypatch):
+        """Test that IMAGE_DETECTION_MODEL defaults to 'gemini-3-flash-preview'."""
+        monkeypatch.delenv("IMAGE_DETECTION_MODEL", raising=False)
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        assert config.IMAGE_DETECTION_MODEL == "gemini-3-flash-preview"
+
+    def test_custom_image_detection_model(self, monkeypatch):
+        """Test that IMAGE_DETECTION_MODEL can be customized independently."""
+        monkeypatch.setenv("GEMINI_MODEL", "gemini-3-flash-preview")
+        monkeypatch.setenv("IMAGE_DETECTION_MODEL", "gemini-3-pro-preview")
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        config.validate()  # Should not raise
+        assert config.GEMINI_MODEL == "gemini-3-flash-preview"
+        assert config.IMAGE_DETECTION_MODEL == "gemini-3-pro-preview"
+
+    def test_image_detection_model_independent_from_main_model(self, monkeypatch):
+        """Test that changing main model doesn't affect image detection model."""
+        monkeypatch.setenv("GEMINI_MODEL", "custom-recipe-model")
+        monkeypatch.setenv("IMAGE_DETECTION_MODEL", "custom-vision-model")
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
+
+        config = Config()
+        assert config.GEMINI_MODEL == "custom-recipe-model"
+        assert config.IMAGE_DETECTION_MODEL == "custom-vision-model"
 
 
 class TestCompressImg:

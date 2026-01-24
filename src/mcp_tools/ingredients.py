@@ -236,7 +236,7 @@ async def extract_ingredients_from_image(image_bytes: bytes) -> Optional[Ingredi
         # Call vision API with JSON response format
         response = await asyncio.to_thread(
             client.models.generate_content,
-            model=config.GEMINI_MODEL,
+            model=config.IMAGE_DETECTION_MODEL,
             contents=[
                 "Extract all food ingredients from this image. Return ONLY valid JSON with 'ingredients' list (strings) and 'confidence_scores' dict mapping ingredient name to confidence (0.0-1.0). Example: {\"ingredients\": [\"tomato\", \"basil\"], \"confidence_scores\": {\"tomato\": 0.95, \"basil\": 0.88}}",
                 types.Part.from_bytes(data=image_bytes, mime_type=mime_type),

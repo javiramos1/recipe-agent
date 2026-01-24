@@ -13,6 +13,7 @@ Post-hook Pipeline:
 """
 
 import asyncio
+from datetime import datetime
 from typing import List, Optional
 
 from agno.guardrails import PromptInjectionGuardrail
@@ -113,18 +114,27 @@ def create_store_troubleshooting_post_hook(knowledge_base):
             if troubleshooting and troubleshooting.strip():
                 if knowledge_base:
                     try:
+                        # Get run_id and timestamp for unique entry tracking
+                        run_id = getattr(run_output, "run_id", "unknown")
+                        timestamp = datetime.utcnow().isoformat()
+                        
+                        # Prepend run_id and timestamp to content for uniqueness
+                        # (LanceDB deduplicates by content hash, so unique metadata prevents duplicates)
+                        unique_content = f"[{timestamp}] Run {run_id}\n\n{troubleshooting}"
+                        
                         # Add troubleshooting finding to knowledge base (async-safe via to_thread)
                         # Knowledge.add_content() stores to AgentOS and syncs to os.agno.com
                         await asyncio.to_thread(
                             knowledge_base.add_content,
-                            text_content=troubleshooting,
+                            text_content=unique_content,
                             metadata={
                                 "type": "troubleshooting",
-                                "run_id": getattr(run_output, "run_id", None),
+                                "run_id": run_id,
+                                "timestamp": timestamp,
                                 "user_id": user_id,
                             }
                         )
-                        logger.info(f"Post-hook: Troubleshooting stored to knowledge base - {troubleshooting[:100]}...")
+                        logger.info(f"Post-hook: Troubleshooting stored to knowledge base (run={run_id}) - {troubleshooting[:100]}...")
                     except Exception as kb_error:
                         # If knowledge base add fails, just log (don't crash)
                         logger.warning(f"Failed to add troubleshooting to knowledge base: {kb_error}. Troubleshooting was: {troubleshooting[:100]}...")

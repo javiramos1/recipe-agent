@@ -111,6 +111,9 @@ nano .env
 
 # 4. Start the application
 make dev
+
+# Or run single queries without keeping server running:
+make query Q="What can I make with chicken and rice?"
 ```
 
 The service will start at:
@@ -348,6 +351,9 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `GEMINI_API_KEY` | string | **required** | Google Gemini API key (vision model) |
 | `SPOONACULAR_API_KEY` | string | **required** | Spoonacular recipe API key |
 | `GEMINI_MODEL` | string | `gemini-3-flash-preview` | Vision model (fast). Options: `gemini-3-flash-preview`, `gemini-3-pro-preview` |
+| `TEMPERATURE` | float | `0.3` | Response randomness (0.0=deterministic, 1.0=creative). For recipes: 0.3 balances consistency with variety |
+| `MAX_OUTPUT_TOKENS` | int | `2048` | Maximum response length. For recipes: 2048 supports full ingredient lists and instructions |
+| `THINKING_LEVEL` | string | `off` | Extended reasoning level: `off` (fastest), `low` (balanced), `high` (thorough). Recipe recommendations work well with `off` or `low` |
 | `PORT` | int | `7777` | Server port |
 | `MAX_HISTORY` | int | `3` | Conversation turns to keep in memory |
 | `MAX_RECIPES` | int | `3` | Maximum recipes to return per request |
