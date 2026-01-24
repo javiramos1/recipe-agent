@@ -158,9 +158,13 @@ GEMINI_API_KEY=your_gemini_key_here
 SPOONACULAR_API_KEY=your_spoonacular_key_here
 
 # Optional - Defaults shown
-# Default: gemini-3-flash-preview (fast, cost-effective)
-# For best results: gemini-3-pro-preview
+# Main recipe recommendation model
 GEMINI_MODEL=gemini-3-flash-preview
+
+# Image detection model (can be different from GEMINI_MODEL)
+# Use gemini-3-pro-preview for better accuracy on complex images
+IMAGE_DETECTION_MODEL=gemini-3-flash-preview
+
 PORT=7777
 MAX_HISTORY=3
 MAX_RECIPES=3
@@ -350,7 +354,8 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | --- | --- | --- | --- |
 | `GEMINI_API_KEY` | string | **required** | Google Gemini API key (vision model) |
 | `SPOONACULAR_API_KEY` | string | **required** | Spoonacular recipe API key |
-| `GEMINI_MODEL` | string | `gemini-3-flash-preview` | Vision model (fast). Options: `gemini-3-flash-preview`, `gemini-3-pro-preview` |
+| `GEMINI_MODEL` | string | `gemini-3-flash-preview` | Main recipe recommendation model. Options: `gemini-3-flash-preview`, `gemini-3-pro-preview` |
+| `IMAGE_DETECTION_MODEL` | string | `gemini-3-flash-preview` | Image detection model (independent from main model). Options: `gemini-3-flash-preview`, `gemini-3-pro-preview`. Use `gemini-3-pro-preview` for better accuracy on complex images |
 | `TEMPERATURE` | float | `0.3` | Response randomness (0.0=deterministic, 1.0=creative). For recipes: 0.3 balances consistency with variety |
 | `MAX_OUTPUT_TOKENS` | int | `2048` | Maximum response length. For recipes: 2048 supports full ingredient lists and instructions |
 | `THINKING_LEVEL` | string | `off` | Extended reasoning level: `off` (fastest), `low` (balanced), `high` (thorough). Recipe recommendations work well with `off` or `low` |
