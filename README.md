@@ -372,6 +372,20 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `ENABLE_TRACING` | bool | `true` | Enable distributed tracing |
 | `TRACING_DB_TYPE` | string | `sqlite` | Tracing database type: `sqlite` or `postgres` |
 | `TRACING_DB_FILE` | string | `agno_traces.db` | Path for SQLite tracing database |
+| **Agent Retry Configuration** | | | |
+| `MAX_RETRIES` | int | `3` | Number of retry attempts for transient API failures |
+| `DELAY_BETWEEN_RETRIES` | int | `2` | Initial delay in seconds between retries (doubles each retry with exponential backoff) |
+| `EXPONENTIAL_BACKOFF` | bool | `true` | Enable exponential backoff (2s → 4s → 8s) for rate limit handling |
+| **Agent Memory & Context** | | | |
+| `ADD_HISTORY_TO_CONTEXT` | bool | `true` | Include conversation history in LLM context for coherence |
+| `READ_TOOL_CALL_HISTORY` | bool | `true` | Give LLM access to previous tool calls |
+| `UPDATE_KNOWLEDGE` | bool | `true` | Allow LLM to add learnings to knowledge base |
+| `READ_CHAT_HISTORY` | bool | `true` | Provide dedicated tool for LLM to query chat history |
+| `ENABLE_USER_MEMORIES` | bool | `true` | Store and track user preferences for personalization |
+| `ENABLE_SESSION_SUMMARIES` | bool | `true` | Auto-summarize sessions for context compression |
+| `COMPRESS_TOOL_RESULTS` | bool | `true` | Compress tool outputs to reduce context size |
+| `ADD_SESSION_STATE_TO_CONTEXT` | bool | `true` | Inject tool_call_count and recipes_found into LLM context between calls |
+| `SEARCH_KNOWLEDGE` | bool | `true` | Give LLM ability to search knowledge base during reasoning |
 
 ### Observability & Tracing
 

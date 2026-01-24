@@ -54,7 +54,32 @@ This is a comprehensive GenAI application designed to **demonstrate best practic
 
 ## Status Section
 
-**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed, Task 11 Tracing implemented, Task 12 E2E Evals complete, Task 13 REST API Tests implemented, Task 13+ Eval visibility to os.agno.com ✅**
+**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed, Task 11 Tracing implemented, Task 12 E2E Evals complete, Task 13 REST API Tests implemented, Task 13+ Eval visibility to os.agno.com, Dynamic instructions + session state context ✅**
+
+**Latest Update (2026-01-24):**
+- ✅ **Solution Found**: Use `add_session_state_to_context=True` to inject session_state into system message between tool calls
+  - This makes `tool_call_count` and `recipes_found` visible to LLM in context, not just instructions
+  - Combined with dynamic instructions function for comprehensive state awareness
+  - Tool-hook enforces hard limit by raising RuntimeError when tool_call_count >= TOOL_CALL_LIMIT
+  - Session state format in context: `<session_state> {"tool_call_count": 3, "recipes_found": 2} </session_state>`
+  - LLM can now see progress and make intelligent decisions about stopping
+  - Fixed recipe counting: Tool-hook now unwraps ToolResult.content to access actual MCP data
+
+**Previous Investigation (2026-01-24):**
+- ⚠️ Dynamic instructions function may only be called once at initialization in current Agno version
+  - Workaround: `add_session_state_to_context=True` provides alternative path for LLM state awareness
+  - Tool call limit (`tool_call_limit=5`) logs warnings but does NOT enforce hard stop
+  - Hard enforcement added in tool-hook: raises RuntimeError when limit reached
+
+**Latest Update (2026-01-22):**
+- ✅ Dynamic instructions now use Agno's template syntax for session_state interpolation
+  - Changed from function approach `get_dynamic_instructions(run_context)` to string template approach
+  - Instructions now use `{tool_call_count}` and `{recipes_found}` template variables
+  - Agno automatically substitutes these values from session_state every time LLM needs instructions
+  - Simpler, more reliable pattern recommended by Agno documentation
+  - Tool-hook continues updating session_state values (tool_call_count, recipes_found)
+  - LLM now sees real-time progress automatically via template substitution
+  - All 161 unit tests passing
 
 **Latest Update (2026-01-22):**
 - ✅ Eval visibility to os.agno.com platform working

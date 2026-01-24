@@ -1,4 +1,4 @@
-"""Pre-hooks and post-hooks for Recipe Recommendation Agent.
+"""Pre-hooks, post-hooks, and tool-hooks for Recipe Recommendation Agent.
 
 Implements ingredient detection pre-hooks, safety guardrails, metadata injection, and response extraction.
 
@@ -6,22 +6,108 @@ Pre-hook Pipeline:
 1. extract_ingredients_pre_hook - Detects ingredients from images (ChatMessage format)
 2. PromptInjectionGuardrail - Safety guardrail
 
+Tool-hook Pipeline (runs during tool execution, between tool calls):
+1. track_state_tool_hook - Increments tool_call_count, updates recipes_found
+
 Post-hook Pipeline:
 1. inject_metadata_post_hook - Injects session_id, run_id, execution_time_ms into response
-2. store_troubleshooting_post_hook - Stores troubleshooting findings to knowledge base (closure)
-3. extract_response_field_post_hook - Extracts response field for UI display (markdown rendering)
+2. extract_response_field_post_hook - Extracts response field for UI display (markdown rendering)
 """
 
-import asyncio
-from datetime import datetime
-from typing import List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from agno.guardrails import PromptInjectionGuardrail
 from agno.run.agent import RunOutput
+from agno.run import RunContext
 
 from src.utils.config import config
 from src.utils.logger import logger
 from src.mcp_tools.ingredients import extract_ingredients_pre_hook
+
+
+async def track_state_tool_hook(
+    run_context: RunContext,
+    function_name: str,
+    function_call: Callable,
+    arguments: Dict[str, Any],
+):
+    """Tool-hook: Track state during tool execution (runs between tool calls).
+    
+    Updates session_state with:
+    - tool_call_count: Increments by 1 for each tool call
+    - recipes_found: Extracted from recipe tool results
+    
+    **CRITICAL**: Enforces tool_call_limit by raising exception (Agno's parameter only logs).
+    """
+    try:
+        import json
+        
+        # Initialize session_state if not present
+        if not run_context.session_state:
+            run_context.session_state = {}
+        
+        # Get current count BEFORE incrementing
+        current_count = run_context.session_state.get("tool_call_count", 0)
+        
+        # ENFORCE tool call limit (hard stop)
+        if current_count > config.TOOL_CALL_LIMIT:
+            error_msg = f"Tool call limit reached: {current_count}/{config.TOOL_CALL_LIMIT}. Stopping to prevent excessive API calls."
+            logger.error(f"🛑 {error_msg}")
+            raise RuntimeError(error_msg)
+        
+        # Increment tool call count
+        run_context.session_state["tool_call_count"] = current_count + 1
+        recipes_found = run_context.session_state.get("recipes_found", 0)
+        
+        logger.info(f"Tool-hook: '{function_name}' | tool_calls={current_count + 1}/{config.TOOL_CALL_LIMIT} | recipes={recipes_found}/{config.MAX_RECIPES}")
+        
+        # Call the actual tool function
+        result = await function_call(**arguments)
+        
+        # Extract recipe count from recipe tool results
+        if function_name in ["search_recipes", "get_recipe_information"]:
+            recipes_in_result = _extract_recipe_count(result)
+            if recipes_in_result > 0:
+                current_recipes = run_context.session_state.get("recipes_found", 0)
+                run_context.session_state["recipes_found"] = current_recipes + recipes_in_result
+                logger.info(f"✓ Found {recipes_in_result} recipes | total: {current_recipes + recipes_in_result}/{config.MAX_RECIPES}")
+        
+        return result
+    
+    except RuntimeError:
+        raise  # Re-raise limit exceeded errors
+    except Exception as e:
+        logger.warning(f"Tool-hook error in '{function_name}': {e}")
+        return await function_call(**arguments)
+
+
+def _extract_recipe_count(result: Any) -> int:
+    """Extract recipe count from tool result. Handles ToolResult wrapping and JSON parsing."""
+    import json
+    
+    # Unwrap ToolResult if needed
+    actual_result = result.content if hasattr(result, 'content') else result
+    
+    # Handle dict with 'recipes' or 'results' keys
+    if isinstance(actual_result, dict):
+        return len(actual_result.get("recipes", []) or actual_result.get("results", []))
+    
+    # Handle JSON string
+    if isinstance(actual_result, str):
+        try:
+            parsed = json.loads(actual_result)
+            if isinstance(parsed, dict):
+                return len(parsed.get("recipes", []) or parsed.get("results", []))
+            elif isinstance(parsed, list):
+                return len(parsed)
+        except (json.JSONDecodeError, ValueError):
+            pass
+    
+    # Handle direct list
+    if isinstance(actual_result, list):
+        return len(actual_result)
+    
+    return 0
 
 
 def inject_metadata_post_hook(
@@ -74,81 +160,6 @@ def inject_metadata_post_hook(
         logger.warning(f"Post-hook failed to inject metadata: {e}")
 
 
-def create_store_troubleshooting_post_hook(knowledge_base):
-    """Factory function to create post-hook closure with knowledge base access.
-    
-    Creates a post-hook that captures the knowledge_base object from the parent scope,
-    enabling direct writes to the knowledge base without relying on session parameter.
-    
-    Args:
-        knowledge_base: Knowledge instance (or None if knowledge base is disabled)
-        
-    Returns:
-        Closure function that stores troubleshooting to knowledge base
-    """
-    async def store_troubleshooting_post_hook(
-        run_output: RunOutput,
-        session=None,
-        user_id: Optional[str] = None,
-        debug_mode: Optional[bool] = None,
-    ) -> None:
-        """Post-hook: Store troubleshooting findings to knowledge base (closure-captured).
-        
-        If troubleshooting field is populated with error/retry info,
-        add it to the agent's knowledge base for future learning.
-        Knowledge base is captured from parent scope (not session parameter).
-        """
-        try:
-            if not run_output.content:
-                return
-            
-            troubleshooting = None
-            
-            # Get troubleshooting field from RecipeResponse
-            if hasattr(run_output.content, "troubleshooting"):
-                troubleshooting = getattr(run_output.content, "troubleshooting", None)
-            elif isinstance(run_output.content, dict):
-                troubleshooting = run_output.content.get("troubleshooting")
-            
-            # If troubleshooting info exists, add to knowledge base
-            if troubleshooting and troubleshooting.strip():
-                if knowledge_base:
-                    try:
-                        # Get run_id and timestamp for unique entry tracking
-                        run_id = getattr(run_output, "run_id", "unknown")
-                        timestamp = datetime.utcnow().isoformat()
-                        
-                        # Prepend run_id and timestamp to content for uniqueness
-                        # (LanceDB deduplicates by content hash, so unique metadata prevents duplicates)
-                        unique_content = f"[{timestamp}] Run {run_id}\n\n{troubleshooting}"
-                        
-                        # Add troubleshooting finding to knowledge base (async-safe via to_thread)
-                        # Knowledge.add_content() stores to AgentOS and syncs to os.agno.com
-                        await asyncio.to_thread(
-                            knowledge_base.add_content,
-                            text_content=unique_content,
-                            metadata={
-                                "type": "troubleshooting",
-                                "run_id": run_id,
-                                "timestamp": timestamp,
-                                "user_id": user_id,
-                            }
-                        )
-                        logger.info(f"Post-hook: Troubleshooting stored to knowledge base (run={run_id}) - {troubleshooting[:100]}...")
-                    except Exception as kb_error:
-                        # If knowledge base add fails, just log (don't crash)
-                        logger.warning(f"Failed to add troubleshooting to knowledge base: {kb_error}. Troubleshooting was: {troubleshooting[:100]}...")
-                else:
-                    # Knowledge base not available, just log
-                    logger.debug(f"Post-hook: Knowledge base not available. Troubleshooting recorded in logs - {troubleshooting[:100]}...")
-            else:
-                logger.debug("Post-hook: No troubleshooting findings to store")
-        except Exception as e:
-            logger.warning(f"Post-hook failed to process troubleshooting: {e}")
-    
-    return store_troubleshooting_post_hook
-
-
 def extract_response_field_post_hook(
     run_output: RunOutput,
     session=None,
@@ -189,6 +200,27 @@ def extract_response_field_post_hook(
         logger.warning(f"Post-hook failed to extract response field: {e}")
 
 
+def get_tool_hooks() -> List:
+    """Get list of tool-hooks to track state during tool execution.
+    
+    Returns:
+        List of tool-hooks to register with agent.
+        
+    Tool-hooks run DURING tool execution (between tool calls in the loop),
+    allowing real-time state updates visible to the next LLM invocation.
+    
+    Includes:
+        - State tracking (tool_call_count, recipes_found) - always enabled
+    """
+    hooks: List = []
+    
+    # Add state tracking tool-hook (always enabled)
+    hooks.append(track_state_tool_hook)
+    logger.info("Registered state tracking tool-hook (runs during tool execution)")
+    
+    return hooks
+
+
 def get_pre_hooks() -> List:
     """Get list of pre-hooks based on configuration.
     
@@ -200,6 +232,7 @@ def get_pre_hooks() -> List:
         - Prompt injection guardrail (enabled by default)
     
     Note: Input is directly ChatMessage schema - no normalization needed.
+    Note: Tool call tracking moved to tool-hooks (runs during tool execution).
     """
     hooks: List = []
     
@@ -219,28 +252,24 @@ def get_post_hooks(knowledge_base=None) -> List:
     """Get list of post-hooks to process responses after agent execution.
     
     Args:
-        knowledge_base: Knowledge instance for storing troubleshooting (optional)
+        knowledge_base: Knowledge instance (optional, not used - agent writes to knowledge via update_knowledge=True)
     
     Returns:
         List of post-hooks to register with agent in execution order.
         
     Includes:
         - Metadata injection (session_id, run_id, execution_time_ms) - always enabled
-        - Troubleshooting storage to knowledge base - when troubleshooting field populated (with closure)
         - Response field extraction for UI rendering (only if OUTPUT_FORMAT=markdown)
     
     Note: Post-hooks process RunOutput after agent completes.
+    Note: Tool call and recipe tracking happen in tool-hooks (runs during tool execution).
+    Note: Troubleshooting storage happens automatically via agent's update_knowledge=True setting.
     """
     hooks: List = []
     
-    # Always inject metadata first (before UI rendering)
+    # Always inject metadata (first hook)
     hooks.append(inject_metadata_post_hook)
     logger.info("Registered metadata injection post-hook")
-    
-    # Store troubleshooting findings to knowledge base (factory creates closure with knowledge_base)
-    store_troubleshooting_hook = create_store_troubleshooting_post_hook(knowledge_base)
-    hooks.append(store_troubleshooting_hook)
-    logger.info("Registered troubleshooting storage post-hook")
     
     # Only extract response field for markdown output format
     if config.OUTPUT_FORMAT == "markdown":

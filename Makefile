@@ -176,19 +176,26 @@ clean:
 	find . -type d -name ".egg-info" -exec rm -rf {} + 2>/dev/null || true
 	@echo "✓ Clean complete"
 
-# Clean Memories: Clear all user memories from database
+# Clean Memories: Clear all user memories from database and knowledge graph
 clean-memories:
 	@if [ ! -f agno.db ]; then \
 		echo "No database found (agno.db). Nothing to clean."; \
-		exit 0; \
-	fi
-	@echo "Clearing user memories from database..."
-	@sqlite3 agno.db "DELETE FROM agno_memories;"
-	@COUNT=$$(sqlite3 agno.db "SELECT COUNT(*) FROM agno_memories;"); \
-	if [ "$$COUNT" -eq 0 ]; then \
-		echo "✓ All memories cleared (0 records remaining)"; \
 	else \
-		echo "⚠ Unexpected records found: $$COUNT"; \
+		echo "Clearing user memories from database..."; \
+		sqlite3 agno.db "DELETE FROM agno_memories;"; \
+		COUNT=$$(sqlite3 agno.db "SELECT COUNT(*) FROM agno_memories;"); \
+		if [ "$$COUNT" -eq 0 ]; then \
+			echo "✓ All memories cleared (0 records remaining)"; \
+		else \
+			echo "⚠ Unexpected records found: $$COUNT"; \
+		fi; \
+	fi
+	@if [ -d "tmp/lancedb" ]; then \
+		echo "Deleting knowledge graph (tmp/lancedb)..."; \
+		rm -rf tmp/lancedb; \
+		echo "✓ Knowledge graph deleted"; \
+	else \
+		echo "No knowledge graph found (tmp/lancedb). Nothing to delete."; \
 	fi
 
 # Zip: Create a ZIP archive of source code excluding files in .gitignore

@@ -15,6 +15,7 @@ from agno.knowledge.knowledge import Knowledge
 from agno.vectordb.lancedb import LanceDb
 from agno.knowledge.embedder.sentence_transformer import SentenceTransformerEmbedder
 from agno.tools import tool
+from agno.run import RunContext
 
 from src.utils.config import config
 from src.utils.logger import logger
@@ -23,10 +24,65 @@ from src.models.models import ChatMessage, RecipeResponse, IngredientDetectionOu
 from src.mcp_tools.ingredients import detect_ingredients_tool
 from src.mcp_tools.spoonacular import SpoonacularMCP
 from src.prompts.prompts import get_system_instructions
-from src.hooks.hooks import get_pre_hooks, get_post_hooks
+from src.hooks.hooks import get_pre_hooks, get_post_hooks, get_tool_hooks
 
 # Suppress LanceDB fork-safety warning (not using multiprocessing)
 warnings.filterwarnings("ignore", message="lance is not fork-safe")
+
+
+def get_dynamic_instructions(run_context: RunContext) -> str:
+    """Generate system instructions with real-time session state awareness.
+    
+    This function is called by Agno EVERY TIME the LLM needs instructions,
+    including between tool calls. It accesses current session_state values
+    and generates instructions with real-time progress information.
+    
+    Args:
+        run_context: RunContext providing access to session_state with current values
+    
+    Returns:
+        str: Complete system instructions with current state values embedded
+    """
+    # Get current state from run_context (updated by tool-hooks in real-time)
+    current_tool_calls = 0
+    recipes_found = 0
+    
+    if run_context and run_context.session_state:
+        current_tool_calls = run_context.session_state.get("tool_call_count", 0)
+        recipes_found = run_context.session_state.get("recipes_found", 0)
+    
+    # Log to verify this function is being called
+    logger.info(f"🔄 Dynamic instructions called | tool_calls={current_tool_calls}/{config.TOOL_CALL_LIMIT} | recipes={recipes_found}/{config.MAX_RECIPES}")
+    
+    # Get base system instructions
+    base_instructions = get_system_instructions(
+        max_recipes=config.MAX_RECIPES,
+        max_tool_calls=config.TOOL_CALL_LIMIT,
+    )
+    
+    # Inject real-time progress awareness at the beginning
+    remaining_calls = max(0, config.TOOL_CALL_LIMIT - current_tool_calls)
+    progress_awareness = f"""## EXECUTION PROGRESS (Real-Time Awareness)
+
+**Tool Call Status:**
+- Tool calls made so far: {current_tool_calls} / {config.TOOL_CALL_LIMIT}
+- Remaining tool calls allowed: {remaining_calls}
+- **CRITICAL**: Once you reach {config.TOOL_CALL_LIMIT} calls, STOP immediately and use LLM knowledge
+
+**Recipe Discovery Status:**
+- Recipes found so far: {recipes_found} / {config.MAX_RECIPES}
+- **GUIDANCE**: If you've found {config.MAX_RECIPES} recipes (target achieved), prioritize consolidating results over searching for more
+- **DECISION**: If recipes_found >= {config.MAX_RECIPES} AND you have used 3+ tool calls, STOP searching and present results
+
+**Combined Strategy:**
+1. If recipes_found < {config.MAX_RECIPES}: You can continue searching (if tool calls remain)
+2. If recipes_found >= {config.MAX_RECIPES}: Present your findings; ask follow-up questions instead of more searches
+3. If remaining tool calls <= 1: Stop searching immediately; use LLM knowledge for any additional help
+
+"""
+    
+    return progress_awareness + base_instructions
+
 
 
 async def initialize_knowledge_base(db=None) -> Knowledge:
@@ -194,6 +250,11 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     pre_hooks = get_pre_hooks()
     logger.info(f"✓ {len(pre_hooks)} pre-hooks registered")
     
+    # 5a. Get tool-hooks (runs during tool execution for state tracking)
+    logger.info("Step 5a/7: Registering tool-hooks...")
+    tool_hooks = get_tool_hooks()
+    logger.info(f"✓ {len(tool_hooks)} tool-hooks registered")
+    
     # 5b. Get post-hooks (includes response field extraction for UI rendering)
     logger.info("Step 5b/7: Registering post-hooks...")
     post_hooks = get_post_hooks(knowledge_base=knowledge)
@@ -201,48 +262,65 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     
     # 6. Configure Agno Agent
     logger.info("Step 6/7: Configuring Agno Agent...")
-    # Generate system instructions with config values
-    system_instructions = get_system_instructions(
-        max_recipes=config.MAX_RECIPES,
-        max_tool_calls=config.TOOL_CALL_LIMIT,
-    )
+    
+    # Pass function reference (not function call) so Agno calls it dynamically
+    logger.info("Dynamic instructions configured: get_dynamic_instructions will be called by Agno with RunContext")
+    logger.info("Session state will be added to context automatically via add_session_state_to_context=True")
+    
     agent = Agent(
+        # === Model Configuration ===
         model=Gemini(
             id=config.GEMINI_MODEL,
             api_key=config.GEMINI_API_KEY,
-            temperature=config.TEMPERATURE,
-            max_output_tokens=config.MAX_OUTPUT_TOKENS,
-            thinking_level=config.THINKING_LEVEL,
+            temperature=config.TEMPERATURE,  # 0.3 = balanced creativity vs consistency
+            max_output_tokens=config.MAX_OUTPUT_TOKENS,  # 2048 supports full recipe with instructions
+            thinking_level=config.THINKING_LEVEL,  # Extended reasoning depth control
         ),
-        db=db,
-        knowledge=knowledge,
-        search_knowledge=True,
-        tools=tools,
-        pre_hooks=pre_hooks,
-        post_hooks=post_hooks,
-        input_schema=ChatMessage,
-        output_schema=RecipeResponse,
-        instructions=system_instructions,
-        # Retry configuration for transient failures
-        retries=3,
-        exponential_backoff=True,
-        delay_between_retries=2,
-        # Memory settings
-        add_history_to_context=True,
-        read_tool_call_history=True,
-        update_knowledge=True,
-        read_chat_history=True,
-        num_history_runs=config.MAX_HISTORY,
-        enable_user_memories=True,
-        enable_session_summaries=True,
-        compress_tool_results=True,
-        # Tool call limit to prevent excessive API calls
-        tool_call_limit=config.TOOL_CALL_LIMIT,
-        # Agent metadata
+        
+        # === Storage & Knowledge ===
+        db=db,  # SQLite (dev) or PostgreSQL (prod) for session persistence
+        knowledge=knowledge,  # LanceDB vector store for learnings/troubleshooting
+        search_knowledge=config.SEARCH_KNOWLEDGE,  # LLM-accessible knowledge search
+        
+        # === Tools & Hooks ===
+        tools=tools,  # Spoonacular MCP + optional ingredient detection tool
+        pre_hooks=pre_hooks,  # Ingredient extraction + safety guardrails
+        tool_hooks=tool_hooks,  # State tracking (tool_call_count, recipes_found)
+        post_hooks=post_hooks,  # Response field extraction for UI rendering
+        
+        # === Input/Output Schemas ===
+        input_schema=ChatMessage,  # Validates incoming messages
+        output_schema=RecipeResponse,  # Structures recipe response with metadata
+        
+        # === Instructions & State ===
+        instructions=get_dynamic_instructions,  # Function ref: called each LLM invocation with real-time state
+        session_state={"tool_call_count": 0, "recipes_found": 0},  # Tracks execution progress
+        
+        # === Retry & Error Handling ===
+        retries=config.MAX_RETRIES,  # 3 retry attempts for transient failures
+        exponential_backoff=config.EXPONENTIAL_BACKOFF,  # 2s → 4s → 8s delays (handles rate limits)
+        delay_between_retries=config.DELAY_BETWEEN_RETRIES,  # Initial backoff delay in seconds
+        
+        # === Memory & Context ===
+        add_history_to_context=config.ADD_HISTORY_TO_CONTEXT,  # Include conversation history
+        read_tool_call_history=config.READ_TOOL_CALL_HISTORY,  # LLM can access previous tool calls
+        update_knowledge=config.UPDATE_KNOWLEDGE,  # LLM can add learnings to KB
+        read_chat_history=config.READ_CHAT_HISTORY,  # Dedicated tool for history access
+        num_history_runs=config.MAX_HISTORY,  # 3 turns of conversation context
+        enable_user_memories=config.ENABLE_USER_MEMORIES,  # Track user preferences
+        enable_session_summaries=config.ENABLE_SESSION_SUMMARIES,  # Auto-compress context
+        compress_tool_results=config.COMPRESS_TOOL_RESULTS,  # Reduce tool output verbosity
+        add_session_state_to_context=config.ADD_SESSION_STATE_TO_CONTEXT,  # Inject progress into context
+        
+        # === Execution Limits ===
+        tool_call_limit=config.TOOL_CALL_LIMIT,  # Hard stop at 5 API calls (prevent runaway)
+        reasoning_max_steps=config.TOOL_CALL_LIMIT,  # Complements tool_call_limit for reasoning depth
+        
+        # === Metadata ===
         name="Recipe Recommendation Agent",
         description="Transforms ingredient images into recipe recommendations with conversational memory",
     )
-    logger.info("✓ Agent configured successfully")
+    logger.info(f"✓ Agent configured successfully with tool_call_limit={config.TOOL_CALL_LIMIT}, reasoning_max_steps={config.TOOL_CALL_LIMIT}")
     logger.info("=== Agent initialization complete ===")
     
     return agent, tracing_db, knowledge

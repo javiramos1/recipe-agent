@@ -54,6 +54,34 @@ class Config:
         # Options: "low", "high" - Recipe recommendations benefit from low/high thinking
         # "low" = fastest (no extended thinking), "high" = slowest but most thorough
         self.THINKING_LEVEL: str = os.getenv("THINKING_LEVEL", "low")
+        
+        # Agent Retry Configuration - handles transient API failures gracefully
+        # MAX_RETRIES: Number of retry attempts for failed API calls (exponential backoff)
+        self.MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "3"))
+        # DELAY_BETWEEN_RETRIES: Initial delay in seconds (doubled each retry if exponential_backoff=True)
+        self.DELAY_BETWEEN_RETRIES: int = int(os.getenv("DELAY_BETWEEN_RETRIES", "2"))
+        # EXPONENTIAL_BACKOFF: Enable exponential backoff for rate limit handling
+        self.EXPONENTIAL_BACKOFF: bool = os.getenv("EXPONENTIAL_BACKOFF", "true").lower() in ("true", "1", "yes")
+        
+        # Agent Memory & History Settings - control context enrichment and knowledge management
+        # ADD_HISTORY_TO_CONTEXT: Include conversation history in LLM context for coherence
+        self.ADD_HISTORY_TO_CONTEXT: bool = os.getenv("ADD_HISTORY_TO_CONTEXT", "true").lower() in ("true", "1", "yes")
+        # READ_TOOL_CALL_HISTORY: Give LLM access to previous tool calls for continuity
+        self.READ_TOOL_CALL_HISTORY: bool = os.getenv("READ_TOOL_CALL_HISTORY", "true").lower() in ("true", "1", "yes")
+        # UPDATE_KNOWLEDGE: Allow LLM to add learnings to knowledge base
+        self.UPDATE_KNOWLEDGE: bool = os.getenv("UPDATE_KNOWLEDGE", "true").lower() in ("true", "1", "yes")
+        # READ_CHAT_HISTORY: Provide dedicated tool for LLM to query chat history
+        self.READ_CHAT_HISTORY: bool = os.getenv("READ_CHAT_HISTORY", "true").lower() in ("true", "1", "yes")
+        # ENABLE_USER_MEMORIES: Store and track user preferences for personalization
+        self.ENABLE_USER_MEMORIES: bool = os.getenv("ENABLE_USER_MEMORIES", "true").lower() in ("true", "1", "yes")
+        # ENABLE_SESSION_SUMMARIES: Auto-summarize sessions for context compression
+        self.ENABLE_SESSION_SUMMARIES: bool = os.getenv("ENABLE_SESSION_SUMMARIES", "true").lower() in ("true", "1", "yes")
+        # COMPRESS_TOOL_RESULTS: Compress tool outputs to reduce context size
+        self.COMPRESS_TOOL_RESULTS: bool = os.getenv("COMPRESS_TOOL_RESULTS", "true").lower() in ("true", "1", "yes")
+        # ADD_SESSION_STATE_TO_CONTEXT: Inject tool_call_count and recipes_found into LLM context between calls
+        self.ADD_SESSION_STATE_TO_CONTEXT: bool = os.getenv("ADD_SESSION_STATE_TO_CONTEXT", "true").lower() in ("true", "1", "yes")
+        # SEARCH_KNOWLEDGE: Give LLM ability to search knowledge base during reasoning
+        self.SEARCH_KNOWLEDGE: bool = os.getenv("SEARCH_KNOWLEDGE", "true").lower() in ("true", "1", "yes")
 
     def validate(self) -> None:
         """Validate required configuration.
@@ -88,6 +116,14 @@ class Config:
         if self.THINKING_LEVEL not in ("off", "low", "high"):
             raise ValueError(
                 f"THINKING_LEVEL must be 'off', 'low', or 'high', got: {self.THINKING_LEVEL}"
+            )
+        if self.MAX_RETRIES < 1:
+            raise ValueError(
+                f"MAX_RETRIES must be at least 1, got: {self.MAX_RETRIES}"
+            )
+        if self.DELAY_BETWEEN_RETRIES < 1:
+            raise ValueError(
+                f"DELAY_BETWEEN_RETRIES must be at least 1 second, got: {self.DELAY_BETWEEN_RETRIES}"
             )
 
 
