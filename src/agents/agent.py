@@ -15,7 +15,6 @@ from agno.knowledge.knowledge import Knowledge
 from agno.vectordb.lancedb import LanceDb
 from agno.knowledge.embedder.sentence_transformer import SentenceTransformerEmbedder
 from agno.tools import tool
-from agno.run import RunContext
 
 from src.utils.config import config
 from src.utils.logger import logger
@@ -28,60 +27,6 @@ from src.hooks.hooks import get_pre_hooks, get_post_hooks, get_tool_hooks
 
 # Suppress LanceDB fork-safety warning (not using multiprocessing)
 warnings.filterwarnings("ignore", message="lance is not fork-safe")
-
-
-def get_dynamic_instructions(run_context: RunContext) -> str:
-    """Generate system instructions with real-time session state awareness.
-    
-    This function is called by Agno EVERY TIME the LLM needs instructions,
-    including between tool calls. It accesses current session_state values
-    and generates instructions with real-time progress information.
-    
-    Args:
-        run_context: RunContext providing access to session_state with current values
-    
-    Returns:
-        str: Complete system instructions with current state values embedded
-    """
-    # Get current state from run_context (updated by tool-hooks in real-time)
-    current_tool_calls = 0
-    recipes_found = 0
-    
-    if run_context and run_context.session_state:
-        current_tool_calls = run_context.session_state.get("tool_call_count", 0)
-        recipes_found = run_context.session_state.get("recipes_found", 0)
-    
-    # Log to verify this function is being called
-    logger.info(f"🔄 Dynamic instructions called | tool_calls={current_tool_calls}/{config.TOOL_CALL_LIMIT} | recipes={recipes_found}/{config.MAX_RECIPES}")
-    
-    # Get base system instructions
-    base_instructions = get_system_instructions(
-        max_recipes=config.MAX_RECIPES,
-        max_tool_calls=config.TOOL_CALL_LIMIT,
-    )
-    
-    # Inject real-time progress awareness at the beginning
-    remaining_calls = max(0, config.TOOL_CALL_LIMIT - current_tool_calls)
-    progress_awareness = f"""## EXECUTION PROGRESS (Real-Time Awareness)
-
-**Tool Call Status:**
-- Tool calls made so far: {current_tool_calls} / {config.TOOL_CALL_LIMIT}
-- Remaining tool calls allowed: {remaining_calls}
-- **CRITICAL**: Once you reach {config.TOOL_CALL_LIMIT} calls, STOP immediately and use LLM knowledge
-
-**Recipe Discovery Status:**
-- Recipes found so far: {recipes_found} / {config.MAX_RECIPES}
-- **GUIDANCE**: If you've found {config.MAX_RECIPES} recipes (target achieved), prioritize consolidating results over searching for more
-- **DECISION**: If recipes_found >= {config.MAX_RECIPES} AND you have used 3+ tool calls, STOP searching and present results
-
-**Combined Strategy:**
-1. If recipes_found < {config.MAX_RECIPES}: You can continue searching (if tool calls remain)
-2. If recipes_found >= {config.MAX_RECIPES}: Present your findings; ask follow-up questions instead of more searches
-3. If remaining tool calls <= 1: Stop searching immediately; use LLM knowledge for any additional help
-
-"""
-    
-    return progress_awareness + base_instructions
 
 
 
@@ -263,8 +208,7 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     # 6. Configure Agno Agent
     logger.info("Step 6/7: Configuring Agno Agent...")
     
-    # Pass function reference (not function call) so Agno calls it dynamically
-    logger.info("Dynamic instructions configured: get_dynamic_instructions will be called by Agno with RunContext")
+    # Get static system instructions (session_state injected via add_session_state_to_context=True)
     logger.info("Session state will be added to context automatically via add_session_state_to_context=True")
     
     agent = Agent(
@@ -293,7 +237,7 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         output_schema=RecipeResponse,  # Structures recipe response with metadata
         
         # === Instructions & State ===
-        instructions=get_dynamic_instructions,  # Function ref: called each LLM invocation with real-time state
+        instructions=get_system_instructions(max_recipes=config.MAX_RECIPES, max_tool_calls=config.TOOL_CALL_LIMIT),
         session_state={"tool_call_count": 0, "recipes_found": 0},  # Tracks execution progress
         
         # === Retry & Error Handling ===

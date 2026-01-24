@@ -237,6 +237,7 @@ class TestAgentMetadata:
         assert "db=db" in code or "db=" in code
         assert "tools=tools" in code
         assert 'name="Recipe Recommendation Agent"' in code
-        assert "enable_user_memories=True" in code
-        assert "enable_session_summaries=True" in code
-        assert "compress_tool_results=True" in code
+        # Check for configuration flags (either literal True or config variable reference)
+        assert ("enable_user_memories=True" in code or "enable_user_memories=config.ENABLE_USER_MEMORIES" in code)
+        assert ("enable_session_summaries=True" in code or "enable_session_summaries=config.ENABLE_SESSION_SUMMARIES" in code)
+        assert ("compress_tool_results=True" in code or "compress_tool_results=config.COMPRESS_TOOL_RESULTS" in code)
