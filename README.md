@@ -106,7 +106,10 @@ make setup
 # 3. Edit .env with your API keys
 # Required:
 #   GEMINI_API_KEY=your_key_here
+# Optional (only needed if USE_SPOONACULAR=true, which is the default):
 #   SPOONACULAR_API_KEY=your_key_here
+# For internal LLM-only mode (no Spoonacular), skip SPOONACULAR_API_KEY and set:
+#   USE_SPOONACULAR=false
 nano .env
 
 # 4. Start the application
@@ -177,7 +180,13 @@ OUTPUT_FORMAT=json
 # DATABASE_URL=postgresql://user:pass@localhost:5432/recipe_service
 ```
 
-#### Getting Spoonacular API Key
+#### Getting Spoonacular API Key (Optional)
+
+**Only required if using Spoonacular for recipe search** (when `USE_SPOONACULAR=true`, which is the default).
+
+If you want to use internal LLM knowledge instead, skip this step and set `USE_SPOONACULAR=false`.
+
+To get a Spoonacular key:
 
 1. Visit [spoonacular.com/food-api](https://spoonacular.com/food-api)
 2. Click **"Get API Key"** button
@@ -185,7 +194,9 @@ OUTPUT_FORMAT=json
 4. Your API key appears on the dashboard
 5. Copy to `.env` as `SPOONACULAR_API_KEY`
 
-#### Understanding Spoonacular Quotas
+#### Understanding Spoonacular Quotas (Spoonacular Mode Only)
+
+Applies when `USE_SPOONACULAR=true`.
 
 **Free Plan:**
 - **API Calls**: 100/day
@@ -197,6 +208,7 @@ OUTPUT_FORMAT=json
 - Check remaining quota in `.env` file or dashboard
 - When exceeded: API returns `402 Payment Required` error
 - Daily quota resets at **00:00 UTC**
+- If quota exceeded, switch to internal LLM mode: `USE_SPOONACULAR=false make dev`
 
 ### 3. Start Development Server
 
@@ -622,7 +634,7 @@ Uses **Agno evals framework** (AgentOS built-in evaluation system) for multi-dim
 4. View eval results in the "Evaluations" tab
 5. Results are persisted in `tmp/recipe_agent_sessions.db` (shared with agent)
 
-**Note:** Requires valid API keys (GEMINI_API_KEY, SPOONACULAR_API_KEY) and internet connection.
+**Note:** Requires GEMINI_API_KEY. SPOONACULAR_API_KEY is optional (only needed if USE_SPOONACULAR=true). Internet connection required for API calls.
 
 ### REST API Integration Tests
 
@@ -651,13 +663,24 @@ Tests REST API endpoints directly using httpx client. Validates:
 
 ### "Spoonacular MCP unreachable" on startup
 
-**Problem:** Application fails to start with MCP connection error.
+**Problem:** Application fails to start with MCP connection error (when USE_SPOONACULAR=true).
 
 **Solution:**
-1. Verify internet connection
-2. Check SPOONACULAR_API_KEY is valid
+1. Verify SPOONACULAR_API_KEY is set and valid
+2. Check internet connection
 3. Test API key: `curl "https://api.spoonacular.com/recipes/info?ids=1&apiKey=YOUR_KEY"`
-4. If valid, MCP may be temporarily unavailable; try again
+4. If you don't have a Spoonacular key, use internal LLM mode: `USE_SPOONACULAR=false make dev`
+5. If valid, MCP may be temporarily unavailable; try again
+
+### "Spoonacular API key missing" error when starting app
+
+**Problem:** Application fails because SPOONACULAR_API_KEY is not set and USE_SPOONACULAR=true.
+
+**Solution:**
+- **Option 1:** Provide Spoonacular key: `SPOONACULAR_API_KEY=your_key make dev`
+- **Option 2:** Switch to internal LLM mode: `USE_SPOONACULAR=false make dev`
+  - No API key needed, uses Gemini's internal knowledge for recipe generation
+  - Still requires GEMINI_API_KEY for ingredient detection from images
 
 ### "API key invalid" errors during requests
 
