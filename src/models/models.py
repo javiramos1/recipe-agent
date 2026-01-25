@@ -119,8 +119,11 @@ class Recipe(BaseModel):
     """Domain model for a recipe.
     
     Supports both basic search results (Step 1) and full recipe details (Step 2).
-    - Step 1: Only id, title, and ready_in_minutes are required (from search_recipes)
+    - Step 1: Only id and title are required (from search_recipes)
+      - Optional basic fields: ready_in_minutes, servings, image
     - Step 2: All fields populated including ingredients/instructions (from get_recipe_information)
+    
+    All fields except id and title are optional. A Recipe object with just id and title is VALID.
     """
     model_config = ConfigDict(str_strip_whitespace=True)
     

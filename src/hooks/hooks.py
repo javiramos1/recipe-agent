@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, List, Optional
 from agno.guardrails import PromptInjectionGuardrail
 from agno.run.agent import RunOutput
 from agno.run import RunContext
+from agno.exceptions import RetryAgentRun
 
 from src.utils.config import config
 from src.utils.logger import logger
@@ -58,24 +59,29 @@ async def track_state_tool_hook(
         if current_count >= config.TOOL_CALL_LIMIT:
             recipes_found = run_context.session_state.get("recipes_found", 0)
             error_msg = (
-                f"🛑 TOOL CALL LIMIT REACHED\n\n"
-                f"You have reached the maximum tool calls ({config.TOOL_CALL_LIMIT}) allowed for this request.\n"
+                f"⛔ TOOL CALL LIMIT REACHED - NO MORE TOOL CALLS ALLOWED\n\n"
+                f"You have exhausted your tool call budget ({config.TOOL_CALL_LIMIT} calls).\n"
                 f"Tool calls made: {current_count}\n"
-                f"Recipes found: {recipes_found}\n\n"
-                f"STOP making tool calls immediately. Use your LLM knowledge to generate recipe suggestions based on "
-                f"the ingredients and context from this conversation. Do NOT attempt to call any more tools.\n\n"
-                f"IMPORTANT: Write this issue to the knowledge base using add_to_knowledge tool with the following:\n"
-                f"- Entry title: 'Tool Call Limit Reached (Search Quality Issue)'\n"
-                f"- Description: 'Only found {recipes_found} recipes after {current_count} tool calls. May indicate search algorithm inefficiency or limited recipe database coverage for ingredient combination.'\n"
-                f"- Category: 'search_quality'\n"
-                f"This helps improve future search strategies."
+                f"Recipes found so far: {recipes_found}\n\n"
+                f"🚫 CRITICAL INSTRUCTION - READ CAREFULLY:\n"
+                f"You MUST respond to the user NOW using ONLY your internal LLM knowledge.\n"
+                f"DO NOT attempt to call search_recipes, get_recipe_information, or ANY other tool.\n"
+                f"ANY attempt to call tools will FAIL with this same error.\n\n"
+                f"✅ What you MUST do NOW:\n"
+                f"1. If you found {recipes_found} recipes: Present them to the user with the basic info you have\n"
+                f"2. If you found 0 recipes: Generate 2-3 recipe suggestions based on the ingredients using your culinary knowledge\n"
+                f"3. Be transparent: Mention that you've reached your search limit and are providing suggestions from your knowledge\n"
+                f"4. Use the RecipeResponse format with your generated suggestions\n"
+                f"5. ⚠️ IF logging insights to knowledge base: Write ONLY ONE entry total (not one per failed attempt)\n\n"
+                f"Example response: 'I've reached my search limit after {current_count} attempts. Based on your ingredients, here are some recipe ideas from my culinary knowledge...'\n\n"
+                f"RESPOND NOW WITHOUT CALLING ANY TOOLS."
             )
             logger.error(f"🛑 Tool call limit reached: {current_count}/{config.TOOL_CALL_LIMIT}")
             
-            # Return error message as tool result
-            # This tells the LLM the tool failed and should stop trying
-            # The LLM sees this error and should generate response using LLM knowledge
-            return error_msg
+            # Raise RetryAgentRun to inject this error into the conversation
+            # This allows the LLM to see the error and generate a response without tools
+            # The LLM will continue but should not call tools after seeing this error
+            raise RetryAgentRun(error_msg)
         
         # Increment tool call count
         run_context.session_state["tool_call_count"] = current_count + 1
