@@ -257,14 +257,16 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         add_session_state_to_context=config.ADD_SESSION_STATE_TO_CONTEXT,  # Inject progress into context
         
         # === Execution Limits ===
-        tool_call_limit=config.TOOL_CALL_LIMIT,  # Hard stop at 5 API calls (prevent runaway)
+        # NOTE: tool_call_limit removed - we enforce limit in tool-hook instead
+        # Agno's tool_call_limit only logs warnings and doesn't actually stop execution
+        # Our track_state_tool_hook raises RuntimeError when limit reached, which properly stops the loop
         reasoning_max_steps=config.TOOL_CALL_LIMIT,  # Complements tool_call_limit for reasoning depth
         
         # === Metadata ===
         name="Recipe Recommendation Agent",
         description="Transforms ingredient images into recipe recommendations with conversational memory",
     )
-    logger.info(f"✓ Agent configured successfully with tool_call_limit={config.TOOL_CALL_LIMIT}, reasoning_max_steps={config.TOOL_CALL_LIMIT}")
+    logger.info(f"✓ Agent configured successfully with tool-hook enforcement at {config.TOOL_CALL_LIMIT} calls")
     logger.info("=== Agent initialization complete ===")
     
     return agent, tracing_db, knowledge

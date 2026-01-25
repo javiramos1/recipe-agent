@@ -35,6 +35,9 @@ class Config:
         self.MIN_INGREDIENT_CONFIDENCE: float = float(os.getenv("MIN_INGREDIENT_CONFIDENCE", "0.7"))
         self.IMAGE_DETECTION_MODE: str = os.getenv("IMAGE_DETECTION_MODE", "pre-hook")
         self.COMPRESS_IMG: bool = os.getenv("COMPRESS_IMG", "true").lower() in ("true", "1", "yes")
+        # Image Compression Threshold: Only compress if image size is below this (in KB)
+        # Default: 300 KB - images above this size are already compressed enough
+        self.COMPRESS_IMG_THRESHOLD_KB: int = int(os.getenv("COMPRESS_IMG_THRESHOLD_KB", "300"))
         self.OUTPUT_FORMAT: str = os.getenv("OUTPUT_FORMAT", "json")
         self.DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
         # Tracing Configuration
@@ -42,7 +45,7 @@ class Config:
         self.TRACING_DB_TYPE: str = os.getenv("TRACING_DB_TYPE", "sqlite")
         self.TRACING_DB_FILE: str = os.getenv("TRACING_DB_FILE", "agno_traces.db")
         # Tool Call Limit: Maximum number of tool calls agent can make per request
-        self.TOOL_CALL_LIMIT: int = int(os.getenv("TOOL_CALL_LIMIT", "5"))
+        self.TOOL_CALL_LIMIT: int = int(os.getenv("TOOL_CALL_LIMIT", "6"))
         # LLM Model Parameters
         # Temperature: Controls randomness (0.0 = deterministic, 1.0 = max randomness)
         # For recipes: 0.3 balances creativity with consistency

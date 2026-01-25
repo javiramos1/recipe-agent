@@ -170,6 +170,7 @@ MAX_HISTORY=3
 MAX_RECIPES=3
 MAX_IMAGE_SIZE_MB=5
 MIN_INGREDIENT_CONFIDENCE=0.7
+COMPRESS_IMG_THRESHOLD_KB=300
 IMAGE_DETECTION_MODE=pre-hook
 LOG_LEVEL=INFO
 OUTPUT_FORMAT=json
@@ -364,6 +365,7 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `MAX_RECIPES` | int | `3` | Maximum recipes to return per request |
 | `MAX_IMAGE_SIZE_MB` | int | `5` | Maximum image upload size |
 | `MIN_INGREDIENT_CONFIDENCE` | float | `0.7` | Confidence threshold for detected ingredients (0.0-1.0) |
+| `COMPRESS_IMG_THRESHOLD_KB` | int | `300` | Only compress images smaller than this threshold (KB). Images above this are already compressed. Set to 0 to disable compression |
 | `IMAGE_DETECTION_MODE` | string | `pre-hook` | Detection mode: `pre-hook` (fast) or `tool` (agent-controlled) |
 | `TOOL_CALL_LIMIT` | int | `6` | Maximum tool calls per agent request (prevents excessive API usage) |
 | `OUTPUT_FORMAT` | string | `json` | Response format: `json` or `markdown` |

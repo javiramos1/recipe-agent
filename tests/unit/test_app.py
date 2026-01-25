@@ -164,7 +164,8 @@ class TestSystemInstructionsContent:
         assert "two-step" in instructions.lower() or ("step 1" in instructions.lower() and "step 2" in instructions.lower())
         assert "search_recipes" in instructions
         assert "get_recipe_information" in instructions
-        assert "never provide recipe instructions without" in instructions.lower()
+        # Check for the concept: user must request details before providing full instructions
+        assert "provide complete recipe details only when user requests them" in instructions.lower() or "wait for user follow-up" in instructions.lower()
 
     def test_system_instructions_cover_preference_management(self):
         """Test system instructions cover preference extraction and application."""

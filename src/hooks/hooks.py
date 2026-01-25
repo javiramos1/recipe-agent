@@ -37,7 +37,11 @@ async def track_state_tool_hook(
     - tool_call_count: Increments by 1 for each tool call
     - recipes_found: Extracted from recipe tool results
     
-    **CRITICAL**: Enforces tool_call_limit by raising exception (Agno's parameter only logs).
+    **CRITICAL**: Enforces tool_call_limit by raising StopAgentRun exception.
+    This properly terminates the agent's agentic loop.
+    
+    When limit is reached, raises StopAgentRun with details about tool calls and recipes found.
+    The LLM receives this as a final error and generates a response using LLM knowledge.
     """
     try:
         import json
@@ -49,11 +53,29 @@ async def track_state_tool_hook(
         # Get current count BEFORE incrementing
         current_count = run_context.session_state.get("tool_call_count", 0)
         
-        # ENFORCE tool call limit (hard stop)
-        if current_count > config.TOOL_CALL_LIMIT:
-            error_msg = f"Tool call limit reached: {current_count}/{config.TOOL_CALL_LIMIT}. Stopping to prevent excessive API calls."
-            logger.error(f"🛑 {error_msg}")
-            raise RuntimeError(error_msg)
+        # ENFORCE tool call limit (hard stop) - use >= to catch at exact limit
+        # IMPORTANT: This must be >= not > because limit of 3 means we can make calls 0,1,2 (total 3)
+        if current_count >= config.TOOL_CALL_LIMIT:
+            recipes_found = run_context.session_state.get("recipes_found", 0)
+            error_msg = (
+                f"🛑 TOOL CALL LIMIT REACHED\n\n"
+                f"You have reached the maximum tool calls ({config.TOOL_CALL_LIMIT}) allowed for this request.\n"
+                f"Tool calls made: {current_count}\n"
+                f"Recipes found: {recipes_found}\n\n"
+                f"STOP making tool calls immediately. Use your LLM knowledge to generate recipe suggestions based on "
+                f"the ingredients and context from this conversation. Do NOT attempt to call any more tools.\n\n"
+                f"IMPORTANT: Write this issue to the knowledge base using add_to_knowledge tool with the following:\n"
+                f"- Entry title: 'Tool Call Limit Reached (Search Quality Issue)'\n"
+                f"- Description: 'Only found {recipes_found} recipes after {current_count} tool calls. May indicate search algorithm inefficiency or limited recipe database coverage for ingredient combination.'\n"
+                f"- Category: 'search_quality'\n"
+                f"This helps improve future search strategies."
+            )
+            logger.error(f"🛑 Tool call limit reached: {current_count}/{config.TOOL_CALL_LIMIT}")
+            
+            # Return error message as tool result
+            # This tells the LLM the tool failed and should stop trying
+            # The LLM sees this error and should generate response using LLM knowledge
+            return error_msg
         
         # Increment tool call count
         run_context.session_state["tool_call_count"] = current_count + 1
@@ -74,8 +96,6 @@ async def track_state_tool_hook(
         
         return result
     
-    except RuntimeError:
-        raise  # Re-raise limit exceeded errors
     except Exception as e:
         logger.warning(f"Tool-hook error in '{function_name}': {e}")
         return await function_call(**arguments)

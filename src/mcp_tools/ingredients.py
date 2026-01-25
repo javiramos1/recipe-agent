@@ -56,16 +56,27 @@ def compress_image(image_bytes: bytes, max_width: int = 1024) -> bytes:
     
     Uses JPEG format with quality=85 + optimize + progressive for optimal size/quality trade-off.
     Resizes oversized images and converts color modes to RGB.
+    Only compresses if image size is below COMPRESS_IMG_THRESHOLD_KB.
     
     Args:
         image_bytes: Raw image bytes to compress
         max_width: Maximum image width in pixels
         
     Returns:
-        Compressed image bytes (or original if PIL unavailable)
+        Compressed image bytes (or original if PIL unavailable or size exceeds threshold)
     """
     if not HAS_PIL:
         logger.debug("PIL not available, skipping image compression")
+        return image_bytes
+    
+    # Check if image size is below compression threshold (skip compression for large images)
+    size_kb = len(image_bytes) / 1024
+    logger.debug(f"Image size: {size_kb:.1f}KB, threshold: {config.COMPRESS_IMG_THRESHOLD_KB}KB")
+    if size_kb < config.COMPRESS_IMG_THRESHOLD_KB:
+        logger.debug(
+            f"Image size {size_kb:.1f}KB below compression threshold "
+            f"({config.COMPRESS_IMG_THRESHOLD_KB}KB), skipping compression"
+        )
         return image_bytes
     
     try:
