@@ -23,7 +23,7 @@ from src.models.models import ChatMessage, RecipeResponse, IngredientDetectionOu
 from src.mcp_tools.ingredients import detect_ingredients_tool
 from src.mcp_tools.spoonacular import SpoonacularMCP
 from src.prompts.prompts import get_system_instructions
-from src.hooks.hooks import get_pre_hooks, get_post_hooks, get_tool_hooks
+from src.hooks.hooks import get_pre_hooks, get_post_hooks
 
 # Suppress LanceDB fork-safety warning (not using multiprocessing)
 warnings.filterwarnings("ignore", message="lance is not fork-safe")
@@ -143,11 +143,11 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
             api_key=config.SPOONACULAR_API_KEY,
             max_retries=3,
             retry_delays=[1, 2, 4],
-            include_tools=["search_recipes", "get_recipe_information"],
+            include_tools=["find_recipes_by_ingredients", "get_recipe_information"],
         )
         try:
             mcp_tools = await spoonacular_mcp.initialize()
-            logger.info("✓ Spoonacular MCP initialized successfully (filtered to: search_recipes, get_recipe_information)")
+            logger.info("✓ Spoonacular MCP initialized successfully (filtered to: find_recipes_by_ingredients, get_recipe_information)")
         except Exception as e:
             logger.error(f"✗ MCP initialization failed: {e}")
             raise SystemExit(1)
@@ -206,11 +206,6 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     pre_hooks = get_pre_hooks()
     logger.info(f"✓ {len(pre_hooks)} pre-hooks registered")
     
-    # 5a. Get tool-hooks (runs during tool execution for state tracking)
-    logger.info("Step 5a/7: Registering tool-hooks...")
-    tool_hooks = get_tool_hooks()
-    logger.info(f"✓ {len(tool_hooks)} tool-hooks registered")
-    
     # 5b. Get post-hooks (includes response field extraction for UI rendering)
     logger.info("Step 5b/7: Registering post-hooks...")
     post_hooks = get_post_hooks(knowledge_base=knowledge)
@@ -219,8 +214,8 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     # 6. Configure Agno Agent
     logger.info("Step 6/7: Configuring Agno Agent...")
     
-    # Get static system instructions (session_state injected via add_session_state_to_context=True)
-    logger.info("Session state will be added to context automatically via add_session_state_to_context=True")
+    # Get static system instructions
+    logger.info("System instructions configured")
     
     agent = Agent(
         # === Model Configuration ===
@@ -240,7 +235,6 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         # === Tools & Hooks ===
         tools=tools,  # Spoonacular MCP + optional ingredient detection tool
         pre_hooks=pre_hooks,  # Ingredient extraction + safety guardrails
-        tool_hooks=tool_hooks,  # State tracking (tool_call_count, recipes_found)
         post_hooks=post_hooks,  # Response field extraction for UI rendering
         
         # === Input/Output Schemas ===
@@ -253,7 +247,6 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
             max_tool_calls=config.TOOL_CALL_LIMIT,
             use_spoonacular=config.USE_SPOONACULAR
         ),
-        session_state={"tool_call_count": 0, "recipes_found": 0},  # Tracks execution progress
         
         # === Retry & Error Handling ===
         retries=config.MAX_RETRIES,  # 3 retry attempts for transient failures
@@ -269,19 +262,16 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         enable_user_memories=config.ENABLE_USER_MEMORIES,  # Track user preferences
         enable_session_summaries=config.ENABLE_SESSION_SUMMARIES,  # Auto-compress context
         compress_tool_results=config.COMPRESS_TOOL_RESULTS,  # Reduce tool output verbosity
-        add_session_state_to_context=config.ADD_SESSION_STATE_TO_CONTEXT,  # Inject progress into context
         
         # === Execution Limits ===
-        # NOTE: tool_call_limit removed - we enforce limit in tool-hook instead
-        # Agno's tool_call_limit only logs warnings and doesn't actually stop execution
-        # Our track_state_tool_hook raises RuntimeError when limit reached, which properly stops the loop
+        tool_call_limit=config.TOOL_CALL_LIMIT,  # Max tool calls per session
         reasoning_max_steps=config.TOOL_CALL_LIMIT,  # Complements tool_call_limit for reasoning depth
         
         # === Metadata ===
         name="Recipe Recommendation Agent",
         description="Transforms ingredient images into recipe recommendations with conversational memory",
     )
-    logger.info(f"✓ Agent configured successfully with tool-hook enforcement at {config.TOOL_CALL_LIMIT} calls")
+    logger.info(f"✓ Agent configured successfully with maximum {config.TOOL_CALL_LIMIT} tool calls per request")
     logger.info("=== Agent initialization complete ===")
     
     return agent, tracing_db, knowledge

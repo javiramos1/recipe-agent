@@ -27,7 +27,7 @@ class TestConfigInitialization:
 
         assert config.PORT == 7777
         assert config.MAX_HISTORY == 3
-        assert config.MAX_RECIPES == 3
+        assert config.MAX_RECIPES == 10
         assert config.MAX_IMAGE_SIZE_MB == 5
         assert config.MIN_INGREDIENT_CONFIDENCE == 0.7
         assert config.GEMINI_MODEL == "gemini-3-flash-preview"

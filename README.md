@@ -622,7 +622,7 @@ Uses **Agno evals framework** (AgentOS built-in evaluation system) for multi-dim
 
 - **AccuracyEval**: Ingredient detection accuracy using LLM-as-judge
 - **AgentAsJudgeEval**: Recipe quality, preference persistence, guardrails, session isolation
-- **ReliabilityEval**: Correct tool sequence (search_recipes → get_recipe_information_bulk)
+- **ReliabilityEval**: Correct tool sequence (find_recipes_by_ingredients → get_recipe_information)
 - **PerformanceEval**: Response time under 5 seconds
 
 **Coverage:** 8 comprehensive eval tests covering all dimensions.

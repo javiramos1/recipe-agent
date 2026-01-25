@@ -26,7 +26,7 @@
 **Critical Architecture Patterns:**
 11. **Pre-hook pattern**: Images processed BEFORE agent executes. Extract ingredients → append as text → clear images from input. Agent only sees ingredient text.
 12. **MCP initialization pattern**: SpoonacularMCP class validates connection BEFORE agent creation. Exponential backoff retries (1s → 2s → 4s). Fail startup if unreachable.
-13. **Two-step recipe process**: NEVER generate recipe instructions without calling `get_recipe_information_bulk`. Always: search_recipes → get_recipe_information_bulk (prevents hallucinations).
+13. **Two-step recipe process**: NEVER generate recipe instructions without calling `get_recipe_information`. Always: find_recipes_by_ingredients → (LLM filter) → get_recipe_information (prevents hallucinations).
 14. **Never store images**: Base64/image bytes NEVER in memory or database. Only ingredient TEXT in chat history.
 15. **System instructions define behavior, NOT code**: Orchestration logic goes in Agno system instructions, not Python code. Let Agno handle tool routing, memory, retries.
 16. **Single entry point**: Everything runs from `python app.py`. No separate servers or multiple terminals.
@@ -54,67 +54,8 @@ This is a comprehensive GenAI application designed to **demonstrate best practic
 
 ## Status Section
 
-**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed, Task 11 Tracing implemented, Task 12 E2E Evals complete, Task 13 REST API Tests implemented, Task 13+ Eval visibility to os.agno.com, Dynamic instructions + session state context ✅**
+**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed, Task 11 Tracing implemented, Task 12 E2E Evals complete, Task 13 REST API Tests implemented, Task 13+ Eval visibility to os.agno.com. Search strategy updated to find_recipes_by_ingredients with LLM-based filtering. Tool-hooks removed. ✅**
 
-**Latest Update (2026-01-24):**
-- ✅ **Solution Found**: Use `add_session_state_to_context=True` to inject session_state into system message between tool calls
-  - This makes `tool_call_count` and `recipes_found` visible to LLM in context, not just instructions
-  - Combined with dynamic instructions function for comprehensive state awareness
-  - Tool-hook enforces hard limit by raising RuntimeError when tool_call_count >= TOOL_CALL_LIMIT
-  - Session state format in context: `<session_state> {"tool_call_count": 3, "recipes_found": 2} </session_state>`
-  - LLM can now see progress and make intelligent decisions about stopping
-  - Fixed recipe counting: Tool-hook now unwraps ToolResult.content to access actual MCP data
-
-**Previous Investigation (2026-01-24):**
-- ⚠️ Dynamic instructions function may only be called once at initialization in current Agno version
-  - Workaround: `add_session_state_to_context=True` provides alternative path for LLM state awareness
-  - Tool call limit (`tool_call_limit=5`) logs warnings but does NOT enforce hard stop
-  - Hard enforcement added in tool-hook: raises RuntimeError when limit reached
-
-**Latest Update (2026-01-22):**
-- ✅ Dynamic instructions now use Agno's template syntax for session_state interpolation
-  - Changed from function approach `get_dynamic_instructions(run_context)` to string template approach
-  - Instructions now use `{tool_call_count}` and `{recipes_found}` template variables
-  - Agno automatically substitutes these values from session_state every time LLM needs instructions
-  - Simpler, more reliable pattern recommended by Agno documentation
-  - Tool-hook continues updating session_state values (tool_call_count, recipes_found)
-  - LLM now sees real-time progress automatically via template substitution
-  - All 161 unit tests passing
-
-**Latest Update (2026-01-22):**
-- ✅ Eval visibility to os.agno.com platform working
-  - Agent and evals now use shared database: `tmp/recipe_agent_sessions.db` with id=`recipe_agent_db`
-  - SDK-based evals (`test_eval.py`) properly persist results to shared database
-  - Performance evals capture metrics (avg_run_time, memory usage, etc)
-  - AgentOS exposes `/eval-runs` endpoint from shared database
-  - os.agno.com can query `/eval-runs` and display eval results in UI
-  - HTTP-based eval tests work but score capture is limited (use SDK for production evals)
-  - Two-terminal workflow documented: `make dev` + `make eval`
-  - Evals now visible in os.agno.com Evaluations tab when connected to http://localhost:7777
-
-**Latest Update (2026-01-21):**
-- ✅ Task 13 complete: REST API Integration Tests (httpx-based)
-  - Created tests/integration/test_integration.py with 13 comprehensive HTTP endpoint tests
-  - Tests cover: Basic requests, session management, image uploads, error handling, preference persistence, session isolation
-  - Uses httpx client library for async HTTP testing
-  - All tests run against live running app on port 7777 via `make int-tests`
-  - Added httpx>=0.24.0 to requirements.txt
-  - Reorganized integration tests: test_eval.py (Agno evals, 8 tests) + test_integration.py (REST API, 13 tests)
-  - Added `make eval` target for Agno evals framework
-  - Added `make int-tests` target for REST API endpoint tests
-  - Updated README.md with complete testing documentation
-- ✅ Task 12 complete: Integration Tests E2E with Agno Evals Framework
-  - Moved tracing.py from src/mcp_tools/ to src/utils/ (proper architecture)
-  - Implemented initialize_tracing() async factory with graceful degradation
-  - Added tracing configuration to config.py (ENABLE_TRACING, TRACING_DB_TYPE, TRACING_DB_FILE)
-  - Updated agent.py factory to return both agent and tracing_db
-  - Updated app.py to conditionally enable tracing based on config
-  - Added OpenTelemetry packages to requirements.txt
-  - Created comprehensive unit tests for tracing (all 158 tests passing)
-  - Integrated official Agno UI from npx (agent-ui folder)
-- ✅ Fixed FormData/JSON compatibility: Frontend sends JSON-stringified message in FormData, pre-hook parses it
-- ✅ Response extraction: RunCompleted handler now extracts 'response' field from RecipeResponse for proper formatting
-- ✅ Services running: Backend (7777) + Frontend (3000) both operational with make dev
 
 ### Phase 1: Foundational (Tasks 1-5 + Task 2.5 logger) ✅
 - [x] Task 1: Project structure, dependencies, .gitignore

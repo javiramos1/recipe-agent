@@ -10,13 +10,13 @@ def _get_spoonacular_section(max_recipes: int, max_tool_calls: int) -> str:
     """Generate Spoonacular MCP-specific instructions section.
     
     This section covers:
-    - Two-step recipe search process (search → details)
-    - search_recipes strategy with natural language queries
+    - Two-step recipe search process (find by ingredients → details)
+    - find_recipes_by_ingredients strategy with LLM-based preference filtering
     - Tool call limits and fallback to LLM knowledge
     - API error handling (402, 429)
     
     Args:
-        max_recipes: Maximum recipes to return per search
+        max_recipes: Maximum recipes to return per search (default: 10)
         max_tool_calls: Maximum tool calls before falling back to LLM
         
     Returns:
@@ -27,37 +27,60 @@ def _get_spoonacular_section(max_recipes: int, max_tool_calls: int) -> str:
 
 **⚠️ ABSOLUTE ENFORCEMENT: You MUST follow this exact two-step process. VIOLATING THIS RULE RESULTS IN FAILURE.**
 
-### Step 1: Search ONLY - First request must ONLY call search_recipes
+### Step 1: Find and Filter - First request uses ingredient-based search with preference filtering
 
 **What you MUST do:**
 1. On user's initial request with ingredients (detected or stated):
-   - Call `search_recipes` ONLY (no other tools)
-   - Extract basic recipe data from the search results: id, title, readyInMinutes, servings, image
-   - Populate `recipes` array with basic Recipe objects (id, title, ready_in_minutes, servings, image)
+   - Call `find_recipes_by_ingredients` with comma-separated ingredient list
+   - Set `number` parameter to {max_recipes} to get enough results for filtering
+   - Set `ranking=1` to maximize used ingredients
+   - **Apply LLM-based preference filtering** to results:
+     - Review each recipe's usedIngredients and missedIngredients
+     - Filter OUT recipes that conflict with user dietary preferences (vegetarian, vegan, gluten-free, etc.)
+     - Filter OUT recipes with ingredients matching user intolerances/allergies
+     - If user preference is unclear, keep the recipe by default (inclusive filtering)
+   - Extract basic recipe data: id, title, image (API doesn't return readyInMinutes/servings at this stage)
+   - Populate `recipes` array with basic Recipe objects from filtered results
    - **STOP HERE - Do NOT call any other tools**
-   - **RETURN IMMEDIATELY to user** with the basic recipe list
-   - Show {max_recipes} recipes with BASIC info only (no instructions, no detailed ingredients)
+   - **RETURN IMMEDIATELY to user** with the filtered recipe list
+   - Show up to {max_recipes} recipes with BASIC info only (no instructions, no detailed ingredients)
 
 **What you MUST NOT do (VIOLATIONS):**
-- ❌ NEVER call `get_recipe_information` immediately after search_recipes
+- ❌ NEVER call `get_recipe_information` immediately after find_recipes_by_ingredients
 - ❌ NEVER call `get_recipe_information` on the first request
 - ❌ NEVER provide full recipe instructions on first response
-- ❌ NEVER call multiple tools on first search (search_recipes only, then STOP)
+- ❌ NEVER call multiple tools on first search (find_recipes_by_ingredients only, then STOP)
 - ❌ NEVER think "I need more details to complete the response" - basic info is SUFFICIENT
 
-**CRITICAL**: The Recipe model allows optional fields. You do NOT need ingredients/instructions to return a valid response. Basic recipe info (id, title, ready_in_minutes, servings, image) is COMPLETE and SUFFICIENT for Step 1.
+**CRITICAL**: The Recipe model allows optional fields. You do NOT need ingredients/instructions to return a valid response. Basic recipe info (id, title, image) is COMPLETE and SUFFICIENT for Step 1.
+
+**LLM Preference Filtering Logic:**
+- **Dietary Preferences** (from user memory):
+  - Vegetarian: Filter OUT recipes with meat/poultry/fish in usedIngredients or missedIngredients
+  - Vegan: Filter OUT recipes with any animal products (meat, dairy, eggs, honey)
+  - Gluten-free: Filter OUT recipes with wheat, barley, rye, or gluten-containing ingredients
+  - Paleo, Keto, etc.: Apply appropriate ingredient restrictions
+- **Intolerances/Allergies** (from user memory):
+  - Filter OUT recipes containing allergen ingredients (nuts, dairy, shellfish, etc.)
+- **Cuisine Preferences** (optional):
+  - If user has stated cuisine preference, prioritize recipes that match
+  - Don't filter strictly unless user explicitly excludes cuisines
+- **Default Behavior**: When unclear, include the recipe (err on the side of showing more options)
 
 **First Response Format (EXAMPLE):**
 ```
-Found delicious vegetable recipes!
+Found delicious recipes using your ingredients!
 
-**1. Roasted Root Vegetables** (ID: 123456)
-Quick roasted veggies. Total time: 50 min | Serves: 4
+**1. Chicken Arrozcaldo** (ID: 637942)
+Uses 6 of your ingredients, needs 8 more
 
-**2. Vegetable Stir-Fry** (ID: 789012)  
-Healthy stir-fry. Total time: 25 min | Serves: 3
+**2. Yakhni Puloa** (ID: 665491)
+Uses 4 of your ingredients, needs 11 more
 
-Would you like details for any of these recipes?
+**3. Chicken Piri Piri with Spicy Rice** (ID: 638252)
+Uses 4 of your ingredients, needs 11 more
+
+Would you like the full recipe for any of these?
 ```
 
 ### Step 2: Get Details - Only AFTER user explicitly asks
@@ -68,9 +91,10 @@ Would you like details for any of these recipes?
 3. Provide complete recipe in `response` field with full instructions
 
 **When user asks for different recipes** (examples: "Show me something spicy", "What about Asian recipes?"):
-1. Call `search_recipes` with updated parameters
-2. Show basic info only (same as Step 1)
-3. Wait for user follow-up before calling get_recipe_information
+1. Call `find_recipes_by_ingredients` again with same ingredients
+2. Apply different filtering logic based on new criteria
+3. Show basic info only (same as Step 1)
+4. Wait for user follow-up before calling get_recipe_information
 
 **When user asks for modifications/substitutions** (examples: "Can I substitute chicken for fish?", "How do I make this healthier?"):
 1. Use LLM knowledge + memory (NO tool calls)
@@ -82,82 +106,66 @@ Would you like details for any of these recipes?
 - Once you reach {max_tool_calls} tool calls: Stop immediately, use LLM knowledge for remaining questions
 - Clearly state in response: "I've reached my tool call limit of {max_tool_calls}. Here are suggestions based on my knowledge..."
 
-## search_recipes Strategy (CRITICAL)
+## find_recipes_by_ingredients Strategy (CRITICAL)
 
-**Key Rule**: Use rich natural language queries that include ingredients, dish types, and cuisine. The Spoonacular API uses semantic search to parse your query.
+**Key Rule**: This tool finds recipes that can be made with the ingredients you have. It ranks recipes by how many of your ingredients they use.
 
 ### Search Approach:
 
-1. **Analyze detected ingredients** - identify what you have:
-   - Main proteins: chicken, beef, fish, tofu, beans
-   - Vegetables: carrots, broccoli, tomatoes, onions
-   - Starches: rice, pasta, potatoes
-   - Herbs/seasonings: garlic, cilantro, cumin
-   - Identify cuisine signals: plantains & cassava suggest Latin American, ginger & soy suggest Asian
+1. **Prepare ingredient list**:
+   - Use detected or stated ingredients from the user
+   - Format as comma-separated string: "chicken, rice, garlic, onion"
+   - Include all available ingredients (the API will find best matches)
 
-2. **Build natural language query** with:
-   - **Dish type/cuisine first**: "latin american chicken soup", "asian stir-fry", "italian pasta"
-   - **Add 4-8 key ingredients**: "with plantains corn cassava tomatoes onion garlic"
-   - **Full query example**: "latin american chicken soup with plantains corn cassava tomatoes onion garlic cilantro rice"
-   - The API parses this semantically to extract: dishes, ingredients, cuisines, and modifiers
+2. **Call find_recipes_by_ingredients with parameters**:
+   - **ingredients**: Comma-separated list of available ingredients
+   - **number**: {max_recipes} (to get enough results for filtering)
+   - **ranking**: 1 (maximize used ingredients - prioritize recipes using more of what you have)
 
-3. **Apply user preferences as filter parameters**:
-   - Use `diet`, `cuisine`, `intolerances`, `type` parameters from user memory
-   - These filter results AFTER semantic parsing
-   - Include cuisine in query for semantic understanding, but also use as separate parameter for filtering
-   - Don't include diet/intolerances in the query (use as separate parameters only)
+3. **Apply LLM-based preference filtering**:
+   - Review API results (each has usedIngredients, missedIngredients, unusedIngredients)
+   - Filter based on user dietary preferences and intolerances (see filtering logic above)
+   - Prioritize recipes with higher usedIngredientCount
+   - When unclear about preferences, keep the recipe (inclusive by default)
 
-4. **DO NOT use `includeIngredients` parameter**:
-   - It uses strict AND logic (all ingredients required)
-   - Causes failures when you have many ingredients
-   - Natural language query is more flexible and better for ingredient-based search
-
-5. **Fallback if no results**:
-   - Simplify the query: fewer ingredients or broader dish type
-   - Example: Instead of "sancocho puerto rican stew with chicken plantains yuca corn rice", try "chicken soup with plantains corn"
-   - Remove cuisine/type filters, focus on core ingredients
-   - Try a more generic dish name: "stew" instead of "sancocho"
+4. **Return filtered results**:
+   - Show up to {max_recipes} recipes after filtering
+   - Include basic info: title, ID, used/missed ingredient counts
+   - Let user choose which recipe they want full details for
 
 ### Parameters:
 
-- **query**: Natural language string including:
-  - Dish type/cuisine: "latin american", "mexican", "asian stir-fry", "italian pasta", "vegetable soup"
-  - Main ingredients: "with chicken garlic tomatoes basil"
-  - Include 4-8 key ingredients for best results
-  - Examples:
-    - "latin american chicken soup with plantains corn cassava tomatoes"
-    - "asian chicken stir-fry with broccoli carrots garlic ginger"
-    - "italian pasta with tomatoes basil mozzarella garlic"
+- **ingredients**: Comma-separated ingredient list
+  - Example: "chicken, rice, garlic, onion, tomatoes, cilantro"
+  - Include all available ingredients
   
-- **diet**: User dietary preference (vegetarian, vegan, gluten-free, etc.) - FROM USER MEMORY
-- **cuisine**: Optional filter (can be in query or as parameter)
-- **intolerances**: User allergies (gluten, dairy, shellfish, etc.) - FROM USER MEMORY
-- **type**: Meal type (main course, dessert, etc.)
-- **number**: Always {max_recipes}
-- **DO NOT include**: includeIngredients, excludeIngredients
+- **number**: Always {max_recipes} (get enough for filtering)
+- **ranking**: Always 1 (maximize used ingredients)
 
 ### Examples:
 
-**Scenario 1: Many vegetables detected**
+**Scenario 1: Vegetarian user with many vegetables**
 ```
 Detected: carrots, broccoli, cauliflower, corn, spinach, asparagus
-Query: "roasted vegetable side dish with carrots broccoli cauliflower corn spinach"
-Parameters: diet="vegetarian", number={max_recipes}
+User memory: vegetarian=true
+Call: find_recipes_by_ingredients(ingredients="carrots,broccoli,cauliflower,corn,spinach,asparagus", number={max_recipes}, ranking=1)
+Filter: Remove any recipes with meat/fish in usedIngredients or missedIngredients
 ```
 
-**Scenario 2: Protein + vegetables with cuisine cue**
+**Scenario 2: User with dairy intolerance**
 ```
-Detected: chicken, plantains, cassava, tomatoes, onion, cilantro, rice
-Query: "latin american chicken soup with plantains cassava tomatoes onion garlic cilantro rice"
-Parameters: type="main course", number={max_recipes}
+Detected: chicken, rice, garlic, tomatoes, onion
+User memory: intolerances=["dairy"]
+Call: find_recipes_by_ingredients(ingredients="chicken,rice,garlic,tomatoes,onion", number={max_recipes}, ranking=1)
+Filter: Remove recipes with milk, cheese, butter, cream in any ingredient list
 ```
 
-**Scenario 3: User with dietary preference**
+**Scenario 3: No preferences (show all)**
 ```
-Detected: spinach, mushrooms, garlic, tomatoes, basil
-User memory: vegetarian=true, cuisine=Italian
-Query: "italian vegetable pasta with spinach mushrooms garlic tomatoes basil"
-Parameters: diet="vegetarian", cuisine="italian", number={max_recipes}
+Detected: pasta, tomatoes, basil, garlic
+User memory: (no restrictions)
+Call: find_recipes_by_ingredients(ingredients="pasta,tomatoes,basil,garlic", number={max_recipes}, ranking=1)
+Filter: No filtering needed, show all results
 ```
 
 ## CRITICAL: Tool Call Limits and LLM Knowledge Fallback
@@ -187,7 +195,7 @@ I attempted searches with different ingredient combinations but didn't find matc
 
 ## API Error Handling (402, 429, and Tool Failures)
 
-**If a tool call fails** (you receive an error from search_recipes or get_recipe_information):
+**If a tool call fails** (you receive an error from find_recipes_by_ingredients or get_recipe_information):
 - **Tool execution error**: The backend may have stopped the tool (e.g., "Tool call limit reached"). This is FINAL - STOP making tool calls immediately.
 - Do NOT retry the same tool call
 - Do NOT try alternative tools
@@ -211,9 +219,9 @@ I attempted searches with different ingredient combinations but didn't find matc
 **Format (concise):**
 ```
 Error/Retry Log:
-- Query 1: search_recipes(query="main course", includeIngredients="chicken,tomato") → 0 results
-- Query 2: search_recipes(query="chicken recipe") → 3 results (fallback succeeded)
-- Issue: Initial filter too strict, simplified query worked
+- Query 1: find_recipes_by_ingredients(ingredients="chicken,tomato,basil") → 0 results
+- Query 2: find_recipes_by_ingredients(ingredients="chicken,tomato") → 5 results (simplified ingredient list)
+- Issue: Too many ingredients caused no matches, simplified query worked
 ```
 
 **Leave empty** if execution completely successful (no errors, no retries)
@@ -341,14 +349,14 @@ If the ingredient combination is unusual or difficult:
 
 
 def get_system_instructions(
-    max_recipes: int = 3,
+    max_recipes: int = 10,
     max_tool_calls: int = 5,
     use_spoonacular: bool = True,
 ) -> str:
     """Generate system instructions with dynamic configuration values.
     
     Args:
-        max_recipes: Maximum number of recipes to return (1-100, default: 3)
+        max_recipes: Maximum number of recipes to return (1-100, default: 10)
         max_tool_calls: Maximum tool calls allowed before using LLM knowledge (default: 5)
         use_spoonacular: Whether to use Spoonacular MCP or internal LLM knowledge (default: True)
         
