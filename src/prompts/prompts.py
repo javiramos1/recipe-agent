@@ -231,7 +231,7 @@ def _get_internal_knowledge_section(max_recipes: int) -> str:
     return f"""
 ## Recipe Generation from Internal Knowledge (No External Tools)
 
-**Operating Mode**: You are generating recipes directly from your internal culinary knowledge without calling external APIs or tools.
+**Operating Mode**: You are generating recipes directly from your internal culinary knowledge.
 
 ### Recipe Generation Strategy:
 
@@ -298,12 +298,6 @@ When user requests full details:
 - Provide cooking techniques and tips
 - Adapt recipes to dietary needs and preferences
 - Reference classic dishes and common variations
-
-**What You CANNOT Do:**
-- ❌ Verify if a recipe exists in a specific cookbook or database
-- ❌ Provide nutritional information with exact precision (can give estimates)
-- ❌ Link to external recipe sources or websites
-- ❌ Claim recipes are "authenticated" or from specific chefs (unless widely known)
 
 **Be Transparent:**
 - When generating from knowledge: "Based on classic cooking techniques..."
@@ -590,10 +584,10 @@ Which recipe would you like details for?
 - Note constraints: "Limited to 3 recipes due to MAX_RECIPES setting"
 
 **troubleshooting** (Optional):
-- Document errors during execution (402, 429, connection failures)
-- List failed queries: "Initial search with [chicken, tomato, basil] returned 0 results. Retry with [chicken, tomato] succeeded."
-- Explain retries: "Retried search_recipes after 429 error"
-- Note missing data: "Recipes found but instructions unavailable"
+{"- Document errors during execution (402, 429, connection failures)" if use_spoonacular else "- Document any issues during recipe generation"}
+{"- List failed queries: \"Initial search with [chicken, tomato, basil] returned 0 results. Retry with [chicken, tomato] succeeded.\"" if use_spoonacular else "- Note unusual ingredient combinations: \"Chocolate and fish - suggested keeping separate\""}
+{"- Explain retries: \"Retried search_recipes after 429 error\"" if use_spoonacular else "- Document user feedback on generated recipes"}
+{"- Note missing data: \"Recipes found but instructions unavailable\"" if use_spoonacular else "- Note when additional context was needed from user"}
 - Leave EMPTY if everything runs successfully
 
 ## Example Interactions
