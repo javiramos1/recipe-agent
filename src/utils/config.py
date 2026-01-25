@@ -20,6 +20,8 @@ class Config:
     def __init__(self) -> None:
         """Initialize configuration from environment variables."""
         self.GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+        # Spoonacular Configuration: Enable/disable external recipe API
+        self.USE_SPOONACULAR: bool = os.getenv("USE_SPOONACULAR", "true").lower() in ("true", "1", "yes")
         self.SPOONACULAR_API_KEY: str = os.getenv("SPOONACULAR_API_KEY", "")
         # Default: gemini-3-flash-preview (fast, cost-effective)
         # For best results: use gemini-3-pro-preview for complex recipe reasoning
@@ -94,8 +96,9 @@ class Config:
         """
         if not self.GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY environment variable is required")
-        if not self.SPOONACULAR_API_KEY:
-            raise ValueError("SPOONACULAR_API_KEY environment variable is required")
+        # Only validate Spoonacular key if Spoonacular mode is enabled
+        if self.USE_SPOONACULAR and not self.SPOONACULAR_API_KEY:
+            raise ValueError("SPOONACULAR_API_KEY environment variable is required when USE_SPOONACULAR=true")
         if self.IMAGE_DETECTION_MODE not in ("pre-hook", "tool"):
             raise ValueError(
                 f"IMAGE_DETECTION_MODE must be 'pre-hook' or 'tool', got: {self.IMAGE_DETECTION_MODE}"

@@ -134,20 +134,26 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     """
     logger.info("=== Initializing Recipe Recommendation Agent ===")
     
-    # 1. Initialize MCP FIRST (fail-fast if unreachable)
-    logger.info("Step 1/7: Initializing Spoonacular MCP...")
-    spoonacular_mcp = SpoonacularMCP(
-        api_key=config.SPOONACULAR_API_KEY,
-        max_retries=3,
-        retry_delays=[1, 2, 4],
-        include_tools=["search_recipes", "get_recipe_information"],
-    )
-    try:
-        mcp_tools = await spoonacular_mcp.initialize()
-        logger.info("✓ Spoonacular MCP initialized successfully (filtered to: search_recipes, get_recipe_information)")
-    except Exception as e:
-        logger.error(f"✗ MCP initialization failed: {e}")
-        raise SystemExit(1)
+    # 1. Initialize MCP (if enabled, with fail-fast if unreachable)
+    logger.info("Step 1/7: Checking Spoonacular MCP configuration...")
+    mcp_tools = None
+    if config.USE_SPOONACULAR:
+        logger.info("Spoonacular MCP enabled - initializing...")
+        spoonacular_mcp = SpoonacularMCP(
+            api_key=config.SPOONACULAR_API_KEY,
+            max_retries=3,
+            retry_delays=[1, 2, 4],
+            include_tools=["search_recipes", "get_recipe_information"],
+        )
+        try:
+            mcp_tools = await spoonacular_mcp.initialize()
+            logger.info("✓ Spoonacular MCP initialized successfully (filtered to: search_recipes, get_recipe_information)")
+        except Exception as e:
+            logger.error(f"✗ MCP initialization failed: {e}")
+            raise SystemExit(1)
+    else:
+        logger.info("Spoonacular MCP disabled - using internal LLM knowledge mode")
+        logger.info("✓ Internal knowledge mode configured")
     
     # 2. Initialize tracing (if enabled)
     logger.info("Step 2/7: Initializing tracing...")
@@ -178,7 +184,12 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     
     # 3. Build tools list based on configuration
     logger.info("Step 3/5: Registering tools...")
-    tools = [mcp_tools]  # Spoonacular MCP always included
+    tools = []
+    
+    # Add Spoonacular MCP tools if enabled
+    if mcp_tools:
+        tools.append(mcp_tools)
+        logger.info("✓ Spoonacular MCP tools registered")
     
     # Add ingredient detection tool if in tool mode
     if config.IMAGE_DETECTION_MODE == "tool":
@@ -188,7 +199,7 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     else:
         logger.info("Using ingredient detection in pre-hook mode (default)")
     
-    logger.info(f"✓ {len(tools)} tools registered")
+    logger.info(f"✓ {len(tools)} tool(s) registered")
     
     # 5. Get pre-hooks (includes ingredient extraction and guardrails)
     logger.info("Step 5/7: Registering pre-hooks and guardrails...")
@@ -237,7 +248,11 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         output_schema=RecipeResponse,  # Structures recipe response with metadata
         
         # === Instructions & State ===
-        instructions=get_system_instructions(max_recipes=config.MAX_RECIPES, max_tool_calls=config.TOOL_CALL_LIMIT),
+        instructions=get_system_instructions(
+            max_recipes=config.MAX_RECIPES,
+            max_tool_calls=config.TOOL_CALL_LIMIT,
+            use_spoonacular=config.USE_SPOONACULAR
+        ),
         session_state={"tool_call_count": 0, "recipes_found": 0},  # Tracks execution progress
         
         # === Retry & Error Handling ===

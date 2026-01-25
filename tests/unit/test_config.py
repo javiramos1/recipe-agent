@@ -86,13 +86,23 @@ class TestConfigValidation:
             config.validate()
 
     def test_validate_raises_error_for_missing_spoonacular_key(self, monkeypatch):
-        """Test that validate() raises ValueError if SPOONACULAR_API_KEY missing."""
+        """Test that validate() raises ValueError if SPOONACULAR_API_KEY missing when USE_SPOONACULAR=true."""
         monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("USE_SPOONACULAR", "true")
         monkeypatch.setenv("SPOONACULAR_API_KEY", "")
 
         config = Config()
         with pytest.raises(ValueError, match="SPOONACULAR_API_KEY"):
             config.validate()
+    
+    def test_validate_allows_missing_spoonacular_key_when_disabled(self, monkeypatch):
+        """Test that validate() succeeds without SPOONACULAR_API_KEY when USE_SPOONACULAR=false."""
+        monkeypatch.setenv("GEMINI_API_KEY", "key")
+        monkeypatch.setenv("USE_SPOONACULAR", "false")
+        monkeypatch.setenv("SPOONACULAR_API_KEY", "")
+
+        config = Config()
+        config.validate()  # Should not raise
 
     def test_validate_succeeds_with_both_keys(self, monkeypatch):
         """Test that validate() succeeds when both required keys are present."""

@@ -354,7 +354,8 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | Variable | Type | Default | Description |
 | --- | --- | --- | --- |
 | `GEMINI_API_KEY` | string | **required** | Google Gemini API key (vision model) |
-| `SPOONACULAR_API_KEY` | string | **required** | Spoonacular recipe API key |
+| `USE_SPOONACULAR` | bool | `true` | Enable Spoonacular MCP for external recipe API. When `false`, uses internal LLM knowledge to generate recipes |
+| `SPOONACULAR_API_KEY` | string | **required if USE_SPOONACULAR=true** | Spoonacular recipe API key (only needed when Spoonacular mode is enabled) |
 | `GEMINI_MODEL` | string | `gemini-3-flash-preview` | Main recipe recommendation model. Options: `gemini-3-flash-preview`, `gemini-3-pro-preview` |
 | `IMAGE_DETECTION_MODEL` | string | `gemini-3-flash-preview` | Image detection model (independent from main model). Options: `gemini-3-flash-preview`, `gemini-3-pro-preview`. Use `gemini-3-pro-preview` for better accuracy on complex images |
 | `TEMPERATURE` | float | `0.3` | Response randomness (0.0=deterministic, 1.0=creative). For recipes: 0.3 balances consistency with variety |
@@ -418,6 +419,36 @@ SQLite file: `agno.db` (auto-created)
 DATABASE_URL=postgresql://user:password@localhost:5432/recipe_service
 ```
 
+### Operating Modes
+
+The agent supports two operating modes:
+
+**Mode 1: Spoonacular MCP (Default - USE_SPOONACULAR=true)**
+- Uses external Spoonacular recipe API for recipe search and details
+- Two-step process: search recipes → get full details on request
+- Requires `SPOONACULAR_API_KEY` environment variable
+- System instructions focus on tool-calling with recipe search semantics
+- Ideal when you want access to a large recipe database with verified accuracy
+
+**Mode 2: Internal LLM Knowledge (USE_SPOONACULAR=false)**
+- Generates recipes from Gemini's internal culinary knowledge
+- No external API calls for recipe generation
+- Does NOT require `SPOONACULAR_API_KEY`
+- System instructions focus on direct recipe generation and culinary reasoning
+- Ideal for cost reduction, privacy, or when external API access is not available
+- Still uses Gemini vision API for ingredient detection from images
+
+**Switching Modes:**
+```bash
+# Use Spoonacular MCP (default)
+USE_SPOONACULAR=true SPOONACULAR_API_KEY=your_key make dev
+
+# Use internal LLM knowledge (no Spoonacular key needed)
+USE_SPOONACULAR=false make dev
+```
+
+Both modes maintain the same API interface and response format. The system prompts automatically adapt to each mode - when using internal knowledge, the LLM never sees Spoonacular-related instructions.
+
 ## Architecture
 
 ### Data Flow
@@ -425,8 +456,9 @@ DATABASE_URL=postgresql://user:password@localhost:5432/recipe_service
 1. **Request** → User sends message and/or image
 2. **Pre-Hook** → Images processed through Gemini vision API to extract ingredients
 3. **Agent** → Agno Agent routes to recipe tools with extracted ingredients + preferences
-4. **Recipe Search** → Spoonacular MCP called to find matching recipes
+4. **Recipe Generation** → Spoonacular MCP called (if enabled) or LLM generates from knowledge
 5. **Response** → Agent synthesizes human-friendly response with recipe details
+
 
 ### Session Management
 
