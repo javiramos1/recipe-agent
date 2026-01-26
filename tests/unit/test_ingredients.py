@@ -531,6 +531,28 @@ class TestDetectIngredientsTool:
         assert result.ingredients == ["tomato"]
 
     @pytest.mark.asyncio
+    @patch("src.mcp_tools.ingredients.extract_ingredients_with_retries", new_callable=AsyncMock)
+    async def test_successful_data_url_extraction(self, mock_extract):
+        """Data URL-based extraction should work correctly."""
+        import base64
+
+        # PNG magic bytes in base64
+        png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+        image_base64 = base64.b64encode(png_bytes).decode()
+        data_url = f"data:image/png;base64,{image_base64}"
+
+        mock_extract.return_value = IngredientDetectionOutput(
+            ingredients=["tomato"],
+            confidence_scores={"tomato": 0.95},
+        )
+
+        result = await detect_ingredients_tool(data_url)
+
+        assert result is not None
+        assert isinstance(result, IngredientDetectionOutput)
+        assert result.ingredients == ["tomato"]
+
+    @pytest.mark.asyncio
     @patch("src.mcp_tools.ingredients.fetch_image_bytes")
     async def test_invalid_image_format(self, mock_fetch):
         """Invalid image format should raise ValueError."""

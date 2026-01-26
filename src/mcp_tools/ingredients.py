@@ -129,6 +129,17 @@ async def fetch_image_bytes(image_source: str | bytes) -> Optional[bytes]:
         return image_source
 
     if isinstance(image_source, str):
+        # Handle data URLs (data:[<mediatype>][;base64],<data>)
+        if image_source.startswith("data:"):
+            try:
+                # Extract the base64 part after the comma
+                header, encoded = image_source.split(",", 1)
+                return base64.b64decode(encoded)
+            except Exception as e:
+                logger.warning(f"Failed to decode data URL: {e}")
+                return None
+        
+        # Handle regular URLs
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(image_source, timeout=aiohttp.ClientTimeout(total=10)) as response:
@@ -435,15 +446,23 @@ async def extract_ingredients_pre_hook(
                 f"(total: {len(unique_ingredients)}, confidence threshold: {config.MIN_INGREDIENT_CONFIDENCE})"
             )
         
-        # Always clear images from the request (whether extraction succeeded or failed)
-        # This prevents images from being sent to the agent after extraction
-        run_input.images = []
+        # Always clear images from the ChatMessage (whether extraction succeeded or failed)
+        # This prevents large base64-encoded images from being sent to the agent after extraction
+        input_data.images = []
+        run_input.input_content = input_data
+        logger.debug("Images cleared from request after ingredient extraction")
 
     except Exception as e:
         # Pre-hooks must be resilient - log but don't crash
         logger.warning(f"Ingredient extraction pre-hook failed: {e}")
         # Still clear images even on error to prevent them from being sent downstream
-        run_input.images = []
+        try:
+            input_data = getattr(run_input, "input_content", None)
+            if input_data:
+                input_data.images = []
+                run_input.input_content = input_data
+        except Exception as clear_error:
+            logger.warning(f"Failed to clear images on error: {clear_error}")
 
 
 async def extract_ingredients_with_retries(
@@ -522,6 +541,9 @@ async def detect_ingredients_tool(image_data: str) -> IngredientDetectionOutput:
         image_bytes = None
         if image_data.startswith(("http://", "https://")):
             # URL-based image
+            image_bytes = await fetch_image_bytes(image_data)
+        elif image_data.startswith("data:"):
+            # Data URL
             image_bytes = await fetch_image_bytes(image_data)
         else:
             # Assume base64 encoded

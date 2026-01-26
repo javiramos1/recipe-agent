@@ -23,6 +23,8 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+recipe-agent*.zip
+
 # Virtual environments
 venv/
 ENV/
