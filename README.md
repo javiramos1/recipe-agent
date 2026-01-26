@@ -75,6 +75,9 @@ graph TD
     
     C -.->|Session Memory| F["SQLite/PostgreSQL<br/>Database"]
     F -.->|Load History| C
+    
+    C -.->|Search & Learn| G["LanceDB<br/>Knowledge Base"]
+    G -.->|Troubleshooting| C
 ```
 
 ## Development Process
@@ -379,7 +382,7 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `IMAGE_DETECTION_MODEL` | string | `gemini-3-flash-preview` | Image detection model (independent from main model). Options: `gemini-3-flash-preview`, `gemini-3-pro-preview`. Use `gemini-3-pro-preview` for better accuracy on complex images |
 | `TEMPERATURE` | float | `0.3` | Response randomness (0.0=deterministic, 1.0=creative). For recipes: 0.3 balances consistency with variety |
 | `MAX_OUTPUT_TOKENS` | int | `2048` | Maximum response length. For recipes: 2048 supports full ingredient lists and instructions |
-| `THINKING_LEVEL` | string | `None` | Extended reasoning level: None (fastest), `low` (balanced), `high` (thorough). Recipe recommendations work well with `None` or `low` |
+| `THINKING_LEVEL` | string | `None` | Extended reasoning level: None (fastest), `low` (balanced), `high` (thorough). Recipe recommendations work well with `None` |
 | `PORT` | int | `7777` | Server port |
 | `MAX_HISTORY` | int | `3` | Conversation turns to keep in memory |
 | `MAX_RECIPES` | int | `3` | Maximum recipes to return per request |
