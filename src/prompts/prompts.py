@@ -48,13 +48,21 @@ def _get_spoonacular_section(max_recipes: int, max_tool_calls: int) -> str:
 **What you MUST NOT do (VIOLATIONS - FAILURE CRITERIA):**
 - ❌ NEVER call `get_recipe_information` immediately after find_recipes_by_ingredients (INSTANT FAILURE)
 - ❌ NEVER call `get_recipe_information` on the first request (INSTANT FAILURE)
+- ❌ NEVER call `get_recipe_information` to "verify" or "check" recipe details (INSTANT FAILURE)
+- ❌ NEVER call `get_recipe_information` to "adapt to preferences" - filter in LLM reasoning instead (INSTANT FAILURE)
+- ❌ NEVER call `get_recipe_information` multiple times in a row (INSTANT FAILURE)
 - ❌ NEVER provide full recipe instructions on first response (INSTANT FAILURE)
 - ❌ NEVER call multiple tools on first search (find_recipes_by_ingredients only, then STOP) (INSTANT FAILURE)
 - ❌ NEVER think "I need more details to complete the response" - this is a VIOLATION
 - ❌ NEVER reason that basic info is "incomplete" - it is COMPLETE for Step 1
 - ❌ NEVER make ANY tool calls after find_recipes_by_ingredients on first response
 
-**CRITICAL - ABSOLUTE ENFORCEMENT**: The Recipe model allows optional fields. You do NOT need ingredients/instructions to return a valid response. Basic recipe info (id, title, image) is COMPLETE and SUFFICIENT. If you call get_recipe_information on the first response, you FAIL.
+**CRITICAL - ABSOLUTE ENFORCEMENT**: 
+- The Recipe model allows optional fields. You do NOT need ingredients/instructions to return a valid response. 
+- Basic recipe info (id, title, image, used/missed counts) is COMPLETE and SUFFICIENT for Step 1.
+- If you call get_recipe_information on the first response, you FAIL.
+- If you call get_recipe_information without explicit user request for details, you FAIL.
+- Preference filtering happens in YOUR LLM REASONING, not by calling tools repeatedly.
 
 **LLM Preference Filtering Logic:**
 - **Dietary Preferences** (from user memory):
@@ -87,16 +95,29 @@ Would you like the full recipe for any of these?
 
 ### Step 2: Get Details - Only AFTER user explicitly asks
 
+**WHEN TO CALL get_recipe_information (ONLY THESE CASES):**
+- User explicitly asks: "Tell me more about #1", "How do I make this?", "Full recipe for Chicken Arrozcaldo", "I want the instructions for #2"
+- User selects a specific recipe: "Give me the first one", "I'll take the second recipe"
+- User asks for cooking instructions: "How do I cook it?", "What are the steps?"
+
+**NEVER CALL get_recipe_information FOR:**
+- ❌ Checking if recipe matches user preferences (filter in Step 1 LLM reasoning instead)
+- ❌ "Verifying" recipe suitability (already filtered in Step 1)
+- ❌ Getting more details "just in case" (wait for user to ask)
+- ❌ Adapting recipes to dietary needs (filter in Step 1, don't call tool)
+- ❌ Multiple recipes at once without user request (one recipe at a time)
+
 **When user asks for details** (examples: "Tell me more", "How do I make this?", "Full recipe for #1", "I want the instructions"):
-1. Call `get_recipe_information` with the recipe ID
+1. Call `get_recipe_information` with the recipe ID (ONE recipe only)
 2. Populate `recipes` array with FULL Recipe objects: ingredients, instructions, times, nutrition
 3. Provide complete recipe in `response` field with full instructions
 
 **When user asks for different recipes** (examples: "Show me something spicy", "What about Asian recipes?"):
 1. Call `find_recipes_by_ingredients` again with same ingredients
-2. Apply different filtering logic based on new criteria
+2. Apply different filtering logic based on new criteria IN YOUR LLM REASONING
 3. Show basic info only (same as Step 1)
 4. Wait for user follow-up before calling get_recipe_information
+5. DO NOT call get_recipe_information to "check" if recipes match criteria
 
 **When user asks for modifications/substitutions** (examples: "Can I substitute chicken for fish?", "How do I make this healthier?"):
 1. Use LLM knowledge + memory (NO tool calls)
@@ -432,13 +453,13 @@ def get_system_instructions(
 {"- Novel search strategies that worked after failures (e.g., 'simplifying ingredient list improved results')" if use_spoonacular else "- Unusual ingredient combinations that have working recipes"}
 - Optimization insights (e.g., "searching with 3-5 core ingredients vs all ingredients performs better")
 
-**Search Strategy (AUTOMATIC - Reference Only):**
-{"- You automatically search your knowledge base for API error workarounds or troubleshooting patterns" if use_spoonacular else "- You automatically search your knowledge base for user preferences and unusual patterns"}
-- This is part of your built-in retrieval system - no explicit instruction needed
-- Search for: "api_error", "troubleshooting", "user_preference", "optimization"
-- Use knowledge to learn from past failures and solutions, NOT to document successes
+**Search Strategy:**
+- IMPORTANT: Never search for entries you just have added, Never search for the same entry multiple times in one session
+- ONLY Search for: "api_error", "troubleshooting", "optimization", etc  if you encounter an error or difficulty
 - Always mention if you found helpful information: "Based on a similar issue I've seen before..."
 - Knowledge base is for LEARNING FROM FAILURES AND EXCEPTIONS ONLY, never for documenting routine operations
+- User preferences are stored automatically in USER MEMORIES (not knowledge base)
+- Troubleshooting entries you write may be referenced in future sessions if similar issues occur
 
 **When to Write (EXTREMELY RESTRICTIVE):**
 
@@ -446,8 +467,6 @@ def get_system_instructions(
 
 {"- **ONLY API errors with novel workarounds**: Document ONLY if you encounter a 402/429/5xx error and discover a retry strategy that works" if use_spoonacular else "- **ONLY learned user preferences**: Document ONLY when user explicitly teaches you a new preference"}
   {"- Example: `\"workaround:429_rate_limit: On rate limit, retry with fewer ingredients (e.g., 2-3 core ingredients instead of full list)\"`" if use_spoonacular else "- Example: `\"preference:user_taught: User prefers quick meals and Italian cuisine\"`"}
-{"- **ONLY novel search optimizations**: Document if you discover ingredient filtering or search techniques that significantly improve results" if use_spoonacular else "- **ONLY when user gives feedback**: Document only when user provides corrective feedback"}
-  {"- Example: `\"optimization:search_strategy: Searching with primary ingredient + cuisine filter reduces irrelevant results\"`" if use_spoonacular else "- Example: `\"feedback:user_taught: User rejected vegetarian recipes, now filter them out\"`"}
 
 **What NOT to Write (ABSOLUTE PROHIBITIONS):**
 - ❌ Recipe details: "recipe_details:123456: Full recipe for Chicken Salad with ingredients and instructions"
@@ -456,7 +475,6 @@ def get_system_instructions(
 - ❌ Regular operations: "User asked for vegetarian recipes, successfully found 5"
 - ❌ Any entry with "recipe_details:", "recipe:", "found recipes:", "recommended recipes:" prefixes
 - ❌ Full recipe content, ingredients lists, instructions, cooking times
-- ❌ Duplicate patterns already documented
 - ❌ "User preferences" - use user_memories instead (handled automatically)
 
 **Format (Only When Writing Troubleshooting):**

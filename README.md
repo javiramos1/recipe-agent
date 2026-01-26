@@ -379,7 +379,7 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `IMAGE_DETECTION_MODEL` | string | `gemini-3-flash-preview` | Image detection model (independent from main model). Options: `gemini-3-flash-preview`, `gemini-3-pro-preview`. Use `gemini-3-pro-preview` for better accuracy on complex images |
 | `TEMPERATURE` | float | `0.3` | Response randomness (0.0=deterministic, 1.0=creative). For recipes: 0.3 balances consistency with variety |
 | `MAX_OUTPUT_TOKENS` | int | `2048` | Maximum response length. For recipes: 2048 supports full ingredient lists and instructions |
-| `THINKING_LEVEL` | string | `off` | Extended reasoning level: `off` (fastest), `low` (balanced), `high` (thorough). Recipe recommendations work well with `off` or `low` |
+| `THINKING_LEVEL` | string | `None` | Extended reasoning level: None (fastest), `low` (balanced), `high` (thorough). Recipe recommendations work well with `None` or `low` |
 | `PORT` | int | `7777` | Server port |
 | `MAX_HISTORY` | int | `3` | Conversation turns to keep in memory |
 | `MAX_RECIPES` | int | `3` | Maximum recipes to return per request |
@@ -387,7 +387,7 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `MIN_INGREDIENT_CONFIDENCE` | float | `0.7` | Confidence threshold for detected ingredients (0.0-1.0) |
 | `COMPRESS_IMG_THRESHOLD_KB` | int | `300` | Only compress images smaller than this threshold (KB). Images above this are already compressed. Set to 0 to disable compression |
 | `IMAGE_DETECTION_MODE` | string | `pre-hook` | Detection mode: `pre-hook` (fast) or `tool` (agent-controlled) |
-| `TOOL_CALL_LIMIT` | int | `6` | Maximum tool calls per agent request (prevents excessive API usage) |
+| `TOOL_CALL_LIMIT` | int | `12` | Maximum tool calls per agent request (prevents excessive API usage) |
 | `OUTPUT_FORMAT` | string | `json` | Response format: `json` or `markdown` |
 | `LOG_LEVEL` | string | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
 | `DATABASE_URL` | string | *optional* | PostgreSQL connection (SQLite default) |

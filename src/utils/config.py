@@ -47,7 +47,7 @@ class Config:
         self.TRACING_DB_TYPE: str = os.getenv("TRACING_DB_TYPE", "sqlite")
         self.TRACING_DB_FILE: str = os.getenv("TRACING_DB_FILE", "agno_traces.db")
         # Tool Call Limit: Maximum number of tool calls agent can make per request
-        self.TOOL_CALL_LIMIT: int = int(os.getenv("TOOL_CALL_LIMIT", "6"))
+        self.TOOL_CALL_LIMIT: int = int(os.getenv("TOOL_CALL_LIMIT", "12"))
         # LLM Model Parameters
         # Temperature: Controls randomness (0.0 = deterministic, 1.0 = max randomness)
         # For recipes: 0.3 balances creativity with consistency
@@ -58,7 +58,7 @@ class Config:
         # Thinking Level: Enables extended thinking for complex reasoning
         # Options: "low", "high" - Recipe recommendations benefit from low/high thinking
         # "low" = fastest (no extended thinking), "high" = slowest but most thorough
-        self.THINKING_LEVEL: str = os.getenv("THINKING_LEVEL", "low")
+        self.THINKING_LEVEL: str = os.getenv("THINKING_LEVEL", None)
         
         # Agent Retry Configuration - handles transient API failures gracefully
         # MAX_RETRIES: Number of retry attempts for failed API calls (exponential backoff)
@@ -117,7 +117,7 @@ class Config:
             raise ValueError(
                 f"MAX_OUTPUT_TOKENS must be at least 512, got: {self.MAX_OUTPUT_TOKENS}"
             )
-        if self.THINKING_LEVEL not in ("off", "low", "high"):
+        if self.THINKING_LEVEL not in (None, "low", "high"):
             raise ValueError(
                 f"THINKING_LEVEL must be 'off', 'low', or 'high', got: {self.THINKING_LEVEL}"
             )
