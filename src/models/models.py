@@ -139,38 +139,38 @@ class Recipe(BaseModel):
         None,
         ge=0,
         le=1440,
-        description="Total time (prep + cook) in minutes (0-1440)"
+        description="Total time (prep + cook) in minutes (0-1440, only set when get_recipe_information is called)"
     )]
     servings: Annotated[Optional[int], Field(
         None,
         ge=1,
         le=100,
-        description="Number of servings (1-100)"
+        description="Number of servings (1-100, only set when get_recipe_information is called)"
     )]
     image: Annotated[Optional[str], Field(
         None,
         max_length=500,
-        description="URL to recipe image"
+        description="URL to recipe image (only set when get_recipe_information is called)"
     )]
     summary: Annotated[Optional[str], Field(
         None,
         max_length=1000,
-        description="Brief description or summary (max 1000 chars)"
+        description="Brief description or summary (max 1000 chars, only set when get_recipe_information is called)"
     )]
     ingredients: Annotated[Optional[List[str]], Field(
         None,
         max_length=100,
-        description="List of ingredients with quantities (max 100 items, Step 2 only)"
+        description="List of ingredients with quantities (max 100 items, only set when get_recipe_information is called)"
     )]
     instructions: Annotated[Optional[List[str]], Field(
         None,
         max_length=100,
-        description="Step-by-step cooking instructions (max 100 steps, Step 2 only)"
+        description="Step-by-step cooking instructions (max 100 steps, only set when get_recipe_information is called)"
     )]
     source_url: Annotated[Optional[str], Field(
         None,
         max_length=500,
-        description="URL to original recipe source"
+        description="URL to original recipe source (only set when get_recipe_information is called)"
     )]
 
 
@@ -189,7 +189,7 @@ class RecipeResponse(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
     
     response: Annotated[str, Field(
-        description="Conversational response from the LLM (1-5000 chars)"
+        description="Markdown-formatted final response presented to the user containing conversational text, recipe details, and suggestions (1-5000 chars)"
     )]
     recipes: Annotated[List[Recipe], Field(
         default_factory=list,

@@ -27,9 +27,14 @@ class Config:
         # For best results: use gemini-3-pro-preview for complex recipe reasoning
         self.GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3-flash-preview")
         # Image Detection Model: separate model optimized for vision tasks
-        # Default: gemini-3-flash-preview (fast, cost-effective for images)
+        # Default: gemini-2.5-flash-lite (fast, cost-effective for images)
         # For better accuracy: use gemini-3-pro-preview for complex image analysis
-        self.IMAGE_DETECTION_MODEL: str = os.getenv("IMAGE_DETECTION_MODEL", "gemini-3-flash-preview")
+        self.IMAGE_DETECTION_MODEL: str = os.getenv("IMAGE_DETECTION_MODEL", "gemini-2.5-flash-lite")
+        # Memory Model: separate model for memory operations and tool compression
+        # Default: gemini-2.5-flash-lite (cost-optimized for background operations)
+        # Used for: user memories, session summaries, and tool result compression
+        # Can be different from main model to reduce costs for background operations
+        self.MEMORY_MODEL: str = os.getenv("MEMORY_MODEL", "gemini-2.5-flash-lite")
         self.PORT: int = int(os.getenv("PORT", "7777"))
         self.MAX_HISTORY: int = int(os.getenv("MAX_HISTORY", "3"))
         self.MAX_RECIPES: int = int(os.getenv("MAX_RECIPES", "10"))
@@ -50,14 +55,15 @@ class Config:
         self.TOOL_CALL_LIMIT: int = int(os.getenv("TOOL_CALL_LIMIT", "12"))
         # LLM Model Parameters
         # Temperature: Controls randomness (0.0 = deterministic, 1.0 = max randomness)
-        # For recipes: 0.3 balances creativity with consistency
-        self.TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.3"))
+        # For recipes: 0.2 balances creativity with consistency
+        self.TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.2"))
         # Max Output Tokens: Maximum length of model response
         # For recipes: 2048 is sufficient for full recipe with instructions
         self.MAX_OUTPUT_TOKENS: int = int(os.getenv("MAX_OUTPUT_TOKENS", "2048"))
         # Thinking Level: Enables extended thinking for complex reasoning
         # Options: "low", "high" - Recipe recommendations benefit from low/high thinking
         # "low" = fastest (no extended thinking), "high" = slowest but most thorough
+        # Default: None (thinking disabled) This has been proved to work best in testing when using external tools
         self.THINKING_LEVEL: str = os.getenv("THINKING_LEVEL", None)
         
         # Agent Retry Configuration - handles transient API failures gracefully
@@ -69,21 +75,72 @@ class Config:
         self.EXPONENTIAL_BACKOFF: bool = os.getenv("EXPONENTIAL_BACKOFF", "true").lower() in ("true", "1", "yes")
         
         # Agent Memory & History Settings - control context enrichment and knowledge management
-        # ADD_HISTORY_TO_CONTEXT: Include conversation history in LLM context for coherence
+        # ====================================================================================
+        # MEMORY STRATEGY: Option 1 - Automatic Context (Recommended for most use cases)
+        # - Automatic recent history inclusion for conversational continuity
+        # - No redundant on-demand history tools to avoid token bloat
+        # - Balances performance with conversational awareness
+        #
+        # Alternative: Option 2 - Selective Access (For complex workflows needing deep history)
+        # - Agent decides when to access history via dedicated tools
+        # - Better for analytics/auditing or when context management is critical
+        #
+        # Alternative: Option 3 - Hybrid (Advanced users with specific needs)
+        # - Both automatic and on-demand access
+        # - Use max_tool_calls_from_history to control context size
+
+        # ADD_HISTORY_TO_CONTEXT: Include recent conversation history in LLM context automatically
+        # Benefits: Seamless conversational continuity, remembers recent preferences/discussions
+        # Trade-offs: Increases token usage, may include irrelevant history
+        # Cost: Local database operation (no extra LLM API calls)
+        # Recommended: True for conversational agents, False for single-turn or context-sensitive apps
         self.ADD_HISTORY_TO_CONTEXT: bool = os.getenv("ADD_HISTORY_TO_CONTEXT", "true").lower() in ("true", "1", "yes")
-        # READ_TOOL_CALL_HISTORY: Give LLM access to previous tool calls for continuity
-        self.READ_TOOL_CALL_HISTORY: bool = os.getenv("READ_TOOL_CALL_HISTORY", "true").lower() in ("true", "1", "yes")
-        # UPDATE_KNOWLEDGE: Allow LLM to add learnings to knowledge base
+
+        # READ_TOOL_CALL_HISTORY: Provide get_tool_call_history() tool for agent to access previous tool calls
+        # Benefits: Agent can analyze tool usage patterns, reference past tool results
+        # Trade-offs: Redundant if add_history_to_context=True (tool calls already in context)
+        # Cost: Local database operation (no extra LLM API calls)
+        # Recommended: False when add_history_to_context=True to avoid redundancy and token bloat
+        self.READ_TOOL_CALL_HISTORY: bool = os.getenv("READ_TOOL_CALL_HISTORY", "false").lower() in ("true", "1", "yes")
+
+        # UPDATE_KNOWLEDGE: Allow LLM to add learnings and troubleshooting to knowledge base
+        # Benefits: Agent learns from experience, improves over time, shares insights across sessions
+        # Trade-offs: Requires knowledge base setup, may add irrelevant information
+        # Cost: Local vector database operation (no extra LLM API calls)
+        # Recommended: True for learning agents, False for stateless or privacy-sensitive applications
         self.UPDATE_KNOWLEDGE: bool = os.getenv("UPDATE_KNOWLEDGE", "true").lower() in ("true", "1", "yes")
-        # READ_CHAT_HISTORY: Provide dedicated tool for LLM to query chat history
-        self.READ_CHAT_HISTORY: bool = os.getenv("READ_CHAT_HISTORY", "true").lower() in ("true", "1", "yes")
-        # ENABLE_USER_MEMORIES: Store and track user preferences for personalization
+
+        # READ_CHAT_HISTORY: Provide get_chat_history() tool for agent to search entire chat history
+        # Benefits: Agent can reference any past message when needed, deep historical analysis
+        # Trade-offs: Redundant if add_history_to_context=True (recent history already included)
+        # Cost: Local database operation (no extra LLM API calls)
+        # Recommended: False when add_history_to_context=True to avoid redundancy and token bloat
+        self.READ_CHAT_HISTORY: bool = os.getenv("READ_CHAT_HISTORY", "false").lower() in ("true", "1", "yes")
+
+        # ENABLE_USER_MEMORIES: Store and track user preferences across sessions
+        # Benefits: Personalized experience, remembers dietary restrictions, cuisine preferences
+        # Trade-offs: Privacy considerations, requires database storage
+        # Cost: Requires extra LLM API calls for preference extraction and storage
+        # Recommended: True for personalized agents, False for anonymous or single-session use
         self.ENABLE_USER_MEMORIES: bool = os.getenv("ENABLE_USER_MEMORIES", "true").lower() in ("true", "1", "yes")
-        # ENABLE_SESSION_SUMMARIES: Auto-summarize sessions for context compression
-        self.ENABLE_SESSION_SUMMARIES: bool = os.getenv("ENABLE_SESSION_SUMMARIES", "true").lower() in ("true", "1", "yes")
-        # COMPRESS_TOOL_RESULTS: Compress tool outputs to reduce context size
+
+        # ENABLE_SESSION_SUMMARIES: Auto-generate and store session summaries for context compression
+        # Benefits: Long-term memory without full context bloat, efficient storage
+        # Trade-offs: Summary quality depends on LLM, may lose nuance
+        # Cost: Requires extra LLM API calls for automatic summary generation
+        # Recommended: False for cost optimization (default), True for long conversations needing compression
+        self.ENABLE_SESSION_SUMMARIES: bool = os.getenv("ENABLE_SESSION_SUMMARIES", "false").lower() in ("true", "1", "yes")
+
+        # COMPRESS_TOOL_RESULTS: Compress/reduce verbosity of tool outputs in context
+        # Benefits: Reduces token usage, focuses on essential information
+        # Trade-offs: May lose some detail, compression quality varies
+        # Recommended: True for token efficiency, False when full tool output details are needed
         self.COMPRESS_TOOL_RESULTS: bool = os.getenv("COMPRESS_TOOL_RESULTS", "true").lower() in ("true", "1", "yes")
-        # SEARCH_KNOWLEDGE: Give LLM ability to search knowledge base during reasoning
+
+        # SEARCH_KNOWLEDGE: Allow agent to search knowledge base during reasoning
+        # Benefits: Access to learned patterns, troubleshooting history, shared insights
+        # Trade-offs: Requires knowledge base setup, may introduce irrelevant information
+        # Recommended: True when knowledge base is available, False for simple stateless agents
         self.SEARCH_KNOWLEDGE: bool = os.getenv("SEARCH_KNOWLEDGE", "true").lower() in ("true", "1", "yes")
 
     def validate(self) -> None:

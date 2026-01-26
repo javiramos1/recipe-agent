@@ -9,6 +9,8 @@ import asyncio
 import warnings
 from agno.agent import Agent
 from agno.models.google import Gemini
+from agno.memory import MemoryManager
+from agno.compression.manager import CompressionManager
 from agno.db.sqlite import SqliteDb
 from agno.db.postgres import PostgresDb
 from agno.knowledge.knowledge import Knowledge
@@ -180,6 +182,30 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     logger.info("Step 2c/7: Initializing knowledge base...")
     knowledge = await initialize_knowledge_base(db=db)
     
+    # 2d. Initialize memory manager with smaller model for cost optimization
+    logger.info("Step 2d/7: Initializing memory manager with cost-optimized model...")
+    memory_manager = MemoryManager(
+        db=db,
+        model=Gemini(
+            id=config.MEMORY_MODEL,  # Configurable smaller model for memory operations (cost optimization)
+            api_key=config.GEMINI_API_KEY,
+        ),
+        additional_instructions="Focus on extracting user preferences, dietary restrictions, and cuisine preferences for recipe recommendations. Keep memories concise and relevant to cooking/recipe context."
+    )
+    logger.info("✓ Memory manager initialized with gemini-2.5-flash-lite for cost optimization")
+    
+    # 2e. Initialize compression manager with smaller model for cost optimization
+    logger.info("Step 2e/7: Initializing compression manager with cost-optimized model...")
+    compression_manager = CompressionManager(
+        model=Gemini(
+            id=config.MEMORY_MODEL,  # Use same cost-optimized model for compression
+            api_key=config.GEMINI_API_KEY,
+        ),
+        compress_tool_results_limit=config.TOOL_CALL_LIMIT,  # Compress after configured number of tool calls
+        compress_tool_call_instructions="Summarize tool results focusing on key facts, ingredients, recipes, and cooking information. Remove redundant details while preserving essential recipe data."
+    )
+    logger.info("✓ Compression manager initialized with cost-optimized model")
+    
     # 3. Build tools list based on configuration
     logger.info("Step 3/5: Registering tools...")
     tools = []
@@ -220,7 +246,7 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         model=Gemini(
             id=config.GEMINI_MODEL,
             api_key=config.GEMINI_API_KEY,
-            temperature=config.TEMPERATURE,  # 0.3 = balanced creativity vs consistency
+            temperature=config.TEMPERATURE,  # 0.2 = consistency with some creativity
             max_output_tokens=config.MAX_OUTPUT_TOKENS,  # 2048 supports full recipe with instructions
             thinking_level=config.THINKING_LEVEL,  # Extended reasoning depth control
         ),
@@ -229,6 +255,8 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         db=db,  # SQLite (dev) or PostgreSQL (prod) for session persistence
         knowledge=knowledge,  # LanceDB vector store for learnings/troubleshooting
         search_knowledge=config.SEARCH_KNOWLEDGE,  # LLM-accessible knowledge search
+        memory_manager=memory_manager,  # Cost-optimized memory operations with smaller model
+        compression_manager=compression_manager,  # Cost-optimized tool result compression
         
         # === Tools & Hooks ===
         tools=tools,  # Spoonacular MCP + optional ingredient detection tool
@@ -252,14 +280,15 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         delay_between_retries=config.DELAY_BETWEEN_RETRIES,  # Initial backoff delay in seconds
         
         # === Memory & Context ===
-        add_history_to_context=config.ADD_HISTORY_TO_CONTEXT,  # Include conversation history
-        read_tool_call_history=config.READ_TOOL_CALL_HISTORY,  # LLM can access previous tool calls
-        update_knowledge=config.UPDATE_KNOWLEDGE,  # LLM can add learnings to KB (guarded by prompts)
-        read_chat_history=config.READ_CHAT_HISTORY,  # Dedicated tool for history access
+        add_history_to_context=config.ADD_HISTORY_TO_CONTEXT,  # Include conversation history (local database operation)
+        read_tool_call_history=config.READ_TOOL_CALL_HISTORY,  # LLM can access previous tool calls (local operation)
+        update_knowledge=config.UPDATE_KNOWLEDGE,  # LLM can add learnings to KB (local vector database operation)
+        read_chat_history=config.READ_CHAT_HISTORY,  # Dedicated tool for history access (local operation)
         num_history_runs=config.MAX_HISTORY,  # 3 turns of conversation context
-        enable_user_memories=config.ENABLE_USER_MEMORIES,  # Track user preferences
-        enable_session_summaries=config.ENABLE_SESSION_SUMMARIES,  # Auto-compress context
+        enable_user_memories=config.ENABLE_USER_MEMORIES,  # Track user preferences (requires extra LLM API calls)
+        enable_session_summaries=config.ENABLE_SESSION_SUMMARIES,  # Auto-compress context (requires extra LLM API calls)
         compress_tool_results=config.COMPRESS_TOOL_RESULTS,  # Reduce tool output verbosity
+        max_tool_calls_from_history=config.TOOL_CALL_LIMIT - 1,  # Full tool call history access
         
         # === Execution Limits ===
         tool_call_limit=config.TOOL_CALL_LIMIT,  # Max tool calls per session

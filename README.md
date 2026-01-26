@@ -15,8 +15,7 @@ We also use **Spoonacular MCP** to demonstrate how to connect to production exte
 **What You'll Learn:**
 - **Agentic Architecture**: Stateful applications with automatic memory, preference extraction, and multi-turn conversations
 - **Tool Integration**: Internal @tool functions + external MCP services (Model Context Protocol) for connecting to production systems
-- **Structured Outputs**: Pydantic schema validation for type-safe request/response contracts
-- **Production Patterns**: Exponential backoff retries, guardrails, rate limiting, error recovery
+- **Production Patterns**: Exponential backoff retries, guardrails, rate limiting, error recovery, Pydantic schema validation
 - **Observability**: Distributed tracing with OpenTelemetry, structured logging, performance metrics
 - **Quality Assurance**: Unit tests, integration tests, and Agno Evals Framework for multi-dimensional evaluation
 - **Complete Lifecycle**: Requirements → Design → Implementation → Testing → Monitoring → Iteration
@@ -48,7 +47,7 @@ We also use **Spoonacular MCP** to demonstrate how to connect to production exte
 - ✅ **Structured Logging** - Python logging with debug/info/warning levels (no sensitive data)
 - ✅ **Unit Tests** - 150+ tests for models, config, ingredients, MCP, tracing
 - ✅ **Integration Tests** - E2E evaluation tests with Agno Evals Framework (accuracy, reliability, performance)
-- ✅ **REST API Tests** - 13 endpoint tests covering session management, file uploads, error handling
+- ✅ **REST API Tests** - 10 endpoint tests covering session management, file uploads, error handling
 
 ### Data & Knowledge
 
@@ -142,6 +141,7 @@ The service will start at:
 | **Vision API** | Gemini (3-flash-preview) | Ingredient detection from images |
 | **Recipe Search** | Spoonacular MCP | 50K+ verified recipes via external service |
 | **Database** | SQLite (dev) / PostgreSQL (prod) | Session storage and memory |
+| **Knowledge Base** | LanceDB | Vector database for semantic search, multi-modal embeddings, and agent learning |
 | **Validation** | Pydantic v2 | Input/output schema validation |
 | **Testing** | pytest + Agno Evals | Unit, integration, and evaluation testing |
 
@@ -166,7 +166,7 @@ Edit `.env` and add your API keys:
 # Required - Get from Google Cloud Console
 GEMINI_API_KEY=your_gemini_key_here
 
-# Required - Get from spoonacular.com/food-api or rapidapi.com
+# Optional - Get from spoonacular.com/food-api or rapidapi.com
 SPOONACULAR_API_KEY=your_spoonacular_key_here
 
 # Optional - Defaults shown
@@ -210,7 +210,6 @@ Applies when `USE_SPOONACULAR=true`.
 **Free Plan:**
 - **API Calls**: 100/day
 - **Cost**: $0/month
-- **Use Case**: Development and testing
 - **Throttle**: 1 request/second
 
 **Quota Status:**
@@ -257,14 +256,6 @@ The application will start at:
 | **Image Support** | Upload images directly (base64 conversion handled) |
 | **Tool Inspection** | See which MCP tools were called and their outputs |
 | **Performance Metrics** | Response times, token usage, execution breakdown |
-
-### Uploading Images for Ingredient Detection
-
-1. **Use Agno OS Upload Widget** - Click image upload in chat input
-2. **Select Ingredient Photos** - Single or multiple images
-3. **Optional Message** - Add notes like "Make it vegetarian" or just send images
-4. **Auto-Extraction** - Gemini Vision API detects ingredients automatically
-5. **View Results** - Recipes with full details returned in Agno UI
 
 **Image Requirements:**
 - **Max Size**: 5MB per image
@@ -379,7 +370,8 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `USE_SPOONACULAR` | bool | `true` | Enable Spoonacular MCP for external recipe API. When `false`, uses internal LLM knowledge to generate recipes |
 | `SPOONACULAR_API_KEY` | string | **required if USE_SPOONACULAR=true** | Spoonacular recipe API key (only needed when Spoonacular mode is enabled) |
 | `GEMINI_MODEL` | string | `gemini-3-flash-preview` | Main recipe recommendation model. Options: `gemini-3-flash-preview`, `gemini-3-pro-preview` |
-| `IMAGE_DETECTION_MODEL` | string | `gemini-3-flash-preview` | Image detection model (independent from main model). Options: `gemini-3-flash-preview`, `gemini-3-pro-preview`. Use `gemini-3-pro-preview` for better accuracy on complex images |
+| `IMAGE_DETECTION_MODEL` | string | `gemini-2.5-flash-lite` | Image detection model (independent from main model). Options: `gemini-2.5-flash-lite`, `gemini-3-flash-preview`, `gemini-3-pro-preview`. Use `gemini-3-pro-preview` for better accuracy on complex images |
+| `MEMORY_MODEL` | string | `gemini-2.5-flash-lite` | Memory operations model for user memories and session summaries. Uses smaller model to reduce API costs for background memory operations |
 | `TEMPERATURE` | float | `0.3` | Response randomness (0.0=deterministic, 1.0=creative). For recipes: 0.3 balances consistency with variety |
 | `MAX_OUTPUT_TOKENS` | int | `2048` | Maximum response length. For recipes: 2048 supports full ingredient lists and instructions |
 | `THINKING_LEVEL` | string | `None` | Extended reasoning level: None (fastest), `low` (balanced), `high` (thorough). Recipe recommendations work well with `None` |
@@ -402,14 +394,16 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `DELAY_BETWEEN_RETRIES` | int | `2` | Initial delay in seconds between retries (doubles each retry with exponential backoff) |
 | `EXPONENTIAL_BACKOFF` | bool | `true` | Enable exponential backoff (2s → 4s → 8s) for rate limit handling |
 | **Agent Memory & Context** | | | |
-| `ADD_HISTORY_TO_CONTEXT` | bool | `true` | Include conversation history in LLM context for coherence |
-| `READ_TOOL_CALL_HISTORY` | bool | `true` | Give LLM access to previous tool calls |
-| `UPDATE_KNOWLEDGE` | bool | `true` | Allow LLM to add learnings to knowledge base |
-| `READ_CHAT_HISTORY` | bool | `true` | Provide dedicated tool for LLM to query chat history |
-| `ENABLE_USER_MEMORIES` | bool | `true` | Store and track user preferences for personalization |
-| `ENABLE_SESSION_SUMMARIES` | bool | `true` | Auto-summarize sessions for context compression |
-| `COMPRESS_TOOL_RESULTS` | bool | `true` | Compress tool outputs to reduce context size |
+| `ADD_HISTORY_TO_CONTEXT` | bool | `true` | Include conversation history in LLM context for coherence (local database operation) |
+| `READ_TOOL_CALL_HISTORY` | bool | `false` | Give LLM access to previous tool calls (avoid redundancy with automatic history, local operation) |
+| `UPDATE_KNOWLEDGE` | bool | `true` | Allow LLM to add learnings to knowledge base (local vector database operation) |
+| `READ_CHAT_HISTORY` | bool | `false` | Provide dedicated tool for LLM to query chat history (avoid redundancy with automatic history, local operation) |
+| `ENABLE_USER_MEMORIES` | bool | `true` | Store and track user preferences for personalization (**requires extra LLM API calls** for extraction) |
+| `ENABLE_SESSION_SUMMARIES` | bool | `false` | Auto-summarize sessions for context compression (**requires extra LLM API calls** for generation) |
+| `COMPRESS_TOOL_RESULTS` | bool | `true` | Compress tool outputs to reduce context size (uses cost-optimized MEMORY_MODEL) |
 | `SEARCH_KNOWLEDGE` | bool | `true` | Give LLM ability to search knowledge base during reasoning |
+
+**Memory Strategy**: Uses *Option 1 - Automatic Context* for optimal balance of conversational continuity and performance. Recent history is automatically included while avoiding redundant on-demand history tools that could bloat token usage. Session summaries are disabled by default to minimize LLM API costs - enable only for long conversations requiring context compression. Memory operations (user memories, session summaries) and tool result compression use a separate cost-optimized model (`MEMORY_MODEL`) to reduce API costs by up to 98% for background operations.
 
 ### Observability & Tracing
 
@@ -439,6 +433,8 @@ SQLite file: `agno.db` (auto-created)
 ```bash
 DATABASE_URL=postgresql://user:password@localhost:5432/recipe_service
 ```
+
+**Clear sessions, memory and knowledge base**: `make clear-memories`
 
 ### Operating Modes
 
@@ -479,7 +475,6 @@ Both modes maintain the same API interface and response format. The system promp
 3. **Agent** → Agno Agent routes to recipe tools with extracted ingredients + preferences
 4. **Recipe Generation** → Spoonacular MCP called (if enabled) or LLM generates from knowledge
 5. **Response** → Agent synthesizes human-friendly response with recipe details
-
 
 ### Session Management
 
@@ -536,23 +531,32 @@ Both modes maintain the same API interface and response format. The system promp
 
 ### Knowledge Base
 
-Agent maintains a searchable knowledge base (LanceDB) of recipe insights and troubleshooting findings:
+Agent maintains a searchable **LanceDB knowledge base** - a high-performance vector database optimized for multi-modal AI applications:
+
+**LanceDB Capabilities:**
+- **Vector Search**: Semantic similarity search using embeddings for natural language queries
+- **Multi-Modal Support**: Stores and searches across text, images, and structured data
+- **High Performance**: Columnar storage with SIMD-accelerated vector operations
+- **ACID Transactions**: Reliable data consistency with full transactional support
+- **Zero-Copy Operations**: Memory-efficient data access without unnecessary copying
+- **Integration**: Native Python API with SentenceTransformer embeddings (no API costs)
 
 **Automatically Stored:**
 - Failed recipe searches (queries, failure reasons)
-- API errors and retries
-- User preferences and patterns
-- Recipe combinations that work/don't work
+- API errors and retries with resolution patterns
+- User preferences and dietary patterns over time
+- Recipe combinations that work/don't work with success rates
+- Ingredient detection accuracy and edge cases
+- Troubleshooting findings and system improvements
 
 **Used For:**
-- Avoiding repeated failed searches
-- Context for future similar requests
-- Improved recommendations over time
-- Debugging search patterns
+- Avoiding repeated failed searches through pattern recognition
+- Context-aware recommendations based on historical user behavior
+- Improved ingredient detection accuracy over time
+- Debugging search patterns and API reliability issues
+- Learning from user feedback and preference evolution
 
 **Search Enabled:** Agent can search knowledge base for similar past issues before attempting new searches (configurable via `search_knowledge=True` in agent config).
-
-
 
 ## API Reference
 
@@ -664,7 +668,7 @@ Tests REST API endpoints directly using httpx client. Validates:
 - **Response validation**: RecipeResponse schema compliance
 - **Rapid requests**: Handles sequential requests without resource exhaustion
 
-**Coverage:** 13 test functions covering all HTTP status codes and edge cases.
+**Coverage:** 10 test functions covering all HTTP status codes and edge cases.
 
 **Note:** Requires running app (`make dev` in separate terminal). Tests connect to `http://localhost:7777`.
 
@@ -734,7 +738,7 @@ Tests REST API endpoints directly using httpx client. Validates:
 **Problem:** SQLite or PostgreSQL connection errors.
 
 **Solution:**
-1. For SQLite: Delete `agno.db` and restart (fresh database)
+1. For SQLite: Run `make clear-memories`
 2. For PostgreSQL: Verify DATABASE_URL is correct
 3. Check database server is running
 4. Ensure database user has create/read/write permissions

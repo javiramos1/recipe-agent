@@ -56,7 +56,6 @@ This is a comprehensive GenAI application designed to **demonstrate best practic
 
 **Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed, Task 11 Tracing implemented, Task 12 E2E Evals complete, Task 13 REST API Tests implemented, Task 13+ Eval visibility to os.agno.com. Search strategy updated to find_recipes_by_ingredients with LLM-based filtering. Tool-hooks removed. ✅**
 
-
 ### Phase 1: Foundational (Tasks 1-5 + Task 2.5 logger) ✅
 - [x] Task 1: Project structure, dependencies, .gitignore
 - [x] Task 2: Configuration management (config.py)
@@ -80,22 +79,13 @@ This is a comprehensive GenAI application designed to **demonstrate best practic
 ### Phase 3: Developer Tools & Testing (Tasks 11-18)
 - [x] Task 11 complete (date: 2026-01-20) - AgentOS Tracing Configuration & Observability
 - [x] Task 12 complete (date: 2026-01-20) - Integration Tests E2E with Agno Evals Framework
-  - Implemented 8 comprehensive integration tests covering all eval dimensions
-  - AccuracyEval: Ingredient detection accuracy using LLM-as-judge (Gemini model)
-  - AgentAsJudgeEval (4 tests): Recipe quality, preference persistence, guardrails, session isolation
-  - ReliabilityEval: Correct tool sequence (search_recipes → get_recipe_information_bulk)
-  - PerformanceEval: Response time under 5 seconds for user experience
-  - Created conftest.py with pytest configuration and API key validation
-  - Integrated dotenv to load .env for API keys with clear messaging
-  - Results persisted in tmp/eval_results.db (SqliteDb) for queryable tracking
-  - All 8 tests collected and validated, ready for execution
 - [x] Task 18 complete (date: 2026-01-18) - Ad hoc query command
 - [x] Task 19 complete (date: 2026-01-19) - Background server support (make dev-bkg, make query automation)
-- [ ] Task 13: REST API Testing - Pending
+- [x] Task 13: REST API Testing (date: 2026-01-20) 
 - [x] Task 14 complete (date: 2026-01-18) - Makefile with all development commands
-- [ ] Task 15: Sample Test Images - Pending
+- [x] Task 15: Sample Test Images (date: 2026-01-20) 
 - [x] Task 16 complete (date: 2026-01-18) - Comprehensive README.md
-- [ ] Task 17: Final Validation - Pending
+- [x] Task 17: Final Validation (date: 2026-01-20) - All tests passing, architecture review, code quality audit
 
 **Update Protocol:** After completing each task, update this status section with:
 - [x] Task [N] complete (date: YYYY-MM-DD) - Description of what was completed
@@ -142,7 +132,7 @@ Single-entry-point application (`python app.py`) with factory pattern separation
 - **External Recipe API** (via npx): Recipe search with filtering
 
 **Data Flow:**
-Request → Pre-hook (image processing) → Agent (orchestration) → MCP (recipe search) → Response
+Request → Pre-hook (image processing) → Agent (orchestration) → MCP (recipe search) → Post-hooks(metadata/response) → Response
 
 **MCP Initialization (Startup):**
 SpoonacularMCP.initialize() → Validate API key → Test connection (retry 1s/2s/4s) → Return MCPTools → Agent creation
@@ -186,7 +176,6 @@ SpoonacularMCP.initialize() → Validate API key → Test connection (retry 1s/2
 - **pytest**: Unit and integration testing framework
 - **Pydantic**: Input/output validation with OpenAPI schema generation
 - **aiohttp**: Async HTTP client for URL-based image fetching
-
 
 ## Async/Await Implementation Standards
 
@@ -283,33 +272,6 @@ def initialize_recipe_agent() -> Agent:
     mcp_tools = spoonacular_mcp.initialize()  # Can't await in sync function!
 ```
 
-### Retry Logic
-
-```python
-# ✅ CORRECT: Non-blocking exponential backoff
-async def extract_with_retries(image_bytes, max_retries=3):
-    for attempt in range(max_retries):
-        try:
-            result = await extract_ingredients_from_image(image_bytes)
-            if result:
-                return result
-        except Exception as e:
-            if attempt < max_retries - 1:
-                delay = 2 ** attempt  # Exponential backoff
-                await asyncio.sleep(delay)  # Non-blocking!
-    return None
-
-# ❌ WRONG: Blocking retry delays
-import time
-for attempt in range(max_retries):
-    try:
-        result = extract_ingredients_from_image(image_bytes)
-        if result:
-            return result
-    except Exception:
-        time.sleep(2 ** attempt)  # Blocks entire app!
-```
-
 ### Summary
 
 - **Every function doing I/O**: Mark as `async def`, use `await` for I/O
@@ -318,8 +280,6 @@ for attempt in range(max_retries):
 - **Sync APIs**: Wrap with `asyncio.to_thread(sync_func, args)`
 - **Startup**: Use `asyncio.run(async_factory())` at module level only
 - **Never mix**: Don't call sync I/O in async functions without `to_thread()`
-
-
 
 
 ```
@@ -505,18 +465,6 @@ images/             # Sample test images for verification
   - ❌ Sync blocking calls in async functions - use `asyncio.to_thread()` wrapper
 - Call `sync_function()` instead of `await asyncio.to_thread(sync_function)`
 - Use blocking third-party libraries without wrapping in `asyncio.to_thread()`
-
-## Configuration
-
-Environment variables (load order: system env > .env > defaults):
-- `GEMINI_API_KEY` (required) - Google Gemini vision API
-- `SPOONACULAR_API_KEY` (required) - Recipe search API
-- `GEMINI_MODEL` (default: gemini-1.5-flash)
-- `PORT` (default: 7777)
-- `MAX_HISTORY` (default: 3) - Conversation turns to keep
-- `MAX_IMAGE_SIZE_MB` (default: 5) - Image upload limit
-- `MIN_INGREDIENT_CONFIDENCE` (default: 0.7) - Vision API confidence filter
-- `DATABASE_URL` (optional) - PostgreSQL for production
 
 ## Testing Strategy
 
