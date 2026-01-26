@@ -403,8 +403,6 @@ async def extract_ingredients_pre_hook(
         message_text = input_data.message or ""
         images = input_data.images or []
         
-        logger.debug(f"Message: {len(message_text)} chars, Images: {len(images)} items")
-        
         # Check if we have images to process
         if not images:
             logger.debug("No images in request, skipping ingredient extraction")
