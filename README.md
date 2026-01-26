@@ -235,7 +235,7 @@ The application will start at:
 1. **Create Free Account**: Visit [os.agno.com](https://os.agno.com) and sign up (free tier available)
 2. **Start Backend**: Run `make dev` in terminal
 3. **Connect Agent**: In Agno OS platform → Click team dropdown → "Add new OS" → Select "Local" → Enter endpoint `http://localhost:7777`
-4. **Chat in Platform**: UI automatically adapts to your agent's input schema
+4. **Chat in Platform**: UI automatically adapts to your agent's input schema. Enter an image URL or base64 data.
 5. **View Traces**: Agno OS platform shows execution traces, tool calls, and reasoning
 
 ### Why Agno OS Platform?
