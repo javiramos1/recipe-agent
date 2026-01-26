@@ -373,7 +373,7 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `IMAGE_DETECTION_MODEL` | string | `gemini-2.5-flash-lite` | Image detection model (independent from main model). Options: `gemini-2.5-flash-lite`, `gemini-3-flash-preview`, `gemini-3-pro-preview`. Use `gemini-3-pro-preview` for better accuracy on complex images |
 | `MEMORY_MODEL` | string | `gemini-2.5-flash-lite` | Memory operations model for user memories and session summaries. Uses smaller model to reduce API costs for background memory operations |
 | `TEMPERATURE` | float | `0.3` | Response randomness (0.0=deterministic, 1.0=creative). For recipes: 0.3 balances consistency with variety |
-| `MAX_OUTPUT_TOKENS` | int | `2048` | Maximum response length. For recipes: 2048 supports full ingredient lists and instructions |
+| `MAX_OUTPUT_TOKENS` | int | `8192` | Maximum response length. For multiple recipes: 8192 supports full response with 10 recipes including instructions (Gemini supports up to 65,536) |
 | `THINKING_LEVEL` | string | `None` | Extended reasoning level: None (fastest), `low` (balanced), `high` (thorough). Recipe recommendations work well with `None` |
 | `PORT` | int | `7777` | Server port |
 | `MAX_HISTORY` | int | `3` | Conversation turns to keep in memory |

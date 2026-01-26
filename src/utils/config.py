@@ -75,8 +75,9 @@ class Config:
         # For recipes: 0.2 balances creativity with consistency
         self.TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.2"))
         # Max Output Tokens: Maximum length of model response
-        # For recipes: 2048 is sufficient for full recipe with instructions
-        self.MAX_OUTPUT_TOKENS: int = int(os.getenv("MAX_OUTPUT_TOKENS", "2048"))
+        # For recipes with multiple recommendations: 8192 supports full response with 10 recipes including instructions
+        # Gemini 3 Flash supports up to 65,536 output tokens - using 8192 for balance of cost and completeness
+        self.MAX_OUTPUT_TOKENS: int = int(os.getenv("MAX_OUTPUT_TOKENS", "8192"))
         # Thinking Level: Enables extended thinking for complex reasoning
         # Options: "low", "high" - Recipe recommendations benefit from low/high thinking
         # "low" = fastest (no extended thinking), "high" = slowest but most thorough

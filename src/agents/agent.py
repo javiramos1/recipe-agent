@@ -247,7 +247,7 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
             id=config.GEMINI_MODEL,
             api_key=config.GEMINI_API_KEY,
             temperature=config.TEMPERATURE,  # 0.2 = consistency with some creativity
-            max_output_tokens=config.MAX_OUTPUT_TOKENS,  # 2048 supports full recipe with instructions
+            max_output_tokens=config.MAX_OUTPUT_TOKENS,  # 8192 supports full response with multiple recipes and instructions (Gemini supports up to 65,536)
             thinking_level=config.THINKING_LEVEL,  # Extended reasoning depth control
         ),
         
@@ -266,6 +266,7 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         # === Input/Output Schemas ===
         input_schema=ChatMessage,  # Validates incoming messages
         output_schema=RecipeResponse,  # Structures recipe response with metadata
+        structured_outputs=True,  # Force native structured outputs (Gemini supports this - guarantees schema-valid JSON at API level)
         
         # === Instructions & State ===
         instructions=get_system_instructions(
