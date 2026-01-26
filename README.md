@@ -47,7 +47,7 @@ This service demonstrates best practices in agentic system design by leveraging 
 ### Data & Knowledge
 
 - ✅ **Knowledge Graph** - LanceDB vector store with SentenceTransformer embeddings (no API cost)
-- ✅ **Semantic Search** - Troubleshooting findings stored and searchable for agent learning
+- ✅ **Semantic Search** - Troubleshooting, Error and other findings stored and searchable for agent learning
 - ✅ **Error Tracking** - API errors (402 quota, 429 rate limit) documented for diagnostics
 
 ### System Design
@@ -312,8 +312,9 @@ The query command initializes the agent and executes one-off requests from the C
 ### Run Tests
 
 ```bash
-make test    # Unit tests (fast, isolated)
-make eval    # Integration tests (requires API keys)
+make test       # Unit tests (fast, isolated)
+make int-tests  # REST API integration tests (starts app automatically, no pre-setup required)
+make eval       # Integration evaluation tests (requires API keys)
 ```
 
 ### Clean Cache
@@ -399,7 +400,6 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `ENABLE_USER_MEMORIES` | bool | `true` | Store and track user preferences for personalization |
 | `ENABLE_SESSION_SUMMARIES` | bool | `true` | Auto-summarize sessions for context compression |
 | `COMPRESS_TOOL_RESULTS` | bool | `true` | Compress tool outputs to reduce context size |
-| `ADD_SESSION_STATE_TO_CONTEXT` | bool | `true` | Inject tool_call_count and recipes_found into LLM context between calls |
 | `SEARCH_KNOWLEDGE` | bool | `true` | Give LLM ability to search knowledge base during reasoning |
 
 ### Observability & Tracing

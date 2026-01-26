@@ -83,8 +83,8 @@ def run_query(query: str, debug: bool = False, stateless: bool = False, image_pa
         logger.info(f"Initializing agent (stateless={stateless})...")
         
         # Initialize agent with persistence disabled for stateless queries
-        # initialize_recipe_agent is async and returns (agent, tracing_db) tuple
-        agent, _ = asyncio.run(initialize_recipe_agent(use_db=not stateless))
+        # initialize_recipe_agent is async and returns (agent, tracing_db, knowledge) tuple
+        agent, _, _ = asyncio.run(initialize_recipe_agent(use_db=not stateless))
         
         logger.info(f"Running query: {query}")
         if image_path:

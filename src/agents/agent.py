@@ -34,7 +34,7 @@ async def initialize_knowledge_base(db=None) -> Knowledge:
     """Initialize knowledge base for recipe troubleshooting and learnings.
     
     Uses LanceDB for vector storage and SentenceTransformer embeddings (lightweight, no API calls).
-    Stores troubleshooting findings, failed queries, and API error patterns.
+    Stores troubleshooting findings and learnings for agent reference and improvement over time.
     
     Args:
         db: Optional database for persisting knowledge content metadata to SQLite (for AgentOS UI display).

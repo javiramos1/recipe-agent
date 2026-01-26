@@ -207,10 +207,6 @@ class RecipeResponse(BaseModel):
         None,
         description="Explanation of agent's decision-making (max 2000 chars)"
     )]
-    troubleshooting: Annotated[Optional[str], Field(
-        None,
-        description="Error/retry info: API errors, failed queries, no results, retries. Empty if successful."
-    )]
     session_id: Annotated[Optional[str], Field(
         None,
         description="Session identifier for conversation continuity"

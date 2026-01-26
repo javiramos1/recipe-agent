@@ -154,16 +154,9 @@ eval: venv-check
 	@echo ""
 	@echo "To view results in UI: Connect os.agno.com to http://localhost:7777"
 
-# REST API Integration Tests (requires running app on port 7777)
+# REST API Integration Tests (starts app with knowledge/memory disabled for clean testing)
 int-tests: venv-check
-	@echo "Running REST API integration tests..."
-	@echo ""
-	@echo "Note: Requires app running on http://localhost:7777"
-	@echo "Start app in another terminal: make dev"
-	@echo ""
-	$(PYTHON) -m pytest tests/integration/test_integration.py -v --tb=short
-	@echo ""
-	@echo "✓ REST API integration tests complete"
+	@bash run_int_tests.sh
 
 # Clean: Remove cache and temporary files
 clean:
