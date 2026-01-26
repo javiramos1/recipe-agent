@@ -22,6 +22,7 @@ class Config:
         self.GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
         # Spoonacular Configuration: Enable/disable external recipe API
         self.USE_SPOONACULAR: bool = os.getenv("USE_SPOONACULAR", "true").lower() in ("true", "1", "yes")
+        # Spoonacular API Key: required if USE_SPOONACULAR is true
         self.SPOONACULAR_API_KEY: str = os.getenv("SPOONACULAR_API_KEY", "")
         # Default: gemini-3-flash-preview (fast, cost-effective)
         # For best results: use gemini-3-pro-preview for complex recipe reasoning
@@ -35,21 +36,37 @@ class Config:
         # Used for: user memories, session summaries, and tool result compression
         # Can be different from main model to reduce costs for background operations
         self.MEMORY_MODEL: str = os.getenv("MEMORY_MODEL", "gemini-2.5-flash-lite")
+        # Server Port
         self.PORT: int = int(os.getenv("PORT", "7777"))
+        # Maximum number of previous interactions to include in context. Default: 3
         self.MAX_HISTORY: int = int(os.getenv("MAX_HISTORY", "3"))
+        # Maximum number of recipe recommendations to return. Default: 10
         self.MAX_RECIPES: int = int(os.getenv("MAX_RECIPES", "10"))
+        # Maximum image size (in MB) that can be processed. Default: 5 MB
         self.MAX_IMAGE_SIZE_MB: int = int(os.getenv("MAX_IMAGE_SIZE_MB", "5"))
+        # Minimum confidence score (0.0 - 1.0) for ingredient detection. Default: 0.7
         self.MIN_INGREDIENT_CONFIDENCE: float = float(os.getenv("MIN_INGREDIENT_CONFIDENCE", "0.7"))
+        # Image Detection Mode: "pre-hook" or "tool"
+        # "pre-hook": process images before main LLM call (faster, lower cost)
+        # "tool": provide image analysis as tool for LLM to call (more flexible, higher cost)
         self.IMAGE_DETECTION_MODE: str = os.getenv("IMAGE_DETECTION_MODE", "pre-hook")
+        # Image Compression: Enable/disable image compression before processing
         self.COMPRESS_IMG: bool = os.getenv("COMPRESS_IMG", "true").lower() in ("true", "1", "yes")
         # Image Compression Threshold: Only compress if image size is below this (in KB)
         # Default: 300 KB - images above this size are already compressed enough
         self.COMPRESS_IMG_THRESHOLD_KB: int = int(os.getenv("COMPRESS_IMG_THRESHOLD_KB", "300"))
+        # Output Format: "json" or "markdown". Default: "json"
+        # "json": structured output for programmatic consumption
+        # "markdown": human-readable format for direct display
         self.OUTPUT_FORMAT: str = os.getenv("OUTPUT_FORMAT", "json")
+        # Database URL: Optional database connection string for persistent storage for production use
         self.DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
-        # Tracing Configuration
+        # Tracing Configuration. 
+        # ENABLE_TRACING: Enable/disable tracing of agent interactions
         self.ENABLE_TRACING: bool = os.getenv("ENABLE_TRACING", "true").lower() in ("true", "1", "yes")
+        # TRACING_DB_TYPE: Type of database for tracing ("sqlite" or "postgres")
         self.TRACING_DB_TYPE: str = os.getenv("TRACING_DB_TYPE", "sqlite")
+        # TRACING_DB_FILE: SQLite database file name for tracing (if using sqlite)
         self.TRACING_DB_FILE: str = os.getenv("TRACING_DB_FILE", "agno_traces.db")
         # Tool Call Limit: Maximum number of tool calls agent can make per request
         self.TOOL_CALL_LIMIT: int = int(os.getenv("TOOL_CALL_LIMIT", "12"))
