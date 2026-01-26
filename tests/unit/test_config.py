@@ -31,7 +31,7 @@ class TestConfigInitialization:
         assert config.MAX_IMAGE_SIZE_MB == 5
         assert config.MIN_INGREDIENT_CONFIDENCE == 0.7
         assert config.GEMINI_MODEL == "gemini-3-flash-preview"
-        assert config.IMAGE_DETECTION_MODEL == "gemini-3-flash-preview"
+        assert config.IMAGE_DETECTION_MODEL == "gemini-2.5-flash-lite"
         assert config.DATABASE_URL is None
 
     def test_config_loads_from_environment(self, monkeypatch):
@@ -239,7 +239,7 @@ class TestImageDetectionModel:
         monkeypatch.setenv("SPOONACULAR_API_KEY", "key")
 
         config = Config()
-        assert config.IMAGE_DETECTION_MODEL == "gemini-3-flash-preview"
+        assert config.IMAGE_DETECTION_MODEL == "gemini-2.5-flash-lite"
 
     def test_custom_image_detection_model(self, monkeypatch):
         """Test that IMAGE_DETECTION_MODEL can be customized independently."""
