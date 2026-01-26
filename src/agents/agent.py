@@ -28,8 +28,6 @@ from src.hooks.hooks import get_pre_hooks, get_post_hooks
 # Suppress LanceDB fork-safety warning (not using multiprocessing)
 warnings.filterwarnings("ignore", message="lance is not fork-safe")
 
-
-
 async def initialize_knowledge_base(db=None) -> Knowledge:
     """Initialize knowledge base for recipe troubleshooting and learnings.
     
@@ -141,7 +139,7 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         logger.info("Spoonacular MCP enabled - initializing...")
         spoonacular_mcp = SpoonacularMCP(
             api_key=config.SPOONACULAR_API_KEY,
-            max_retries=3,
+            max_retries= config.MAX_RETRIES,
             retry_delays=[1, 2, 4],
             include_tools=["find_recipes_by_ingredients", "get_recipe_information"],
         )
@@ -256,7 +254,7 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
         # === Memory & Context ===
         add_history_to_context=config.ADD_HISTORY_TO_CONTEXT,  # Include conversation history
         read_tool_call_history=config.READ_TOOL_CALL_HISTORY,  # LLM can access previous tool calls
-        update_knowledge=config.UPDATE_KNOWLEDGE,  # LLM can add learnings to KB
+        update_knowledge=config.UPDATE_KNOWLEDGE,  # LLM can add learnings to KB (guarded by prompts)
         read_chat_history=config.READ_CHAT_HISTORY,  # Dedicated tool for history access
         num_history_runs=config.MAX_HISTORY,  # 3 turns of conversation context
         enable_user_memories=config.ENABLE_USER_MEMORIES,  # Track user preferences

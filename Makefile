@@ -31,7 +31,7 @@ help:
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  make clean           Remove cache files and temporary data"
-	@echo "  make clean-memories  Clear all user memories from database"
+	@echo "  make clean-memories  Clear ALL user memories, sessions, knowledge, and learnings"
 	@echo "  make zip             Create a ZIP archive of source code (excludes files in .gitignore)"
 	@echo "  make help            Show this help message"
 
@@ -169,27 +169,45 @@ clean:
 	find . -type d -name ".egg-info" -exec rm -rf {} + 2>/dev/null || true
 	@echo "✓ Clean complete"
 
-# Clean Memories: Clear all user memories from database and knowledge graph
+# Clean Memories: Clear all user memories, sessions, knowledge, and learnings from all databases
 clean-memories:
-	@if [ ! -f agno.db ]; then \
-		echo "No database found (agno.db). Nothing to clean."; \
-	else \
-		echo "Clearing user memories from database..."; \
+	@echo "Clearing all user data (memories, sessions, knowledge, learnings)..."
+	@if [ -f agno.db ]; then \
+		echo "  - Clearing agno_memories table..."; \
 		sqlite3 agno.db "DELETE FROM agno_memories;"; \
-		COUNT=$$(sqlite3 agno.db "SELECT COUNT(*) FROM agno_memories;"); \
-		if [ "$$COUNT" -eq 0 ]; then \
-			echo "✓ All memories cleared (0 records remaining)"; \
-		else \
-			echo "⚠ Unexpected records found: $$COUNT"; \
-		fi; \
+		echo "  - Clearing agno_sessions table..."; \
+		sqlite3 agno.db "DELETE FROM agno_sessions;"; \
+		echo "  - Clearing agno_knowledge table..."; \
+		sqlite3 agno.db "DELETE FROM agno_knowledge;"; \
+		echo "  - Clearing agno_learnings table..."; \
+		sqlite3 agno.db "DELETE FROM agno_learnings;"; \
+		MEMORIES=$$(sqlite3 agno.db "SELECT COUNT(*) FROM agno_memories;"); \
+		SESSIONS=$$(sqlite3 agno.db "SELECT COUNT(*) FROM agno_sessions;"); \
+		KNOWLEDGE=$$(sqlite3 agno.db "SELECT COUNT(*) FROM agno_knowledge;"); \
+		LEARNINGS=$$(sqlite3 agno.db "SELECT COUNT(*) FROM agno_learnings;"); \
+		echo "✓ agno.db cleared (memories: $$MEMORIES, sessions: $$SESSIONS, knowledge: $$KNOWLEDGE, learnings: $$LEARNINGS)"; \
+	else \
+		echo "⚠ agno.db not found"; \
 	fi
-	@if [ -d "tmp/lancedb" ]; then \
-		echo "Deleting knowledge graph (tmp/lancedb)..."; \
+	@if [ -f tmp/recipe_agent_sessions.db ]; then \
+		echo "  - Deleting session database..."; \
+		rm -f tmp/recipe_agent_sessions.db; \
+		echo "✓ Session database deleted"; \
+	fi
+	@if [ -d tmp/lancedb ]; then \
+		echo "  - Deleting knowledge graph (vector DB)..."; \
 		rm -rf tmp/lancedb; \
 		echo "✓ Knowledge graph deleted"; \
-	else \
-		echo "No knowledge graph found (tmp/lancedb). Nothing to delete."; \
 	fi
+	@if [ -f agno_traces.db ]; then \
+		echo "  - Deleting traces database..."; \
+		rm -f agno_traces.db; \
+		echo "✓ Traces database deleted"; \
+	fi
+	@echo ""
+	@echo "✓ All user data cleared successfully"
+	@echo ""
+	@echo "Next step: Restart the server (make dev or make run)"
 
 # Zip: Create a ZIP archive of source code excluding files in .gitignore
 zip:

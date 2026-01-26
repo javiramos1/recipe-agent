@@ -6,14 +6,20 @@ A simple recipe recommendation problem intentionally solved with production-grad
 
 ## Overview
 
-This service demonstrates best practices in agentic system design by leveraging **AgentOS** as the complete runtime, **Agno Agent** as the orchestrator, and **Gemini Vision API** for ingredient detection. The simple domain is a vehicle for learning comprehensive architectural patterns applicable to complex real-world systems.
+This service demonstrates best practices in agentic system design by leveraging **AgentOS** as the complete runtime, **Agno Agent** as the orchestrator, and **Gemini Vision API** for ingredient detection.
+
+**⚠️ Intentional Complexity:** Recipe recommendation is deliberately simple—a problem normally solved with a single API call. This complexity is intentional: the goal is to showcase production-grade architecture patterns (memory, tools, retries, observability, testing) on a familiar domain. 
+
+We also use **Spoonacular MCP** to demonstrate how to connect to production external systems (APIs, databases, services) via the MCP protocol—but LLMs are fully capable of generating recipes independently. The choice to use MCP here illustrates best practices for integrating external data sources in agentic systems.
 
 **What You'll Learn:**
-- How to architect stateful agentic applications with memory and preferences
-- Tool design (internal @tool functions + external MCP services)
-- Production patterns: retries, guardrails, structured validation, observability
-- Testing strategies: unit, integration, and evaluation frameworks
-- Complete development lifecycle: requirements → design → implementation → monitoring
+- **Agentic Architecture**: Stateful applications with automatic memory, preference extraction, and multi-turn conversations
+- **Tool Integration**: Internal @tool functions + external MCP services (Model Context Protocol) for connecting to production systems
+- **Structured Outputs**: Pydantic schema validation for type-safe request/response contracts
+- **Production Patterns**: Exponential backoff retries, guardrails, rate limiting, error recovery
+- **Observability**: Distributed tracing with OpenTelemetry, structured logging, performance metrics
+- **Quality Assurance**: Unit tests, integration tests, and Agno Evals Framework for multi-dimensional evaluation
+- **Complete Lifecycle**: Requirements → Design → Implementation → Testing → Monitoring → Iteration
 
 ### Key Capabilities
 
@@ -52,7 +58,7 @@ This service demonstrates best practices in agentic system design by leveraging 
 
 ### System Design
 
-- ✅ **MCP Tools** - Spoonacular recipe API with custom retry logic and connection validation
+- ✅ **MCP Tools** - Spoonacular recipe API with custom retry logic and connection validation (optional)
 - ✅ **Internal Tools** - Ingredient detection tool (image→ingredients with confidence scores)
 - ✅ **Pre/Post Hooks** - Image processing, guardrails, metadata injection, troubleshooting tracking
 - ✅ **Templated Prompts** - Configurable system instructions with dynamic parameters (MAX_RECIPES, MIN_CONFIDENCE, etc)
@@ -64,7 +70,7 @@ This service demonstrates best practices in agentic system design by leveraging 
 graph TD
     A["User Request<br/>(Image or Text)"] --> B["Pre-Hook<br/>Ingredient Detection"]
     B --> C["Agno Agent<br/>Orchestrator"]
-    C --> D["Spoonacular MCP<br/>Recipe Search"]
+    C --> D["Spoonacular MCP<br/>Recipe Search - optional"]
     D --> E["Recipe Response<br/>with Preferences"]
     
     C -.->|Session Memory| F["SQLite/PostgreSQL<br/>Database"]
@@ -91,7 +97,7 @@ This project demonstrates a **modern AI-powered SDLC** using GitHub Copilot thro
 - Python 3.8+
 - API Keys:
   - [Google Gemini API Key](https://ai.google.dev/docs) (for vision/ingredient detection)
-  - [Spoonacular API Key](https://spoonacular.com/food-api) (for recipe search)
+  - [Spoonacular API Key](https://spoonacular.com/food-api) (for recipe search - optional)
 
 ### Setup
 

@@ -162,7 +162,7 @@ class TestSystemInstructionsContent:
         """Test system instructions enforce two-step recipe process."""
         instructions = self._get_system_instructions()
         assert "two-step" in instructions.lower() or ("step 1" in instructions.lower() and "step 2" in instructions.lower())
-        assert "search_recipes" in instructions
+        assert "find_recipes_by_ingredients" in instructions
         assert "get_recipe_information" in instructions
         # Check for the concept: user must request details before providing full instructions
         assert "provide complete recipe details only when user requests them" in instructions.lower() or "wait for user follow-up" in instructions.lower()
@@ -186,7 +186,7 @@ class TestSystemInstructionsContent:
         """Test system instructions cover edge cases."""
         instructions = self._get_system_instructions()
         assert "no ingredients" in instructions.lower() or "no ingredients detected" in instructions.lower()
-        assert "no recipes found" in instructions.lower()
+        assert "unusual ingredient combination" in instructions.lower() or "edge case" in instructions.lower()
 
     def test_system_instructions_cover_critical_guardrails(self):
         """Test system instructions include critical guardrails."""
