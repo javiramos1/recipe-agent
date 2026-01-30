@@ -61,7 +61,7 @@ class Config:
         self.OUTPUT_FORMAT: str = os.getenv("OUTPUT_FORMAT", "json")
         # Database URL: Optional database connection string for persistent storage for production use
         self.DATABASE_URL: Optional[str] = os.getenv("DATABASE_URL")
-        # Tracing Configuration. 
+        # Tracing Configuration.
         # ENABLE_TRACING: Enable/disable tracing of agent interactions
         self.ENABLE_TRACING: bool = os.getenv("ENABLE_TRACING", "true").lower() in ("true", "1", "yes")
         # TRACING_DB_TYPE: Type of database for tracing ("sqlite" or "postgres")
@@ -83,7 +83,7 @@ class Config:
         # "low" = fastest (no extended thinking), "high" = slowest but most thorough
         # Default: None (thinking disabled) This has been proved to work best in testing when using external tools
         self.THINKING_LEVEL: str = os.getenv("THINKING_LEVEL", None)
-        
+
         # Agent Retry Configuration - handles transient API failures gracefully
         # MAX_RETRIES: Number of retry attempts for failed API calls (exponential backoff)
         self.MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "3"))
@@ -91,7 +91,7 @@ class Config:
         self.DELAY_BETWEEN_RETRIES: int = int(os.getenv("DELAY_BETWEEN_RETRIES", "2"))
         # EXPONENTIAL_BACKOFF: Enable exponential backoff for rate limit handling
         self.EXPONENTIAL_BACKOFF: bool = os.getenv("EXPONENTIAL_BACKOFF", "true").lower() in ("true", "1", "yes")
-        
+
         # Agent Memory & History Settings - control context enrichment and knowledge management
         # ====================================================================================
         # MEMORY STRATEGY: Option 1 - Automatic Context (Recommended for most use cases)
@@ -147,7 +147,11 @@ class Config:
         # Trade-offs: Summary quality depends on LLM, may lose nuance
         # Cost: Requires extra LLM API calls for automatic summary generation
         # Recommended: False for cost optimization (default), True for long conversations needing compression
-        self.ENABLE_SESSION_SUMMARIES: bool = os.getenv("ENABLE_SESSION_SUMMARIES", "false").lower() in ("true", "1", "yes")
+        self.ENABLE_SESSION_SUMMARIES: bool = os.getenv("ENABLE_SESSION_SUMMARIES", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
         # COMPRESS_TOOL_RESULTS: Compress/reduce verbosity of tool outputs in context
         # Benefits: Reduces token usage, focuses on essential information
@@ -173,37 +177,21 @@ class Config:
         if self.USE_SPOONACULAR and not self.SPOONACULAR_API_KEY:
             raise ValueError("SPOONACULAR_API_KEY environment variable is required when USE_SPOONACULAR=true")
         if self.IMAGE_DETECTION_MODE not in ("pre-hook", "tool"):
-            raise ValueError(
-                f"IMAGE_DETECTION_MODE must be 'pre-hook' or 'tool', got: {self.IMAGE_DETECTION_MODE}"
-            )
+            raise ValueError(f"IMAGE_DETECTION_MODE must be 'pre-hook' or 'tool', got: {self.IMAGE_DETECTION_MODE}")
         if self.OUTPUT_FORMAT not in ("json", "markdown"):
-            raise ValueError(
-                f"OUTPUT_FORMAT must be 'json' or 'markdown', got: {self.OUTPUT_FORMAT}"
-            )
+            raise ValueError(f"OUTPUT_FORMAT must be 'json' or 'markdown', got: {self.OUTPUT_FORMAT}")
         if self.TRACING_DB_TYPE not in ("sqlite", "postgres"):
-            raise ValueError(
-                f"TRACING_DB_TYPE must be 'sqlite' or 'postgres', got: {self.TRACING_DB_TYPE}"
-            )
+            raise ValueError(f"TRACING_DB_TYPE must be 'sqlite' or 'postgres', got: {self.TRACING_DB_TYPE}")
         if not (0.0 <= self.TEMPERATURE <= 1.0):
-            raise ValueError(
-                f"TEMPERATURE must be between 0.0 and 1.0, got: {self.TEMPERATURE}"
-            )
+            raise ValueError(f"TEMPERATURE must be between 0.0 and 1.0, got: {self.TEMPERATURE}")
         if self.MAX_OUTPUT_TOKENS < 512:
-            raise ValueError(
-                f"MAX_OUTPUT_TOKENS must be at least 512, got: {self.MAX_OUTPUT_TOKENS}"
-            )
+            raise ValueError(f"MAX_OUTPUT_TOKENS must be at least 512, got: {self.MAX_OUTPUT_TOKENS}")
         if self.THINKING_LEVEL not in (None, "low", "high"):
-            raise ValueError(
-                f"THINKING_LEVEL must be 'off', 'low', or 'high', got: {self.THINKING_LEVEL}"
-            )
+            raise ValueError(f"THINKING_LEVEL must be 'off', 'low', or 'high', got: {self.THINKING_LEVEL}")
         if self.MAX_RETRIES < 1:
-            raise ValueError(
-                f"MAX_RETRIES must be at least 1, got: {self.MAX_RETRIES}"
-            )
+            raise ValueError(f"MAX_RETRIES must be at least 1, got: {self.MAX_RETRIES}")
         if self.DELAY_BETWEEN_RETRIES < 1:
-            raise ValueError(
-                f"DELAY_BETWEEN_RETRIES must be at least 1 second, got: {self.DELAY_BETWEEN_RETRIES}"
-            )
+            raise ValueError(f"DELAY_BETWEEN_RETRIES must be at least 1 second, got: {self.DELAY_BETWEEN_RETRIES}")
 
 
 # Create module-level config instance and validate immediately

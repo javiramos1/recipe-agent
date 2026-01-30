@@ -317,6 +317,29 @@ make int-tests  # REST API integration tests (starts app automatically, no pre-s
 make eval       # Integration evaluation tests (requires API keys)
 ```
 
+### Code Quality
+
+```bash
+make lint      # Run Ruff and Flake8 linters (checks code style and unused imports)
+make format    # Fix formatting issues with Ruff (auto-fixes whitespace, line length, etc.)
+```
+
+**Linting** checks for:
+
+- Unused imports (F401)
+- Code style violations (E, W, F codes)
+- Missing placeholders in f-strings (F541)
+- Syntax errors
+
+**Formatting** automatically fixes:
+
+- Trailing whitespace
+- Blank lines with whitespace
+- Line length (max 120 chars)
+- Import organization
+
+Note: `make zip` automatically runs `make lint` before creating the archive to ensure code quality.
+
 ### Clean Cache
 
 ```bash

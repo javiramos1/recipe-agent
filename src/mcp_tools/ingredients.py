@@ -46,6 +46,7 @@ from src.models.models import IngredientDetectionOutput
 # Try to import PIL for image compression
 try:
     from PIL import Image
+
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
@@ -53,22 +54,22 @@ except ImportError:
 
 def compress_image(image_bytes: bytes, max_width: int = 1024) -> bytes:
     """Compress image for API transmission using Pillow.
-    
+
     Uses JPEG format with quality=85 + optimize + progressive for optimal size/quality trade-off.
     Resizes oversized images and converts color modes to RGB.
     Only compresses if image size is below COMPRESS_IMG_THRESHOLD_KB.
-    
+
     Args:
         image_bytes: Raw image bytes to compress
         max_width: Maximum image width in pixels
-        
+
     Returns:
         Compressed image bytes (or original if PIL unavailable or size exceeds threshold)
     """
     if not HAS_PIL:
         logger.debug("PIL not available, skipping image compression")
         return image_bytes
-    
+
     # Check if image size is below compression threshold (skip compression for large images)
     size_kb = len(image_bytes) / 1024
     logger.debug(f"Image size: {size_kb:.1f}KB, threshold: {config.COMPRESS_IMG_THRESHOLD_KB}KB")
@@ -78,11 +79,11 @@ def compress_image(image_bytes: bytes, max_width: int = 1024) -> bytes:
             f"({config.COMPRESS_IMG_THRESHOLD_KB}KB), skipping compression"
         )
         return image_bytes
-    
+
     try:
         img = Image.open(BytesIO(image_bytes))
         original_size_mb = len(image_bytes) / (1024 * 1024)
-        
+
         # Convert RGBA/LA/P to RGB for better compression
         if img.mode in ("RGBA", "LA", "P"):
             rgb_img = Image.new("RGB", img.size, (255, 255, 255))
@@ -91,26 +92,26 @@ def compress_image(image_bytes: bytes, max_width: int = 1024) -> bytes:
             else:
                 rgb_img.paste(img)
             img = rgb_img
-        
+
         # Resize if oversized
         if img.width > max_width:
             ratio = max_width / img.width
             new_height = int(img.height * ratio)
             img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
-        
+
         # Compress to JPEG with quality 85 + optimize + progressive
         output = BytesIO()
         img.save(output, format="JPEG", quality=85, optimize=True, progressive=True)
         output.seek(0)
         compressed_bytes = output.read()
         compressed_size_mb = len(compressed_bytes) / (1024 * 1024)
-        
+
         logger.debug(
             f"Image compressed: {original_size_mb:.2f}MB → {compressed_size_mb:.2f}MB "
-            f"({(1 - compressed_size_mb/original_size_mb)*100:.1f}% reduction)"
+            f"({(1 - compressed_size_mb / original_size_mb) * 100:.1f}% reduction)"
         )
         return compressed_bytes
-        
+
     except Exception as e:
         logger.warning(f"Failed to compress image: {e}. Using original.")
         return image_bytes
@@ -138,7 +139,7 @@ async def fetch_image_bytes(image_source: str | bytes) -> Optional[bytes]:
             except Exception as e:
                 logger.warning(f"Failed to decode data URL: {e}")
                 return None
-        
+
         # Handle regular URLs
         try:
             async with aiohttp.ClientSession() as session:
@@ -185,7 +186,7 @@ def validate_image_size(image_bytes: bytes) -> bool:
 
 def parse_gemini_response(response_text: str) -> Optional[IngredientDetectionOutput]:
     """Parse JSON from Gemini response into validated IngredientDetectionOutput model.
-    
+
     Handles text before/after JSON and validates parsed data against IngredientDetectionOutput schema.
 
     Args:
@@ -195,7 +196,7 @@ def parse_gemini_response(response_text: str) -> Optional[IngredientDetectionOut
         Validated IngredientDetectionOutput instance, or None on parse/validation failure.
     """
     parsed_dict = None
-    
+
     try:
         # Try direct JSON parse first
         parsed_dict = json.loads(response_text)
@@ -221,7 +222,7 @@ def parse_gemini_response(response_text: str) -> Optional[IngredientDetectionOut
         ingredients = parsed_dict.get("ingredients", [])
         confidence_scores = parsed_dict.get("confidence_scores", {})
         image_description = parsed_dict.get("image_description", None)
-        
+
         # Create validated model instance
         output = IngredientDetectionOutput(
             ingredients=ingredients,
@@ -260,7 +261,7 @@ async def extract_ingredients_from_image(image_bytes: bytes) -> Optional[Ingredi
             client.models.generate_content,
             model=config.IMAGE_DETECTION_MODEL,
             contents=[
-                "Extract all food ingredients from this image. Return ONLY valid JSON with 'ingredients' list (strings) and 'confidence_scores' dict mapping ingredient name to confidence (0.0-1.0). Example: {\"ingredients\": [\"tomato\", \"basil\"], \"confidence_scores\": {\"tomato\": 0.95, \"basil\": 0.88}}",
+                'Extract all food ingredients from this image. Return ONLY valid JSON with \'ingredients\' list (strings) and \'confidence_scores\' dict mapping ingredient name to confidence (0.0-1.0). Example: {"ingredients": ["tomato", "basil"], "confidence_scores": {"tomato": 0.95, "basil": 0.88}}',
                 types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
             ],
         )
@@ -274,9 +275,7 @@ async def extract_ingredients_from_image(image_bytes: bytes) -> Optional[Ingredi
         return None
 
 
-def filter_ingredients_by_confidence(
-    ingredients: list[str], confidence_scores: dict[str, float]
-) -> list[str]:
+def filter_ingredients_by_confidence(ingredients: list[str], confidence_scores: dict[str, float]) -> list[str]:
     """Filter ingredients by MIN_INGREDIENT_CONFIDENCE threshold.
 
     Args:
@@ -303,10 +302,10 @@ def filter_ingredients_by_confidence(
 
 async def _get_image_bytes_from_source(image_source) -> Optional[bytes]:
     """Extract image bytes from various source formats.
-    
+
     Args:
         image_source: String URL, bytes, or object with url/content attribute.
-        
+
     Returns:
         Image bytes or None if extraction failed.
     """
@@ -321,13 +320,13 @@ async def _get_image_bytes_from_source(image_source) -> Optional[bytes]:
 
 async def _process_single_image(image_source, idx: int) -> Optional[list[str]]:
     """Process single image to extract ingredients (helper for pre-hook).
-    
+
     Validates, compresses, and extracts ingredients from one image.
-    
+
     Args:
         image_source: Image source (URL, bytes, or object with url/content).
         idx: Image index for logging.
-        
+
     Returns:
         List of extracted ingredient names, or None if processing failed.
     """
@@ -343,7 +342,7 @@ async def _process_single_image(image_source, idx: int) -> Optional[list[str]]:
 
     if not validate_image_size(image_bytes):
         return None
-    
+
     # Compress image if enabled
     if config.COMPRESS_IMG:
         logger.debug(f"Image {idx + 1}: Compressing for API transmission...")
@@ -356,9 +355,7 @@ async def _process_single_image(image_source, idx: int) -> Optional[list[str]]:
         return None
 
     # Filter by confidence threshold
-    ingredients = filter_ingredients_by_confidence(
-        result.ingredients, result.confidence_scores
-    )
+    ingredients = filter_ingredients_by_confidence(result.ingredients, result.confidence_scores)
 
     if ingredients:
         logger.info(
@@ -366,7 +363,7 @@ async def _process_single_image(image_source, idx: int) -> Optional[list[str]]:
             f"(confidence threshold: {config.MIN_INGREDIENT_CONFIDENCE})"
         )
         return ingredients
-    
+
     logger.warning(f"Image {idx + 1}: No ingredients with sufficient confidence")
     return None
 
@@ -410,10 +407,10 @@ async def extract_ingredients_pre_hook(
         if not input_data or not hasattr(input_data, "message"):
             logger.debug("No valid ChatMessage found in RunInput")
             return
-        
+
         message_text = input_data.message or ""
         images = input_data.images or []
-        
+
         # Check if we have images to process
         if not images:
             logger.debug("No images in request, skipping ingredient extraction")
@@ -436,16 +433,16 @@ async def extract_ingredients_pre_hook(
             unique_ingredients = list(dict.fromkeys(all_ingredients))  # Remove duplicates, preserve order
             ingredient_text = ", ".join(unique_ingredients)
             updated_message = f"{message_text}\n\n[Detected Ingredients] {ingredient_text}"
-            
+
             # Update ChatMessage object's message field
             input_data.message = updated_message
             run_input.input_content = input_data
-            
+
             logger.info(
                 f"Ingredients extracted from image: {unique_ingredients} "
                 f"(total: {len(unique_ingredients)}, confidence threshold: {config.MIN_INGREDIENT_CONFIDENCE})"
             )
-        
+
         # Always clear images from the ChatMessage (whether extraction succeeded or failed)
         # This prevents large base64-encoded images from being sent to the agent after extraction
         input_data.images = []
@@ -491,15 +488,16 @@ async def extract_ingredients_with_retries(
             # If result is None but no exception, retry (might be transient API issue)
             retry_count += 1
             if retry_count < max_retries:
-                logger.debug(f"Retrying ingredient extraction (attempt {retry_count + 1}/{max_retries}) after {delay_seconds}s")
+                logger.debug(
+                    f"Retrying ingredient extraction (attempt {retry_count + 1}/{max_retries}) after {delay_seconds}s"
+                )
                 await asyncio.sleep(delay_seconds)
                 delay_seconds *= 2  # Exponential backoff
         except Exception as e:
             # Check if error is transient or permanent
             error_str = str(e).lower()
             is_transient = any(
-                keyword in error_str
-                for keyword in ["timeout", "connection", "429", "500", "503", "502", "retryable"]
+                keyword in error_str for keyword in ["timeout", "connection", "429", "500", "503", "502", "retryable"]
             )
 
             if is_transient and retry_count < max_retries - 1:
@@ -523,16 +521,16 @@ async def detect_ingredients_tool(image_data: str) -> IngredientDetectionOutput:
     """Extract ingredients from image using Gemini vision API.
 
     This method is meant to be called by the @tool-decorated wrapper in agent.py.
-    
+
     Core implementation function called by the @tool-decorated wrapper in agent.py.
     Handles image validation, API calls, and confidence filtering.
-    
+
     Args:
         image_data: Base64-encoded image string or URL.
-    
+
     Returns:
         IngredientDetectionOutput with detected ingredients and confidence scores.
-    
+
     Raises:
         ValueError: If image cannot be processed.
     """
@@ -573,9 +571,7 @@ async def detect_ingredients_tool(image_data: str) -> IngredientDetectionOutput:
             raise ValueError("Failed to extract ingredients from image. Please try another image.")
 
         # Filter by confidence to ensure we only return high-confidence ingredients
-        ingredients = filter_ingredients_by_confidence(
-            result.ingredients, result.confidence_scores
-        )
+        ingredients = filter_ingredients_by_confidence(result.ingredients, result.confidence_scores)
 
         if not ingredients:
             raise ValueError("No ingredients detected with sufficient confidence. Please try another image.")
@@ -592,4 +588,4 @@ async def detect_ingredients_tool(image_data: str) -> IngredientDetectionOutput:
         raise
     except Exception as e:
         logger.error(f"Ingredient detection tool failed: {e}")
-        raise ValueError(f"Ingredient detection failed: {str(e)}")
+        raise ValueError(f"Ingredient detection failed: {str(e)}") from e

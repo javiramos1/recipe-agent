@@ -43,7 +43,7 @@ from src.utils.logger import logger
 @pytest.fixture(scope="session")
 def evaluator_agent() -> Agent:
     """Gemini-based evaluator agent for AgentAsJudgeEval.
-    
+
     Uses Gemini instead of OpenAI (which requires additional pip install).
     """
     return Agent(
@@ -56,14 +56,14 @@ def evaluator_agent() -> Agent:
 @pytest.fixture(scope="session")
 def eval_db() -> SqliteDb:
     """Persistent database for storing evaluation results.
-    
+
     IMPORTANT: To view evals in the UI, you must:
     1. Start AgentOS: `make dev` (in separate terminal)
     2. Run evals: `make eval` (this will use same db as AgentOS)
     3. AgentOS exposes /eval-runs endpoint automatically
     4. Connect os.agno.com to http://localhost:7777
     5. View evals in the AgentOS UI
-    
+
     Results are stored in tmp/recipe_agent_sessions.db (shared with agent)
     for queryable tracking and os.agno.com visualization.
     """
@@ -77,14 +77,14 @@ def eval_db() -> SqliteDb:
 @pytest.fixture(scope="session")
 def agent() -> Agent:
     """Initialize agent once for all tests.
-    
+
     The agent is fully configured with:
     - Gemini model for ingredient detection
     - Spoonacular MCP for recipe search
     - SQLite session database for memory
     - Pre-hooks for image processing (pre-hook mode)
     - System instructions for recipe-focused behavior
-    
+
     Shared across all tests to test preference persistence and session isolation.
     """
     logger.info("Initializing agent for integration tests...")
@@ -102,39 +102,39 @@ def agent() -> Agent:
 @pytest.fixture(scope="session")
 def test_images() -> dict:
     """Load and encode sample test images.
-    
+
     Returns dict mapping image categories to:
     - base64: Base64-encoded image for use in requests
     - expected: List of expected ingredients to find
     - description: Human-readable description for test documentation
     - file_path: Path to original image file
-    
+
     Supported categories:
     - vegetables: Fresh vegetables (tomatoes, basil, onions, etc.)
     - fruits: Mixed fruits (bananas, apples, berries, etc.)
     - pantry: Pantry items (pasta, rice, beans, etc.)
     """
     images_dir = Path("images")
-    
+
     # Map categories to actual image files (using available sample images)
     image_mappings = {
         "vegetables": {
             "file": "fresh_vegetables.jpg",
             "expected": ["vegetables", "tomato", "onion", "garlic"],
-            "description": "Fresh vegetables for cooking"
+            "description": "Fresh vegetables for cooking",
         },
         "fruits": {
             "file": "fruit.jpg",
             "expected": ["fruit", "banana", "apple", "berry"],
-            "description": "Mixed fresh fruits"
+            "description": "Mixed fresh fruits",
         },
         "pantry": {
             "file": "pasta.png",
             "expected": ["pasta", "grains", "dried goods"],
-            "description": "Pantry staples and dry goods"
-        }
+            "description": "Pantry staples and dry goods",
+        },
     }
-    
+
     test_images = {}
     for category, mapping in image_mappings.items():
         image_path = images_dir / mapping["file"]
@@ -146,30 +146,28 @@ def test_images() -> dict:
                     "base64": base64_image,
                     "expected": mapping["expected"],
                     "description": mapping["description"],
-                    "file_path": str(image_path)
+                    "file_path": str(image_path),
                 }
                 logger.info(f"Loaded test image: {category} from {image_path}")
         else:
             logger.warning(f"Test image not found: {image_path}")
-    
+
     if not test_images:
         pytest.skip("No test images found in images/ directory")
-    
+
     return test_images
 
 
 class TestRecipeQuality:
     """AgentAsJudgeEval: Custom criteria for recipe completeness and quality.
-    
+
     Tests that recipes include required fields (title, ingredients, instructions,
     time estimates) using semantic scoring (1-10 scale, threshold 7).
     """
-    
-    def test_recipe_quality_completeness(
-        self, agent: Agent, eval_db: SqliteDb, evaluator_agent: Agent
-    ) -> None:
+
+    def test_recipe_quality_completeness(self, agent: Agent, eval_db: SqliteDb, evaluator_agent: Agent) -> None:
         """Verify recipe responses include all required fields.
-        
+
         Run agent with ingredient request and evaluate that response includes:
         - Recipe title
         - Ingredient list
@@ -177,20 +175,18 @@ class TestRecipeQuality:
         - Prep/cook time estimates
         """
         logger.info("Testing recipe quality completeness...")
-        
+
         # Run agent with ingredient request
         try:
-            response: RunOutput = asyncio.run(agent.arun(
-                input={
-                    "message": "Find me recipes for chicken, tomatoes, and basil"
-                }
-            ))
+            response: RunOutput = asyncio.run(
+                agent.arun(input={"message": "Find me recipes for chicken, tomatoes, and basil"})
+            )
             response_str = str(response.content) if response.content else ""
             logger.info(f"Agent response length: {len(response_str)}")
         except Exception as e:
             logger.error(f"Agent run failed: {e}")
             pytest.skip(f"Agent execution failed: {e}")
-        
+
         # Evaluate recipe completeness with custom criteria
         evaluation = AgentAsJudgeEval(
             name="Recipe Completeness",
@@ -207,13 +203,13 @@ class TestRecipeQuality:
             evaluator_agent=evaluator_agent,
             db=eval_db,
         )
-        
+
         result: Optional[AgentAsJudgeResult] = evaluation.run(
             input="Find recipes for chicken, tomatoes, basil",
             output=str(response.content) if response.content else "",
-            print_results=True
+            print_results=True,
         )
-        
+
         if result:
             logger.info(f"Recipe quality score: {result.results[0].score if result.results else 'N/A'}")
             if result.results:
@@ -231,45 +227,37 @@ class TestRecipeQuality:
 
 class TestPreferencePersistence:
     """AgentAsJudgeEval: Verify preferences extracted and applied across turns.
-    
+
     Tests that user preferences (vegetarian, dietary restrictions, cuisine)
     are extracted in one turn and automatically applied in subsequent turns
     within the same session without re-stating the preference.
     """
-    
-    def test_preference_persistence_vegetarian(
-        self, agent: Agent, eval_db: SqliteDb, evaluator_agent: Agent
-    ) -> None:
+
+    def test_preference_persistence_vegetarian(self, agent: Agent, eval_db: SqliteDb, evaluator_agent: Agent) -> None:
         """Verify vegetarian preference persists across conversation turns.
-        
+
         Turn 1: Extract preference ("I'm vegetarian")
         Turn 2: Verify preference applied without re-stating
         """
         session_id = f"test_pref_session_{uuid.uuid4().hex[:8]}"
         logger.info(f"Testing preference persistence with session: {session_id}")
-        
+
         try:
             # Turn 1: Extract preference
-            response1: RunOutput = asyncio.run(agent.arun(
-                input={
-                    "message": "I'm vegetarian. What recipes do you recommend?"
-                },
-                session_id=session_id
-            ))
+            response1: RunOutput = asyncio.run(
+                agent.arun(input={"message": "I'm vegetarian. What recipes do you recommend?"}, session_id=session_id)
+            )
             logger.info(f"Turn 1 response: {str(response1.content)[:100] if response1.content else ''}...")
-            
+
             # Turn 2: Verify preference applied without re-stating
-            response2: RunOutput = asyncio.run(agent.arun(
-                input={
-                    "message": "What about Italian recipes?"
-                },
-                session_id=session_id
-            ))
+            response2: RunOutput = asyncio.run(
+                agent.arun(input={"message": "What about Italian recipes?"}, session_id=session_id)
+            )
             logger.info(f"Turn 2 response: {str(response2.content)[:100] if response2.content else ''}...")
         except Exception as e:
             logger.error(f"Agent run failed: {e}")
             pytest.skip(f"Agent execution failed: {e}")
-        
+
         # Evaluate that preference persisted
         evaluation = AgentAsJudgeEval(
             name="Preference Persistence - Vegetarian",
@@ -285,17 +273,19 @@ class TestPreferencePersistence:
             evaluator_agent=evaluator_agent,
             db=eval_db,
         )
-        
+
         result: Optional[AgentAsJudgeResult] = evaluation.run(
             input="Previous: user stated 'I'm vegetarian'. New request: 'What about Italian recipes?'",
             output=str(response2.content) if response2.content else "",
-            print_results=True
+            print_results=True,
         )
-        
+
         if result:
             logger.info(f"Preference persistence score: {result.results[0].score if result.results else 'N/A'}")
             if result.results:
-                assert result.results[0].passed, f"Preference persistence score {result.results[0].score} below threshold"
+                assert result.results[0].passed, (
+                    f"Preference persistence score {result.results[0].score} below threshold"
+                )
             else:
                 pytest.skip("No results from preference persistence evaluation")
         else:
@@ -304,35 +294,29 @@ class TestPreferencePersistence:
 
 class TestGuardrails:
     """AgentAsJudgeEval: Verify agent refuses off-topic requests politely.
-    
+
     Tests that agent enforces guardrails by politely declining off-topic
     requests and redirecting to recipe-focused topics.
     """
-    
-    def test_off_topic_rejection_weather(
-        self, agent: Agent, eval_db: SqliteDb, evaluator_agent: Agent
-    ) -> None:
+
+    def test_off_topic_rejection_weather(self, agent: Agent, eval_db: SqliteDb, evaluator_agent: Agent) -> None:
         """Verify agent rejects weather questions politely.
-        
+
         Send off-topic request (weather) and verify agent:
         - Politely declines
         - Explains it's recipe-focused
         - Offers to help with recipes instead
         """
         logger.info("Testing off-topic guardrail enforcement...")
-        
+
         try:
-            response: RunOutput = asyncio.run(agent.arun(
-                input={
-                    "message": "What's the weather today?"
-                }
-            ))
+            response: RunOutput = asyncio.run(agent.arun(input={"message": "What's the weather today?"}))
             response_str = str(response.content) if response.content else ""
             logger.info(f"Off-topic response: {response_str[:100]}...")
         except Exception as e:
             logger.error(f"Agent run failed: {e}")
             pytest.skip(f"Agent execution failed: {e}")
-        
+
         # Evaluate guardrail response
         evaluation = AgentAsJudgeEval(
             name="Guardrail Enforcement - Off-Topic",
@@ -348,13 +332,13 @@ class TestGuardrails:
             evaluator_agent=evaluator_agent,
             db=eval_db,
         )
-        
+
         result: Optional[AgentAsJudgeResult] = evaluation.run(
             input="What's the weather today?",
             output=str(response.content) if response.content else "",
-            print_results=True
+            print_results=True,
         )
-        
+
         if result:
             logger.info(f"Guardrail enforcement score: {result.results[0].score if result.results else 'N/A'}")
             if result.results:
@@ -367,46 +351,38 @@ class TestGuardrails:
 
 class TestSessionIsolation:
     """AgentAsJudgeEval: Verify preferences don't leak between sessions.
-    
+
     Tests that preferences extracted in one user's session don't affect
     other users' sessions - sessions should be isolated.
     """
-    
-    def test_session_isolation_preferences(
-        self, agent: Agent, eval_db: SqliteDb, evaluator_agent: Agent
-    ) -> None:
+
+    def test_session_isolation_preferences(self, agent: Agent, eval_db: SqliteDb, evaluator_agent: Agent) -> None:
         """Verify preferences don't cross-contaminate between sessions.
-        
+
         User A: Sets vegetarian preference
         User B: Should not be limited to vegetarian recipes
         """
         user_a_session = f"user_a_{uuid.uuid4().hex[:8]}"
         user_b_session = f"user_b_{uuid.uuid4().hex[:8]}"
-        
+
         logger.info(f"Testing session isolation: {user_a_session} vs {user_b_session}")
-        
+
         try:
             # User A: Set vegetarian preference
-            response_a: RunOutput = asyncio.run(agent.arun(
-                input={
-                    "message": "I'm vegetarian"
-                },
-                session_id=user_a_session
-            ))
+            response_a: RunOutput = asyncio.run(
+                agent.arun(input={"message": "I'm vegetarian"}, session_id=user_a_session)
+            )
             logger.info(f"User A response: {str(response_a.content)[:100] if response_a.content else ''}...")
-            
+
             # User B: Should get meat-based options (no vegetarian constraint)
-            response_b: RunOutput = asyncio.run(agent.arun(
-                input={
-                    "message": "Show me recipes with meat"
-                },
-                session_id=user_b_session
-            ))
+            response_b: RunOutput = asyncio.run(
+                agent.arun(input={"message": "Show me recipes with meat"}, session_id=user_b_session)
+            )
             logger.info(f"User B response: {str(response_b.content)[:100] if response_b.content else ''}...")
         except Exception as e:
             logger.error(f"Agent run failed: {e}")
             pytest.skip(f"Agent execution failed: {e}")
-        
+
         # Evaluate session isolation
         evaluation = AgentAsJudgeEval(
             name="Session Isolation",
@@ -422,13 +398,13 @@ class TestSessionIsolation:
             evaluator_agent=evaluator_agent,
             db=eval_db,
         )
-        
+
         result: Optional[AgentAsJudgeResult] = evaluation.run(
             input="Different session requesting meat recipes. User A had vegetarian preference in separate session.",
             output=str(response_b.content) if response_b.content else "",
-            print_results=True
+            print_results=True,
         )
-        
+
         if result:
             logger.info(f"Session isolation score: {result.results[0].score if result.results else 'N/A'}")
             if result.results:
@@ -441,52 +417,48 @@ class TestSessionIsolation:
 
 class TestToolReliability:
     """ReliabilityEval: Verify correct tool sequence for recipe process.
-    
+
     Tests that agent follows the two-step recipe process:
     1. Call find_recipes_by_ingredients with detected ingredients
     2. Call get_recipe_information to get full recipe details (when user asks)
-    
+
     This prevents hallucinations by ensuring recipes are ground in tool outputs.
     """
-    
-    def test_two_step_recipe_process(
-        self, agent: Agent
-    ) -> None:
+
+    def test_two_step_recipe_process(self, agent: Agent) -> None:
         """Verify agent uses correct tool sequence on first request.
-        
+
         Per system instructions (two-step pattern):
-        
+
         **Step 1 (Initial Request - REQUIRED):** Call search tools ONLY
         - Agent receives: "What recipes can I make with tomatoes and basil?"
         - Agent should: Call find_recipes_by_ingredients (Spoonacular) OR search knowledge
         - Agent should NOT: Call get_recipe_information on first response
         - Response: Basic recipe list (id, title, image only)
-        
+
         **Step 2 (Follow-up - user-initiated):** Call detail tools
         - User asks: "Tell me more about #1" or "How do I make this?"
         - Agent should: Call get_recipe_information with recipe ID
         - Response: Full recipe with ingredients and instructions
-        
+
         This test validates Step 1: Agent only searches for recipes on initial request.
         """
         logger.info("Testing Step 1 of two-step recipe process (initial search only)...")
-        
+
         try:
-            response: RunOutput = asyncio.run(agent.arun(
-                input={
-                    "message": "What recipes can I make with tomatoes and basil?"
-                }
-            ))
+            response: RunOutput = asyncio.run(
+                agent.arun(input={"message": "What recipes can I make with tomatoes and basil?"})
+            )
             logger.info(f"Agent response received")
         except Exception as e:
             logger.error(f"Agent run failed: {e}")
             pytest.skip(f"Agent execution failed: {e}")
-        
+
         # Verify tool calls for Step 1 (initial request)
         # Per system instructions: ONLY search tools on first response, NO detail retrieval
         # SEARCH_KNOWLEDGE is disabled in test environment to prevent add_to_knowledge calls
         use_spoonacular = os.getenv("USE_SPOONACULAR", "false").lower() == "true"
-        
+
         if use_spoonacular:
             # In Spoonacular MCP mode: Only expect find_recipes_by_ingredients on first request
             # Step 2 (get_recipe_information) comes only AFTER user asks for details
@@ -496,15 +468,15 @@ class TestToolReliability:
             # When knowledge search is disabled, no tools are expected on first response
             # Agent generates recipes from internal LLM knowledge only
             expected_tools = []
-        
+
         evaluation = ReliabilityEval(
             name="Two-Step Recipe Process (Step 1)",
             agent_response=response,
             expected_tool_calls=expected_tools,
         )
-        
+
         result: Optional[ReliabilityResult] = evaluation.run(print_results=True)
-        
+
         if result:
             logger.info("Tool reliability (Step 1): PASSED - Agent correctly called search tool on first request")
             # Log what tools were actually called for debugging
@@ -517,29 +489,23 @@ class TestToolReliability:
 
 class TestPerformance:
     """PerformanceEval: Measure response latency and efficiency.
-    
+
     Tests that agent responds within acceptable time (max 5 seconds)
     for good user experience.
     """
-    
-    def test_response_time_performance(
-        self, agent: Agent, eval_db: SqliteDb
-    ) -> None:
+
+    def test_response_time_performance(self, agent: Agent, eval_db: SqliteDb) -> None:
         """Verify response time is within acceptable range.
-        
+
         Agent should respond to recipe requests within 5 seconds
         for good user experience.
         """
         logger.info("Testing response time performance...")
-        
+
         # Measure performance with agent and input
         def run_agent_test():
-            return asyncio.run(agent.arun(
-                input={
-                    "message": "Show me vegetarian recipes"
-                }
-            ))
-        
+            return asyncio.run(agent.arun(input={"message": "Show me vegetarian recipes"}))
+
         evaluation = PerformanceEval(
             name="Response Latency",
             func=run_agent_test,
@@ -547,18 +513,18 @@ class TestPerformance:
             warmup_runs=0,
             db=eval_db,
         )
-        
+
         result: Optional[PerformanceResult] = evaluation.run(print_results=True)
-        
+
         if result:
             # PerformanceResult has avg_run_time_ms attribute for latency
             # Check if result has timing data (attribute varies by Agno version)
             avg_latency = None
-            if hasattr(result, 'avg_run_time_ms'):
+            if hasattr(result, "avg_run_time_ms"):
                 avg_latency = result.avg_run_time_ms
-            elif hasattr(result, 'avg_latency_ms'):
+            elif hasattr(result, "avg_latency_ms"):
                 avg_latency = result.avg_latency_ms
-            
+
             if avg_latency:
                 logger.info(f"Performance evaluation completed. Avg latency: {avg_latency}ms")
                 # Check if within reasonable time (5 seconds)
@@ -571,42 +537,36 @@ class TestPerformance:
 
 class TestErrorHandling:
     """AgentAsJudgeEval: Verify graceful error handling for edge cases.
-    
+
     Tests that agent handles edge cases (empty messages, invalid input)
     gracefully without crashing, providing helpful feedback.
     """
-    
-    def test_error_handling_empty_message(
-        self, agent: Agent, eval_db: SqliteDb, evaluator_agent: Agent
-    ) -> None:
+
+    def test_error_handling_empty_message(self, agent: Agent, eval_db: SqliteDb, evaluator_agent: Agent) -> None:
         """Verify agent handles minimal input gracefully.
-        
+
         Send minimal but valid message ("help") and verify agent:
         - Doesn't crash
         - Provides helpful error message or default behavior
         - Suggests next steps
-        
-        Note: Completely empty strings and whitespace are rejected by Pydantic 
-        schema validation before reaching the agent, so we test with minimal 
+
+        Note: Completely empty strings and whitespace are rejected by Pydantic
+        schema validation before reaching the agent, so we test with minimal
         valid message instead to verify graceful error handling.
         """
         logger.info("Testing error handling for minimal message...")
-        
+
         try:
             # Use minimal but valid message: "help"
             # This triggers agent handling without being a recipe request
-            response: RunOutput = asyncio.run(agent.arun(
-                input={
-                    "message": "help"
-                }
-            ))
+            response: RunOutput = asyncio.run(agent.arun(input={"message": "help"}))
             response_str = str(response.content) if response.content else "No content"
             logger.info(f"Minimal message response: {response_str[:100]}...")
         except Exception as e:
             logger.error(f"Agent run raised exception: {e}")
             # Exception handling is also acceptable
             pytest.skip(f"Agent handling: {e}")
-        
+
         # Evaluate error handling
         evaluation = AgentAsJudgeEval(
             name="Error Handling",
@@ -622,13 +582,11 @@ class TestErrorHandling:
             evaluator_agent=evaluator_agent,
             db=eval_db,
         )
-        
+
         result: Optional[AgentAsJudgeResult] = evaluation.run(
-            input="help",
-            output=str(response.content) if response.content else "No response",
-            print_results=True
+            input="help", output=str(response.content) if response.content else "No response", print_results=True
         )
-        
+
         if result:
             logger.info(f"Error handling score: {result.results[0].score if result.results else 'N/A'}")
             if result.results:

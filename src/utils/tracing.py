@@ -49,8 +49,7 @@ async def initialize_tracing() -> Optional[SqliteDb]:
         )
 
         logger.info(
-            f"Tracing enabled successfully. Database: {config.TRACING_DB_FILE}, "
-            f"batch_size: 256, queue_size: 2048"
+            f"Tracing enabled successfully. Database: {config.TRACING_DB_FILE}, batch_size: 256, queue_size: 2048"
         )
         return tracing_db
 

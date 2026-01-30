@@ -40,7 +40,7 @@ class TestChatMessage:
         msg = ChatMessage(images=["https://example.com/image.jpg"])
         assert msg.message == "What can I cook with these ingredients?"
         assert msg.images == ["https://example.com/image.jpg"]
-        
+
         # When BOTH are missing, should raise error
         with pytest.raises(ValidationError) as exc:
             ChatMessage(message=None, images=None)

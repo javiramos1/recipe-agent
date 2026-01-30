@@ -1,4 +1,4 @@
-.PHONY: setup dev debug dev-bkg run query stop test eval int-tests clean clean-memories zip help venv-check
+.PHONY: setup dev debug dev-bkg run query stop test eval int-tests lint format clean clean-memories zip help venv-check
 
 # Virtual environment directory
 VENV_DIR := .venv
@@ -28,6 +28,10 @@ help:
 	@echo "  make test            Run unit tests"
 	@echo "  make eval            Run integration evals (Agno evals framework, requires API keys)"
 	@echo "  make int-tests       Run REST API integration tests (requires running app)"
+	@echo ""
+	@echo "Code Quality:"
+	@echo "  make lint            Run Ruff and Flake8 linters"
+	@echo "  make format          Fix formatting issues with Ruff"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  make clean           Remove cache files and temporary data"
@@ -158,6 +162,23 @@ eval: venv-check
 int-tests: venv-check
 	@bash run_int_tests.sh
 
+# Lint: Run Ruff and Flake8 linters
+lint: venv-check
+	@echo "Running Ruff linter..."
+	@$(PYTHON) -m ruff check src tests app.py query.py --line-length=120 || true
+	@echo ""
+	@echo "Running Flake8 linter..."
+	@$(PYTHON) -m flake8 src tests app.py query.py || true
+	@echo ""
+	@echo "✓ Linting complete"
+
+# Format: Fix formatting issues with Ruff
+format: venv-check
+	@echo "Fixing formatting issues with Ruff..."
+	@$(PYTHON) -m ruff format src tests app.py query.py --line-length=120
+	@echo ""
+	@echo "✓ Formatting complete"
+
 # Clean: Remove cache and temporary files
 clean:
 	@echo "Cleaning up..."
@@ -210,7 +231,7 @@ clean-memories:
 	@echo "Next step: Restart the server (make dev or make run)"
 
 # Zip: Create a ZIP archive of source code excluding files in .gitignore
-zip:
+zip: lint
 	@echo "Creating ZIP archive..."
 	@TIMESTAMP=$$(date +%Y%m%d_%H%M%S); \
 	ZIPFILE="recipe-agent_$$TIMESTAMP.zip"; \

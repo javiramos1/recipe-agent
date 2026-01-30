@@ -262,9 +262,7 @@ class TestGetLogger:
         test_logger = get_logger(test_name)
 
         # Check that at least one handler has RichTextFormatter
-        has_rich_formatter = any(
-            isinstance(h.formatter, RichTextFormatter) for h in test_logger.handlers
-        )
+        has_rich_formatter = any(isinstance(h.formatter, RichTextFormatter) for h in test_logger.handlers)
         assert has_rich_formatter or len(test_logger.handlers) > 0
 
     def test_get_logger_respects_log_type_json(self, monkeypatch):
@@ -335,9 +333,7 @@ class TestLoggerEnvironmentVariables:
         test_logger = get_logger(test_name)
 
         # Should use RichTextFormatter by default
-        has_rich_formatter = any(
-            isinstance(h.formatter, RichTextFormatter) for h in test_logger.handlers
-        )
+        has_rich_formatter = any(isinstance(h.formatter, RichTextFormatter) for h in test_logger.handlers)
         assert has_rich_formatter or len(test_logger.handlers) > 0
 
     def test_invalid_log_level_defaults_to_info(self, monkeypatch):

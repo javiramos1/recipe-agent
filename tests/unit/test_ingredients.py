@@ -608,4 +608,3 @@ class TestDetectIngredientsTool:
         assert "1 more" in result.image_description
         assert "tomato" in result.image_description
         assert "95%" in result.image_description
-

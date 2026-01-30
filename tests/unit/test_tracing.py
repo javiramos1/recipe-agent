@@ -75,7 +75,7 @@ class TestTracingConfig:
         monkeypatch.setenv("ENABLE_TRACING", "true")
         monkeypatch.setenv("TRACING_DB_TYPE", "sqlite")
         monkeypatch.setenv("TRACING_DB_FILE", "traces_custom.db")
-        
+
         config = Config()
         assert config.ENABLE_TRACING is True
         assert config.TRACING_DB_TYPE == "sqlite"
@@ -87,10 +87,10 @@ async def test_initialize_tracing_disabled(monkeypatch):
     """Test that initialize_tracing returns None when disabled."""
     from src.utils.tracing import initialize_tracing
     from src.utils import config as config_module
-    
+
     # Mock config.ENABLE_TRACING directly
     monkeypatch.setattr(config_module.config, "ENABLE_TRACING", False)
-    
+
     result = await initialize_tracing()
     assert result is None
 
@@ -100,14 +100,14 @@ async def test_initialize_tracing_creates_database(monkeypatch, tmp_path):
     """Test that initialize_tracing creates a database."""
     from src.utils.tracing import initialize_tracing
     from src.utils import config as config_module
-    
+
     db_file = str(tmp_path / "test_traces.db")
     # Mock config directly
     monkeypatch.setattr(config_module.config, "ENABLE_TRACING", True)
     monkeypatch.setattr(config_module.config, "TRACING_DB_FILE", db_file)
-    
+
     result = await initialize_tracing()
-    
+
     # Should return a database instance
     assert result is not None
     assert hasattr(result, "db_file")
@@ -118,16 +118,16 @@ async def test_initialize_tracing_graceful_degradation(monkeypatch):
     """Test that initialize_tracing handles missing OpenTelemetry gracefully."""
     from src.utils.tracing import initialize_tracing
     from src.utils import config as config_module
-    
+
     # Mock config to enable tracing
     monkeypatch.setattr(config_module.config, "ENABLE_TRACING", True)
-    
+
     # Mock setup_tracing to raise ImportError
     with patch("src.utils.tracing.setup_tracing") as mock_setup:
         mock_setup.side_effect = ImportError("opentelemetry not installed")
-        
+
         result = await initialize_tracing()
-        
+
         # Should return None but not crash
         assert result is None
 
@@ -137,15 +137,15 @@ async def test_initialize_tracing_exception_handling(monkeypatch):
     """Test that initialize_tracing handles exceptions gracefully."""
     from src.utils.tracing import initialize_tracing
     from src.utils import config as config_module
-    
+
     # Mock config to enable tracing
     monkeypatch.setattr(config_module.config, "ENABLE_TRACING", True)
-    
+
     # Mock SqliteDb to raise an exception
     with patch("src.utils.tracing.SqliteDb") as mock_db:
         mock_db.side_effect = RuntimeError("Database connection failed")
-        
+
         result = await initialize_tracing()
-        
+
         # Should return None but not crash
         assert result is None

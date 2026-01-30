@@ -31,10 +31,10 @@ class TestMCPInitialize:
         """Test successful initialization."""
         mock_instance = MagicMock()
         mock_to_thread.return_value = mock_instance
-        
+
         mcp = SpoonacularMCP(api_key="test")
         result = await mcp.initialize()
-        
+
         assert result == mock_instance
 
     @pytest.mark.asyncio
@@ -44,9 +44,9 @@ class TestMCPInitialize:
         """Test initialization with retries."""
         mock_instance = MagicMock()
         mock_to_thread.side_effect = [ConnectionError(), ConnectionError(), mock_instance]
-        
+
         mcp = SpoonacularMCP(api_key="test", max_retries=3)
         result = await mcp.initialize()
-        
+
         assert result == mock_instance
         assert mock_to_thread.call_count == 3

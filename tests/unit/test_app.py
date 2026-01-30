@@ -36,6 +36,7 @@ class TestAgentConfiguration:
     def test_agent_module_syntax_valid(self):
         """Test that agent module has no syntax errors."""
         import ast
+
         with open("src/agents/agent.py", "r") as f:
             code = f.read()
         try:
@@ -53,10 +54,11 @@ class TestAgentConfiguration:
     def test_factory_function_defined(self):
         """Test that initialize_recipe_agent factory function is defined in agent.py."""
         import ast
+
         with open("src/agents/agent.py", "r") as f:
             code = f.read()
         tree = ast.parse(code)
-        
+
         # Find top-level function definitions (including async functions)
         functions = [node.name for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
         assert "initialize_recipe_agent" in functions
@@ -142,6 +144,7 @@ class TestSystemInstructionsContent:
     def _get_system_instructions(self):
         """Helper to get system instructions from the function."""
         from src.prompts.prompts import get_system_instructions
+
         return get_system_instructions()
 
     def test_system_instructions_cover_core_responsibilities(self):
@@ -161,11 +164,16 @@ class TestSystemInstructionsContent:
     def test_system_instructions_cover_two_step_recipe_process(self):
         """Test system instructions enforce two-step recipe process."""
         instructions = self._get_system_instructions()
-        assert "two-step" in instructions.lower() or ("step 1" in instructions.lower() and "step 2" in instructions.lower())
+        assert "two-step" in instructions.lower() or (
+            "step 1" in instructions.lower() and "step 2" in instructions.lower()
+        )
         assert "find_recipes_by_ingredients" in instructions
         assert "get_recipe_information" in instructions
         # Check for the concept: user must request details before providing full instructions
-        assert "provide complete recipe details only when user requests them" in instructions.lower() or "wait for user follow-up" in instructions.lower()
+        assert (
+            "provide complete recipe details only when user requests them" in instructions.lower()
+            or "wait for user follow-up" in instructions.lower()
+        )
 
     def test_system_instructions_cover_preference_management(self):
         """Test system instructions cover preference extraction and application."""
@@ -201,24 +209,26 @@ class TestToolsAndPreHooks:
     def test_ingredient_detection_tool_signature(self):
         """Test ingredient detection tool has correct signature."""
         from src.mcp_tools.ingredients import detect_ingredients_tool
-        
+
         # Tool function should be callable
         assert callable(detect_ingredients_tool)
-        
+
         # Should accept image_data parameter
         import inspect
+
         sig = inspect.signature(detect_ingredients_tool)
         assert "image_data" in sig.parameters
 
     def test_pre_hook_function_signature(self):
         """Test pre-hook function has correct signature."""
         from src.mcp_tools.ingredients import extract_ingredients_pre_hook
-        
+
         # Pre-hook should be callable
         assert callable(extract_ingredients_pre_hook)
-        
+
         # Pre-hook receives run_input, session, user_id, debug_mode
         import inspect
+
         sig = inspect.signature(extract_ingredients_pre_hook)
         assert "run_input" in sig.parameters
         assert "session" in sig.parameters
@@ -231,7 +241,7 @@ class TestAgentMetadata:
         """Test agent has proper configuration in agent.py."""
         with open("src/agents/agent.py", "r") as f:
             code = f.read()
-        
+
         # Verify agent initialization with proper settings
         assert "Agent(" in code
         assert "model=Gemini(" in code
@@ -239,6 +249,9 @@ class TestAgentMetadata:
         assert "tools=tools" in code
         assert 'name="Recipe Recommendation Agent"' in code
         # Check for configuration flags (either literal True or config variable reference)
-        assert ("enable_user_memories=True" in code or "enable_user_memories=config.ENABLE_USER_MEMORIES" in code)
-        assert ("enable_session_summaries=True" in code or "enable_session_summaries=config.ENABLE_SESSION_SUMMARIES" in code)
-        assert ("compress_tool_results=True" in code or "compress_tool_results=config.COMPRESS_TOOL_RESULTS" in code)
+        assert "enable_user_memories=True" in code or "enable_user_memories=config.ENABLE_USER_MEMORIES" in code
+        assert (
+            "enable_session_summaries=True" in code
+            or "enable_session_summaries=config.ENABLE_SESSION_SUMMARIES" in code
+        )
+        assert "compress_tool_results=True" in code or "compress_tool_results=config.COMPRESS_TOOL_RESULTS" in code

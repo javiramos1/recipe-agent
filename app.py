@@ -54,6 +54,6 @@ if __name__ == "__main__":
     logger.info("   5. Chat in platform UI with automatic schema-aware forms")
     logger.info("   6. View execution traces and performance metrics")
     logger.info("---")
-    
+
     # Run with AgentOS (production-ready, no reload)
     agent_os.serve(app=app, port=config.PORT, reload=False)

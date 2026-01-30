@@ -94,7 +94,7 @@ class TestConfigValidation:
         config = Config()
         with pytest.raises(ValueError, match="SPOONACULAR_API_KEY"):
             config.validate()
-    
+
     def test_validate_allows_missing_spoonacular_key_when_disabled(self, monkeypatch):
         """Test that validate() succeeds without SPOONACULAR_API_KEY when USE_SPOONACULAR=false."""
         monkeypatch.setenv("GEMINI_API_KEY", "key")
@@ -343,5 +343,3 @@ class TestCompressImg:
         monkeypatch.setenv("COMPRESS_IMG", "False")
         config2 = Config()
         assert config2.COMPRESS_IMG is False
-
-
