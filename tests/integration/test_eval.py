@@ -29,7 +29,6 @@ from typing import Optional
 import pytest
 from agno.agent import Agent
 from agno.db.sqlite import SqliteDb
-from agno.eval.accuracy import AccuracyEval, AccuracyResult
 from agno.eval.agent_as_judge import AgentAsJudgeEval, AgentAsJudgeResult
 from agno.eval.reliability import ReliabilityEval, ReliabilityResult
 from agno.eval.performance import PerformanceEval, PerformanceResult
@@ -217,7 +216,7 @@ class TestRecipeQuality:
                 output_lower = (str(response.content) if response.content else "").lower()
                 if "quota" in output_lower or "limit" in output_lower or "error" in output_lower:
                     # API limits are expected in test environment, skip gracefully
-                    pytest.skip(f"API quota limit reached - expected in test environment")
+                    pytest.skip("API quota limit reached - expected in test environment")
                 assert result.results[0].passed, f"Recipe quality score {result.results[0].score} below threshold"
             else:
                 pytest.skip("No results from recipe quality evaluation")
@@ -449,7 +448,7 @@ class TestToolReliability:
             response: RunOutput = asyncio.run(
                 agent.arun(input={"message": "What recipes can I make with tomatoes and basil?"})
             )
-            logger.info(f"Agent response received")
+            logger.info("Agent response received")
         except Exception as e:
             logger.error(f"Agent run failed: {e}")
             pytest.skip(f"Agent execution failed: {e}")

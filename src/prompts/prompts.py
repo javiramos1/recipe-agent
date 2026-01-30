@@ -57,8 +57,8 @@ def _get_spoonacular_section(max_recipes: int, max_tool_calls: int) -> str:
 - ❌ NEVER reason that basic info is "incomplete" - it is COMPLETE for Step 1
 - ❌ NEVER make ANY tool calls after find_recipes_by_ingredients on first response
 
-**CRITICAL - ABSOLUTE ENFORCEMENT**: 
-- The Recipe model allows optional fields. You do NOT need ingredients/instructions to return a valid response. 
+**CRITICAL - ABSOLUTE ENFORCEMENT**:
+- The Recipe model allows optional fields. You do NOT need ingredients/instructions to return a valid response.
 - Basic recipe info (id, title, image, used/missed counts) is COMPLETE and SUFFICIENT for Step 1.
 - If you call get_recipe_information on the first response, you FAIL.
 - If you call get_recipe_information without explicit user request for details, you FAIL.
@@ -161,7 +161,7 @@ Would you like the full recipe for any of these?
 - **ingredients**: Comma-separated ingredient list
   - Example: "chicken, rice, garlic, onion, tomatoes, cilantro"
   - Include all available ingredients
-  
+
 - **number**: Always {max_recipes} (get enough for filtering)
 - **ranking**: Always 1 (maximize used ingredients)
 
@@ -210,7 +210,7 @@ Filter: No filtering needed, show all results
 I've reached my search limit after {max_tool_calls} tool calls, but here are some suggestions based on your ingredients:
 
 1. **Garlic Herb Roasted Chicken** - Roast your chicken breast with the garlic, thyme, and rosemary
-2. **Creamy Chicken Pasta** - Combine shredded chicken with pasta and cream sauce  
+2. **Creamy Chicken Pasta** - Combine shredded chicken with pasta and cream sauce
 3. **Herb-Marinated Grilled Chicken** - Marinate in olive oil with your fresh herbs
 
 I attempted searches with different ingredient combinations but didn't find matching recipes in the database. These suggestions are based on common cooking techniques and ingredient pairings.
@@ -687,7 +687,7 @@ Found delicious vegetable recipes!
 **1. Roasted Root Vegetables** {"(ID: 123456)" if use_spoonacular else ""}
 Colorful roasted veggies. Total time: 50 min | Serves: 4
 
-**2. Vegetable Stir-Fry** {"(ID: 789012)" if use_spoonacular else ""}  
+**2. Vegetable Stir-Fry** {"(ID: 789012)" if use_spoonacular else ""}
 Quick healthy stir-fry. Total time: 25 min | Serves: 3
 
 Which recipe would you like details for?
@@ -709,9 +709,9 @@ Which recipe would you like details for?
 **No Results:**
 - Empty `recipes` array
 - `response`: {
-        '"I couldn\'t find recipes with those ingredients. Here are suggestions based on your ingredients and preferences..."'
+        '"I could not find recipes with those ingredients. Here are suggestions based on your ingredients and preferences..."'
         if use_spoonacular
-        else '"That\'s an interesting combination. Let me suggest some alternatives..."'
+        else '"That is an interesting combination. Let me suggest some alternatives..."'
     }
 {
         "- Then try with simpler search or different ingredient grouping"

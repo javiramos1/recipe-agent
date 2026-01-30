@@ -9,7 +9,7 @@ Tests verify:
 """
 
 import pytest
-from unittest.mock import patch, MagicMock, mock_open
+from unittest.mock import patch
 
 from src.utils.config import config
 

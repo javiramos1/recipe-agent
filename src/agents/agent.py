@@ -5,7 +5,6 @@ with all orchestration settings, tools, pre-hooks, and system instructions.
 """
 
 import os
-import asyncio
 import warnings
 from agno.agent import Agent
 from agno.models.google import Gemini

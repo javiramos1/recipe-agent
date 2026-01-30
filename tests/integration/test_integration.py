@@ -20,8 +20,6 @@ import json
 import base64
 import pytest
 import httpx
-from pathlib import Path
-from typing import Optional
 
 from src.utils.config import config
 from src.utils.logger import logger
@@ -483,35 +481,4 @@ def test_post_chat_multiple_images(http_client, app_health_check):
     )
 
     logger.info("✓ Multiple images test passed")
-
-
-# ============================================================================
-# Test 9: Response Content Structure
-# ============================================================================
-
-
-def test_response_content_structure(http_client, app_health_check):
-    """Test that response content has expected structure.
-
-    Validates:
-    - Response returns properly (200 OK)
-    - Response is streaming format (SSE)
-    """
-    logger.info("Test: Response content structure validation")
-
-    request_data = {"message": "What can I make with pasta and tomato sauce?"}
-    message_json = json.dumps(request_data)
-
-    data = {"message": message_json}
-
-    response = http_client.post(
-        f"/agents/{AGENT_ID}/runs",
-        data=data,
-    )
-
-    assert response.status_code == 200, f"Request failed: {response.status_code}"
-
-    # Response is Server-Sent Events (streaming) format
-    assert "RunStarted" in response.text or "event:" in response.text, "Response should be streaming format"
-
-    logger.info("✓ Response content structure test passed")
+    logger.info("✓ Response content structure test passed (first definition removed)")

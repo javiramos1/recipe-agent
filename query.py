@@ -28,7 +28,6 @@ from pathlib import Path
 from rich.console import Console
 from rich.markdown import Markdown
 
-from src.utils.config import config
 from src.utils.logger import logger
 from src.agents.agent import initialize_recipe_agent
 

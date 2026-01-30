@@ -261,7 +261,7 @@ class IngredientDetectionOutput(BaseModel):
         validated = {}
         for ingredient, score in v.items():
             if not isinstance(ingredient, str):
-                raise ValueError(f"Confidence score keys must be strings")
+                raise ValueError("Confidence score keys must be strings")
 
             try:
                 f = float(score)

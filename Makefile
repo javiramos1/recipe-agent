@@ -162,8 +162,8 @@ eval: venv-check
 int-tests: venv-check
 	@bash run_int_tests.sh
 
-# Lint: Run Ruff and Flake8 linters
-lint: venv-check
+# Lint: Run Ruff and Flake8 linters (format first)
+lint: venv-check format
 	@echo "Running Ruff linter..."
 	@$(PYTHON) -m ruff check src tests app.py query.py --line-length=120 || true
 	@echo ""

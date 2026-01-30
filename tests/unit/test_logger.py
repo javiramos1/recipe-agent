@@ -1,14 +1,9 @@
-"""Unit tests for logging infrastructure (Task 2.5)."""
+"""Unit tests for logger infrastructure (Task 2.5)."""
 
 import json
 import logging
-import os
-from io import StringIO
-from unittest.mock import patch
 
-import pytest
-
-from src.utils.logger import JSONFormatter, RichTextFormatter, get_logger, logger
+from src.utils.logger import JSONFormatter, RichTextFormatter, get_logger
 
 
 class TestJSONFormatter:

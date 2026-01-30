@@ -1,8 +1,5 @@
 """Unit tests for configuration management (Task 2)."""
 
-import os
-from unittest.mock import patch
-
 import pytest
 
 from src.utils.config import Config

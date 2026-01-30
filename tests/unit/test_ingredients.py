@@ -8,8 +8,7 @@ Tests cover:
 - Error handling and resilience
 """
 
-import json
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
