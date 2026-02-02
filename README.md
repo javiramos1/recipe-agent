@@ -394,7 +394,7 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `SPOONACULAR_API_KEY` | string | **required if USE_SPOONACULAR=true** | Spoonacular recipe API key (only needed when Spoonacular mode is enabled) |
 | `GEMINI_MODEL` | string | `gemini-3-flash-preview` | Main recipe recommendation model. Options: `gemini-3-flash-preview`, `gemini-3-pro-preview` |
 | `IMAGE_DETECTION_MODEL` | string | `gemini-2.5-flash-lite` | Image detection model (independent from main model). Options: `gemini-2.5-flash-lite`, `gemini-3-flash-preview`, `gemini-3-pro-preview`. Use `gemini-3-pro-preview` for better accuracy on complex images |
-| `MEMORY_MODEL` | string | `gemini-2.5-flash-lite` | Memory operations model for user memories and session summaries. Uses smaller model to reduce API costs for background memory operations |
+| `AGENT_MNGT_MODEL` | string | `gemini-2.5-flash-lite` | Agent management model for memories, summaries, compression, and learning. Uses smaller model to reduce API costs for background operations (98% cheaper) |
 | `TEMPERATURE` | float | `0.3` | Response randomness (0.0=deterministic, 1.0=creative). For recipes: 0.3 balances consistency with variety |
 | `MAX_OUTPUT_TOKENS` | int | `8192` | Maximum response length. For multiple recipes: 8192 supports full response with 10 recipes including instructions (Gemini supports up to 65,536) |
 | `THINKING_LEVEL` | string | `None` | Extended reasoning level: None (fastest), `low` (balanced), `high` (thorough). Recipe recommendations work well with `None` |
@@ -882,6 +882,7 @@ recipe-agent/
 
 ## References
 
+- [AGENT_FEATURES.md](.docs/AGENT_FEATURES.md) - **Quick reference for all Agno Agent capabilities** (what we use, costs, when to use each)
 - [PRD.md](.docs/PRD.md) - Complete functional requirements
 - [DESIGN.md](.docs/DESIGN.md) - Technical architecture and decisions
 - [IMPLEMENTATION_PLAN.md](.docs/IMPLEMENTATION_PLAN.md) - Task breakdown

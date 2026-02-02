@@ -230,7 +230,7 @@ async def _initialize_managers(db, knowledge):
     memory_manager = MemoryManager(
         db=db,
         model=Gemini(
-            id=config.MEMORY_MODEL,
+            id=config.AGENT_MNGT_MODEL,
             api_key=config.GEMINI_API_KEY,
         ),
         additional_instructions="Focus on extracting user preferences, dietary restrictions, and cuisine preferences for recipe recommendations. Keep memories concise and relevant to cooking/recipe context.",
@@ -240,7 +240,7 @@ async def _initialize_managers(db, knowledge):
     logger.info("Step 5b/7: Initializing compression manager with cost-optimized model...")
     compression_manager = CompressionManager(
         model=Gemini(
-            id=config.MEMORY_MODEL,
+            id=config.AGENT_MNGT_MODEL,
             api_key=config.GEMINI_API_KEY,
         ),
         compress_tool_results_limit=config.TOOL_CALL_LIMIT,
@@ -263,7 +263,7 @@ async def _initialize_managers(db, knowledge):
             db=db,
             knowledge=knowledge,  # Connect knowledge base for learned insights storage
             model=Gemini(
-                id=config.MEMORY_MODEL,
+                id=config.AGENT_MNGT_MODEL,
                 api_key=config.GEMINI_API_KEY,
             ),
             # LearnedKnowledge: Agent learns recipe insights and preferences dynamically

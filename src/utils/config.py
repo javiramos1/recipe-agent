@@ -31,11 +31,11 @@ class Config:
         # Default: gemini-2.5-flash-lite (fast, cost-effective for images)
         # For better accuracy: use gemini-3-pro-preview for complex image analysis
         self.IMAGE_DETECTION_MODEL: str = os.getenv("IMAGE_DETECTION_MODEL", "gemini-2.5-flash-lite")
-        # Memory Model: separate model for memory operations and tool compression
+        # Agent Management Model: separate model for memory ops, compression, and learning
         # Default: gemini-2.5-flash-lite (cost-optimized for background operations)
-        # Used for: user memories, session summaries, and tool result compression
-        # Can be different from main model to reduce costs for background operations
-        self.MEMORY_MODEL: str = os.getenv("MEMORY_MODEL", "gemini-2.5-flash-lite")
+        # Used for: user memories, session summaries, tool compression, and learning machine extraction
+        # Can be different from main model to reduce costs for background operations (98% cheaper)
+        self.AGENT_MNGT_MODEL: str = os.getenv("AGENT_MNGT_MODEL", "gemini-2.5-flash-lite")
         # Server Port
         self.PORT: int = int(os.getenv("PORT", "7777"))
         # Maximum number of previous interactions to include in context. Default: 3
