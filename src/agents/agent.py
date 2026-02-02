@@ -261,6 +261,7 @@ async def _initialize_managers(db, knowledge):
         
         learning_machine = LearningMachine(
             db=db,
+            knowledge=knowledge,  # Connect knowledge base for learned insights storage
             model=Gemini(
                 id=config.MEMORY_MODEL,
                 api_key=config.GEMINI_API_KEY,
