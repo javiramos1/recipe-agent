@@ -10,6 +10,7 @@ from agno.agent import Agent
 from agno.models.google import Gemini
 from agno.memory import MemoryManager
 from agno.compression.manager import CompressionManager
+from agno.learn import LearningMachine, LearnedKnowledgeConfig, LearningMode
 from agno.db.sqlite import SqliteDb
 from agno.db.postgres import PostgresDb
 from agno.knowledge.knowledge import Knowledge
@@ -215,14 +216,15 @@ def _configure_database(use_db: bool):
     return db
 
 
-async def _initialize_managers(db):
-    """Initialize memory manager and compression manager with cost-optimized models.
+async def _initialize_managers(db, knowledge):
+    """Initialize memory manager, compression manager, and learning machine with cost-optimized models.
 
     Args:
         db: Database instance for persisting manager state.
+        knowledge: Knowledge base instance for learning.
 
     Returns:
-        Tuple of (memory_manager, compression_manager).
+        Tuple of (memory_manager, compression_manager, learning_machine).
     """
     logger.info("Step 5a/7: Initializing memory manager with cost-optimized model...")
     memory_manager = MemoryManager(
@@ -246,7 +248,36 @@ async def _initialize_managers(db):
     )
     logger.info("✓ Compression manager initialized with cost-optimized model")
 
-    return memory_manager, compression_manager
+    logger.info("Step 5c/7: Initializing learning machine for agent learning...")
+    learning_machine = None
+    if config.ENABLE_LEARNING:
+        # Parse learning mode from string (ALWAYS, AGENTIC, PROPOSE)
+        mode_map = {
+            "ALWAYS": LearningMode.ALWAYS,
+            "AGENTIC": LearningMode.AGENTIC,
+            "PROPOSE": LearningMode.PROPOSE,
+        }
+        learning_mode = mode_map.get(config.LEARNING_MODE.upper(), LearningMode.AGENTIC)
+        
+        learning_machine = LearningMachine(
+            db=db,
+            model=Gemini(
+                id=config.MEMORY_MODEL,
+                api_key=config.GEMINI_API_KEY,
+            ),
+            # LearnedKnowledge: Agent learns recipe insights and preferences dynamically
+            # AGENTIC mode: Agent decides when to save learnings (recommended for recipes)
+            # Namespace="global": Learnings benefit all users (shared recipe insights)
+            learned_knowledge=LearnedKnowledgeConfig(
+                mode=learning_mode,
+                namespace="global",  # Shared recipe learnings across all users
+            ),
+        )
+        logger.info(f"✓ Learning machine initialized with {config.LEARNING_MODE} mode (global namespace for shared recipe insights)")
+    else:
+        logger.info("✓ Learning machine disabled (ENABLE_LEARNING=false)")
+
+    return memory_manager, compression_manager, learning_machine
 
 
 def _register_hooks(knowledge):
@@ -271,7 +302,7 @@ def _register_hooks(knowledge):
     return pre_hooks, post_hooks
 
 
-def _create_agent(db, knowledge, memory_manager, compression_manager, tools, pre_hooks, post_hooks) -> Agent:
+def _create_agent(db, knowledge, memory_manager, compression_manager, learning_machine, tools, pre_hooks, post_hooks) -> Agent:
     """Create and configure the Agno Agent instance.
 
     Args:
@@ -279,6 +310,7 @@ def _create_agent(db, knowledge, memory_manager, compression_manager, tools, pre
         knowledge: Knowledge base instance for learnings.
         memory_manager: Memory manager for user preferences.
         compression_manager: Compression manager for tool results.
+        learning_machine: Learning machine for dynamic insight extraction (optional).
         tools: List of registered tools.
         pre_hooks: List of pre-hooks for request processing.
         post_hooks: List of post-hooks for response processing.
@@ -299,8 +331,9 @@ def _create_agent(db, knowledge, memory_manager, compression_manager, tools, pre
         ),
         # === Storage & Knowledge ===
         db=db,  # SQLite (dev) or PostgreSQL (prod) for session persistence
-        knowledge=knowledge,  # LanceDB vector store for learnings/troubleshooting
-        search_knowledge=config.SEARCH_KNOWLEDGE,  # LLM-accessible knowledge search
+        knowledge=knowledge,  # LanceDB vector store for learnings/troubleshooting (NOTE: disabled by default - use LearnedKnowledge instead for dynamic learning)
+        search_knowledge=config.SEARCH_KNOWLEDGE,  # LLM-accessible knowledge search (disabled by default - Knowledge vs LearnedKnowledge: use one, not both)
+        learning=learning_machine,  # Learning Machine: dynamic insight extraction and preferences (AGENTIC mode by default)
         memory_manager=memory_manager,  # Cost-optimized memory operations with smaller model
         compression_manager=compression_manager,  # Cost-optimized tool result compression
         # === Tools & Hooks ===
@@ -327,6 +360,8 @@ def _create_agent(db, knowledge, memory_manager, compression_manager, tools, pre
         update_knowledge=config.UPDATE_KNOWLEDGE,  # LLM can add learnings to KB (local vector database operation)
         read_chat_history=config.READ_CHAT_HISTORY,  # Dedicated tool for history access (local operation)
         num_history_runs=config.MAX_HISTORY,  # 3 turns of conversation context
+        search_session_history=config.SEARCH_SESSION_HISTORY,  # Search across multiple past sessions
+        num_history_sessions=config.NUM_HISTORY_SESSIONS,  # Include last 2 sessions in history search (performance tip: keep low)
         enable_user_memories=config.ENABLE_USER_MEMORIES,  # Track user preferences (requires extra LLM API calls)
         enable_session_summaries=config.ENABLE_SESSION_SUMMARIES,  # Auto-compress context (requires extra LLM API calls)
         compress_tool_results=config.COMPRESS_TOOL_RESULTS,  # Reduce tool output verbosity
@@ -351,7 +386,7 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     2. Tracing database for observability
     3. Session persistence database (SQLite or PostgreSQL)
     4. Knowledge base for learnings and troubleshooting
-    5. Memory and compression managers (cost-optimized)
+    5. Memory, compression, and learning managers (cost-optimized)
     6. Tool registration (MCP + ingredient detection)
     7. Pre-hooks and post-hooks registration
     8. Agent configuration with system instructions
@@ -373,9 +408,9 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     tracing_db = await _initialize_tracing_db()
     db = _configure_database(use_db)
     knowledge = await initialize_knowledge_base(db=db)
-    memory_manager, compression_manager = await _initialize_managers(db)
+    memory_manager, compression_manager, learning_machine = await _initialize_managers(db, knowledge)
     pre_hooks, post_hooks = _register_hooks(knowledge)
-    agent = _create_agent(db, knowledge, memory_manager, compression_manager, tools, pre_hooks, post_hooks)
+    agent = _create_agent(db, knowledge, memory_manager, compression_manager, learning_machine, tools, pre_hooks, post_hooks)
 
     logger.info("=== Agent initialization complete ===")
     return agent, tracing_db, knowledge

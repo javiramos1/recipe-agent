@@ -165,6 +165,44 @@ class Config:
         # Recommended: True when knowledge base is available, False for simple stateless agents
         self.SEARCH_KNOWLEDGE: bool = os.getenv("SEARCH_KNOWLEDGE", "true").lower() in ("true", "1", "yes")
 
+        # SEARCH_SESSION_HISTORY: Enable searching across multiple past sessions for context
+        # Benefits: Access to learnings and preferences from previous conversations
+        # Trade-offs: Increases context size, may include irrelevant information from old sessions
+        # Cost: Local database operation (no extra LLM API calls)
+        # Recommended: True for long-term personalization, False to focus on current session only
+        self.SEARCH_SESSION_HISTORY: bool = os.getenv("SEARCH_SESSION_HISTORY", "true").lower() in ("true", "1", "yes")
+
+        # NUM_HISTORY_SESSIONS: Number of past sessions to include in session history search
+        # Performance tip: Keep low (2-3) to avoid filling context length and slowing down requests
+        # Recommended: 2 for balancing long-term context with performance
+        self.NUM_HISTORY_SESSIONS: int = int(os.getenv("NUM_HISTORY_SESSIONS", "2"))
+
+        # Learning Machine Configuration - agents that learn and improve over time
+        # ========================================================================
+        # ENABLE_LEARNING: Enable Learning Machine for dynamic user profiles and learned knowledge
+        # Benefits: Agent extracts insights, saves learnings, improves personalization over time
+        # Trade-offs: Requires extra LLM API calls for extraction; storage in database
+        # Recommended: True for long-term agents, False for stateless or single-turn applications
+        self.ENABLE_LEARNING: bool = os.getenv("ENABLE_LEARNING", "true").lower() in ("true", "1", "yes")
+
+        # LEARNING_MODE: How agent learns - "ALWAYS" (automatic), "AGENTIC" (agent-controlled), "PROPOSE" (user-approved)
+        # ALWAYS: Automatic extraction after each response (background LLM calls)
+        # AGENTIC: Agent receives tools, decides when to save learnings (default, recommended)
+        # PROPOSE: Agent proposes, user confirms before saving (high-stakes environments)
+        # Recommended: "AGENTIC" for recipe agents - balances autonomy with control
+        self.LEARNING_MODE: str = os.getenv("LEARNING_MODE", "AGENTIC")
+
+        # SEARCH_KNOWLEDGE vs ENABLE_LEARNING distinction
+        # ================================================
+        # SEARCH_KNOWLEDGE: Queries external documents/FAQs (read-only, static)
+        # ENABLE_LEARNING: Agents store insights dynamically (dynamic, agent-driven)
+        # NOTE: Using both is overkill. For this use case, LearnedKnowledge is preferred because:
+        #   - Agents learn from recipe conversations dynamically
+        #   - User preferences and recipe learnings change over time
+        #   - No need for external document ingestion
+        # If you have external docs, use Knowledge. If you want dynamic learning, use LearnedKnowledge.
+        # WARNING: Do NOT enable both - it creates redundancy and wastes tokens/storage.
+
     def validate(self) -> None:
         """Validate required configuration.
 

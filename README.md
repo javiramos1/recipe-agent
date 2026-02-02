@@ -425,8 +425,21 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `ENABLE_SESSION_SUMMARIES` | bool | `false` | Auto-summarize sessions for context compression (**requires extra LLM API calls** for generation) |
 | `COMPRESS_TOOL_RESULTS` | bool | `true` | Compress tool outputs to reduce context size (uses cost-optimized MEMORY_MODEL) |
 | `SEARCH_KNOWLEDGE` | bool | `true` | Give LLM ability to search knowledge base during reasoning |
+| `SEARCH_SESSION_HISTORY` | bool | `true` | Enable searching across multiple past sessions for long-term preference tracking (local database operation) |
+| `NUM_HISTORY_SESSIONS` | int | `2` | Number of past sessions to include in history search (keep low 2-3 to avoid context bloat and performance impact) |
+| **Learning Machine** | | | |
+| `ENABLE_LEARNING` | bool | `true` | Enable Learning Machine for dynamic user profile and recipe insight extraction |
+| `LEARNING_MODE` | string | `AGENTIC` | How agent learns: `ALWAYS` (auto), `AGENTIC` (agent-controlled, **recommended**), `PROPOSE` (user-approved) |
 
-**Memory Strategy**: Uses *Option 1 - Automatic Context* for optimal balance of conversational continuity and performance. Recent history is automatically included while avoiding redundant on-demand history tools that could bloat token usage. Session summaries are disabled by default to minimize LLM API costs - enable only for long conversations requiring context compression. Memory operations (user memories, session summaries) and tool result compression use a separate cost-optimized model (`MEMORY_MODEL`) to reduce API costs by up to 98% for background operations.
+**Design Note on Knowledge vs LearnedKnowledge:**
+- **Knowledge** (`SEARCH_KNOWLEDGE`): For external documents/FAQs (read-only, static). Disabled by default.
+- **LearnedKnowledge** (`ENABLE_LEARNING`): For dynamic insights from conversations (agent-driven, evolving). Enabled by default.
+- ⚠️ **WARNING:** Using both is overkill for recipe agents. Choose one: static documents (Knowledge) OR dynamic learning (LearnedKnowledge). Do NOT enable both.
+- For this project: LearnedKnowledge preferred because user preferences and recipe learnings are dynamic and change over conversations.
+
+**Learning Strategy**: Uses AGENTIC mode by default - agent receives tools and decides when to save insights (user preferences, recipe recommendations, cooking techniques). Learnings saved to global namespace (shared insights benefit all users). Uses cost-optimized MEMORY_MODEL for extraction.
+
+**Memory Strategy**: Uses *Option 1 - Automatic Context* for optimal balance of conversational continuity and performance. Recent history is automatically included while avoiding redundant on-demand history tools that could bloat token usage. Session history search (last 2 sessions by default) provides long-term preference context without excessive context overhead. Session summaries are disabled by default to minimize LLM API costs - enable only for long conversations requiring context compression. Memory operations (user memories, session summaries) and tool result compression use a separate cost-optimized model (`MEMORY_MODEL`) to reduce API costs by up to 98% for background operations.
 
 ### Observability & Tracing
 
@@ -580,6 +593,16 @@ Agent maintains a searchable **LanceDB knowledge base** - a high-performance vec
 - Learning from user feedback and preference evolution
 
 **Search Enabled:** Agent can search knowledge base for similar past issues before attempting new searches (configurable via `search_knowledge=True` in agent config).
+
+### Design Decisions: Features Not Implemented
+
+**Skills** (Not Used - Intentionally Simple)
+- Agno Skills provide progressive capability discovery via lazy-loaded instruction packages
+- **Decision:** Unnecessary for recipe agents. Our system instructions are concise and sufficient. Skills shine in complex multi-domain agents (code review, debugging, documentation) with reusable knowledge across teams. Recipe recommendations don't need this complexity.
+
+**Culture** (Not Used - Overkill for Single Agent)
+- Agno Culture provides shared organizational knowledge/principles for multi-agent systems
+- **Decision:** Designed for teams of agents that learn from each other. Single agent systems don't benefit. Better alternatives: system instructions (declarative) or LearnedKnowledge (dynamic).
 
 ## API Reference
 
