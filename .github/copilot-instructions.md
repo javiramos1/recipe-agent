@@ -54,7 +54,7 @@ This is a comprehensive GenAI application designed to **demonstrate best practic
 
 ## Status Section
 
-**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed, Task 11 Tracing implemented, Task 12 E2E Evals complete, Task 13 REST API Tests implemented, Task 13+ Eval visibility to os.agno.com. Search strategy updated to find_recipes_by_ingredients with LLM-based filtering. Tool-hooks removed. ✅**
+**Current Status: Phase 2 complete with async refactoring (Tasks 1-10), Local Agent UI integrated, JSON message format working, Response formatting fixed, Task 11 Tracing implemented, Task 12 E2E Evals complete, Task 13 REST API Tests implemented, Task 13+ Eval visibility to os.agno.com. Search strategy updated to find_recipes_by_ingredients with LLM-based filtering. Tool-hooks removed. Model naming refactored: MEMORY_MODEL → AGENT_MNGT_MODEL for accuracy. ✅**
 
 ### Phase 1: Foundational (Tasks 1-5 + Task 2.5 logger) ✅
 - [x] Task 1: Project structure, dependencies, .gitignore
@@ -86,6 +86,7 @@ This is a comprehensive GenAI application designed to **demonstrate best practic
 - [x] Task 15: Sample Test Images (date: 2026-01-20) 
 - [x] Task 16 complete (date: 2026-01-18) - Comprehensive README.md
 - [x] Task 17: Final Validation (date: 2026-01-20) - All tests passing, architecture review, code quality audit
+- [x] **REFACTOR** (date: 2026-01-21) Model naming clarity - MEMORY_MODEL → AGENT_MNGT_MODEL (all files, 163 tests passing)
 
 **Update Protocol:** After completing each task, update this status section with:
 - [x] Task [N] complete (date: YYYY-MM-DD) - Description of what was completed
