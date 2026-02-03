@@ -398,6 +398,10 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `TEMPERATURE` | float | `0.3` | Response randomness (0.0=deterministic, 1.0=creative). For recipes: 0.3 balances consistency with variety |
 | `MAX_OUTPUT_TOKENS` | int | `8192` | Maximum response length. For multiple recipes: 8192 supports full response with 10 recipes including instructions (Gemini supports up to 65,536) |
 | `THINKING_LEVEL` | string | `None` | Extended reasoning level: None (fastest), `low` (balanced), `high` (thorough). Recipe recommendations work well with `None` |
+| **Agent Context Awareness** | | | |
+| `ADD_DATETIME_TO_CONTEXT` | bool | `true` | Include current date/time in agent context for time-aware recipes ("quick weeknight dinners", seasonal recipes) |
+| `TIMEZONE_IDENTIFIER` | string | `Etc/UTC` | Timezone for datetime context (TZ Database format: `America/New_York`, `Europe/London`, etc.) |
+| `ADD_LOCATION_TO_CONTEXT` | bool | `false` | Include user location for geo-aware recipes (requires user permission, privacy consideration) |
 | `PORT` | int | `7777` | Server port |
 | `MAX_HISTORY` | int | `3` | Conversation turns to keep in memory |
 | `MAX_RECIPES` | int | `3` | Maximum recipes to return per request |
@@ -427,6 +431,9 @@ curl -X POST http://localhost:7777/agents/recipe-recommendation-agent/runs \
 | `SEARCH_KNOWLEDGE` | bool | `true` | Give LLM ability to search knowledge base during reasoning |
 | `SEARCH_SESSION_HISTORY` | bool | `true` | Enable searching across multiple past sessions for long-term preference tracking (local database operation) |
 | `NUM_HISTORY_SESSIONS` | int | `2` | Number of past sessions to include in history search (keep low 2-3 to avoid context bloat and performance impact) |
+| **Agent Performance & Debugging** | | | |
+| `CACHE_SESSION` | bool | `false` | Cache agent session in memory for faster access (single-server only, not for distributed systems) |
+| `DEBUG_MODE` | bool | `false` | Enable detailed logging and system message inspection (development only, see compiled system message) |
 | **Learning Machine** | | | |
 | `ENABLE_LEARNING` | bool | `true` | Enable Learning Machine for dynamic user profile and recipe insight extraction |
 | `LEARNING_MODE` | string | `AGENTIC` | How agent learns: `ALWAYS` (auto), `AGENTIC` (agent-controlled, **recommended**), `PROPOSE` (user-approved) |

@@ -345,12 +345,17 @@ def _create_agent(db, knowledge, memory_manager, compression_manager, learning_m
         input_schema=ChatMessage,  # Validates incoming messages
         output_schema=RecipeResponse,  # Structures recipe response with metadata
         structured_outputs=True,  # Force native structured outputs (Gemini supports this - guarantees schema-valid JSON at API level)
+        markdown=True,  # Format response field with markdown for rich text rendering in UI
         # === Instructions & State ===
         instructions=get_system_instructions(
             max_recipes=config.MAX_RECIPES,
             max_tool_calls=config.TOOL_CALL_LIMIT,
             use_spoonacular=config.USE_SPOONACULAR,
         ),
+        # === Context Awareness ===
+        add_datetime_to_context=config.ADD_DATETIME_TO_CONTEXT,  # Include current date/time for time-aware recipes
+        timezone_identifier=config.TIMEZONE_IDENTIFIER,  # Timezone for datetime context (e.g., "Etc/UTC")
+        add_location_to_context=config.ADD_LOCATION_TO_CONTEXT,  # Include user location (privacy consideration)
         # === Retry & Error Handling ===
         retries=config.MAX_RETRIES,  # 3 retry attempts for transient failures
         exponential_backoff=config.EXPONENTIAL_BACKOFF,  # 2s → 4s → 8s delays (handles rate limits)
@@ -363,16 +368,20 @@ def _create_agent(db, knowledge, memory_manager, compression_manager, learning_m
         num_history_runs=config.MAX_HISTORY,  # 3 turns of conversation context
         search_session_history=config.SEARCH_SESSION_HISTORY,  # Search across multiple past sessions
         num_history_sessions=config.NUM_HISTORY_SESSIONS,  # Include last 2 sessions in history search (performance tip: keep low)
+        add_learnings_to_context=config.ADD_LEARNINGS_TO_CONTEXT,  # AGENTIC: false (agent controls via tools); ALWAYS: true (auto-inject); Cost: increases context size if true
         enable_user_memories=config.ENABLE_USER_MEMORIES,  # Track user preferences (requires extra LLM API calls)
         enable_session_summaries=config.ENABLE_SESSION_SUMMARIES,  # Auto-compress context (requires extra LLM API calls)
         compress_tool_results=config.COMPRESS_TOOL_RESULTS,  # Reduce tool output verbosity
+        cache_session=config.CACHE_SESSION,  # Cache session in memory for faster access (single-server only)
         max_tool_calls_from_history=config.TOOL_CALL_LIMIT - 1,  # Full tool call history access
         # === Execution Limits ===
         tool_call_limit=config.TOOL_CALL_LIMIT,  # Max tool calls per session
         reasoning_max_steps=config.TOOL_CALL_LIMIT,  # Complements tool_call_limit for reasoning depth
+        # === Debugging ===
+        debug_mode=config.DEBUG_MODE,  # Enable detailed logging and system message inspection
         # === Metadata ===
         name="Recipe Recommendation Agent",
-        description="Transforms ingredient images into recipe recommendations with conversational memory",
+        description="Transforms ingredients into recipe recommendations with conversational memory",
     )
 
     logger.info(f"✓ Agent configured successfully with maximum {config.TOOL_CALL_LIMIT} tool calls per request")

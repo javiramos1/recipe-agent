@@ -84,6 +84,25 @@ class Config:
         # Default: None (thinking disabled) This has been proved to work best in testing when using external tools
         self.THINKING_LEVEL: str = os.getenv("THINKING_LEVEL", None)
 
+        # Agent Context Awareness - enhance recipe recommendations with temporal and location context
+        # ============================================================================================
+        # ADD_DATETIME_TO_CONTEXT: Include current date/time in agent context
+        # Benefits: Enables time-aware recipes ("quick weeknight dinners", "summer recipes", seasonal ingredients)
+        # Trade-offs: None (local operation)
+        # Cost: No extra LLM API calls
+        # Recommended: True for context-aware suggestions
+        self.ADD_DATETIME_TO_CONTEXT: bool = os.getenv("ADD_DATETIME_TO_CONTEXT", "true").lower() in ("true", "1", "yes")
+        # TIMEZONE_IDENTIFIER: Timezone for datetime context (TZ Database format)
+        # Examples: "Etc/UTC", "America/New_York", "Europe/London", "Asia/Tokyo"
+        # Default: "Etc/UTC" for consistency
+        self.TIMEZONE_IDENTIFIER: str = os.getenv("TIMEZONE_IDENTIFIER", "Etc/UTC")
+        # ADD_LOCATION_TO_CONTEXT: Include user location in agent context
+        # Benefits: Enables location-aware recipes (local ingredients, regional cuisines, seasonal availability)
+        # Trade-offs: Privacy consideration, requires location permission
+        # Cost: No extra LLM API calls (local operation)
+        # Recommended: False by default (requires user permission); enable only with explicit user consent
+        self.ADD_LOCATION_TO_CONTEXT: bool = os.getenv("ADD_LOCATION_TO_CONTEXT", "false").lower() in ("true", "1", "yes")
+
         # Agent Retry Configuration - handles transient API failures gracefully
         # MAX_RETRIES: Number of retry attempts for failed API calls (exponential backoff)
         self.MAX_RETRIES: int = int(os.getenv("MAX_RETRIES", "3"))
@@ -192,6 +211,24 @@ class Config:
         # Recommended: "AGENTIC" for recipe agents - balances autonomy with control
         self.LEARNING_MODE: str = os.getenv("LEARNING_MODE", "AGENTIC")
 
+        # ADD_LEARNINGS_TO_CONTEXT: Automatically inject learned insights into LLM context
+        # **CRITICAL: Depends on LEARNING_MODE selection:**
+        # - AGENTIC mode (recommended): Set to False
+        #   Agent controls learnings via tools (search_learnings, save_learning)
+        #   Automatic context injection creates redundancy and token bloat
+        # - ALWAYS mode: Set to True
+        #   Relies on automatic extraction + context injection for learning workflow
+        # - PROPOSE mode: Set to True
+        #   Learnings need to be available for user review
+        # Default: False (aligns with recommended AGENTIC mode)
+        # Pattern: Same as SEARCH_KNOWLEDGE - False for Agentic RAG, True for Traditional RAG
+        # Cost: No extra API calls (local operation), but increases context size if True
+        self.ADD_LEARNINGS_TO_CONTEXT: bool = os.getenv("ADD_LEARNINGS_TO_CONTEXT", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+
         # SEARCH_KNOWLEDGE vs ENABLE_LEARNING distinction
         # ================================================
         # SEARCH_KNOWLEDGE: Queries external documents/FAQs (read-only, static)
@@ -202,6 +239,19 @@ class Config:
         #   - No need for external document ingestion
         # If you have external docs, use Knowledge. If you want dynamic learning, use LearnedKnowledge.
         # WARNING: Do NOT enable both - it creates redundancy and wastes tokens/storage.
+
+        # Agent Performance & Debugging Configuration
+        # ============================================
+        # CACHE_SESSION: Cache agent session in memory for faster access
+        # Benefits: Faster subsequent requests for same session, reduced database queries
+        # Trade-offs: Increased memory usage; may have stale data if session updated elsewhere
+        # Recommended: True for single-server deployments, False for distributed/multi-server
+        self.CACHE_SESSION: bool = os.getenv("CACHE_SESSION", "false").lower() in ("true", "1", "yes")
+        # DEBUG_MODE: Enable debug logging and detailed agent output
+        # Benefits: Detailed logs for troubleshooting, see compiled system message
+        # Trade-offs: Verbose output, slower response times, not suitable for production
+        # Recommended: True for development/debugging, False for production
+        self.DEBUG_MODE: bool = os.getenv("DEBUG_MODE", "false").lower() in ("true", "1", "yes")
 
     def validate(self) -> None:
         """Validate required configuration.

@@ -14,6 +14,11 @@ Quick reference for all Agno Agent capabilities, what we use, and when to use ea
 | **Multi-Session History** | Cross-session context | ✅ Using | Enabled (2 sessions) | No | N/A | Long-term preference tracking across conversations |
 | **Learning Machines** | Dynamic insight extraction | ✅ Using | Enabled (AGENTIC) | Yes | AGENT_MNGT_MODEL | Save recipe insights, user preferences over time |
 | **LearnedKnowledge** | Agent-created insights | ✅ Using | Enabled | Yes | AGENT_MNGT_MODEL | Share learned recipes/patterns globally |
+| **Learning Context Injection** | Auto-inject learnings | ✅ Using (False) | Disabled | No | N/A | Control when learnings appear in context |
+| **Datetime Context** | Time-aware reasoning | ✅ Using | Enabled | No | N/A | Support temporal queries ("quick weeknight dinners", seasonal recipes) |
+| **Location Context** | Location-aware reasoning | ⚠️ Available | Disabled | No | N/A | Support local ingredients, regional cuisines (requires user permission) |
+| **Session Caching** | In-memory session cache | ⚠️ Available | Disabled | No | N/A | Performance optimization for single-server deployments |
+| **Debug Mode** | Detailed logging & inspection | ⚠️ Available | Disabled | No | N/A | Development/troubleshooting (see compiled system message) |
 | **Knowledge Base** | External documents | ❌ Disabled | Disabled | No | N/A | Ground responses in static docs/FAQs |
 | **Skills** | Domain expertise packages | ❌ Not Used | N/A | No | N/A | Reusable instruction sets (overkill for recipes) |
 | **Culture** | Org-wide principles | ❌ Not Used | N/A | No | N/A | Multi-agent shared knowledge (not needed here) |
@@ -98,6 +103,70 @@ Quick reference for all Agno Agent capabilities, what we use, and when to use ea
 - **When:** Multi-tenant systems, shared learning desired
 - **Example:** "For seafood + garlic, always add lemon" (learned across users)
 
+#### 9. **Learning Context Injection** (`ADD_LEARNINGS_TO_CONTEXT=false`)
+- **What:** Automatically injects learned insights into LLM context
+- **Cost:** No extra LLM calls (local operation), but increases context size if enabled
+- **Critical Dependency:** LEARNING_MODE selection:
+  - **AGENTIC (recommended):** Set to `false`
+    - Agent controls learnings via tools (`search_learnings`, `save_learning`)
+    - Auto-injection creates redundancy and token bloat
+    - Pattern: Same as Agentic RAG (`search_knowledge=true` vs `add_knowledge_to_context=true`)
+  - **ALWAYS:** Set to `true`
+    - Relies on automatic extraction + context injection workflow
+    - Learnings automatically injected via `<relevant_learnings>` tags
+  - **PROPOSE:** Set to `true`
+    - Learnings need context for user review before saving
+- **Default:** `false` (aligns with recommended AGENTIC mode)
+- **Pros:** Agent-controlled selective learning, reduces token bloat, efficient retrieval
+- **Cons:** Agent must explicitly call `search_learnings` when needed
+- **When:** AGENTIC mode (default setup), cost-sensitive applications
+- **Example:** Agent searches learnings about "seafood" only when reasoning about seafood recipes
+
+#### 10. **Datetime Context** (`ADD_DATETIME_TO_CONTEXT=true`)
+- **What:** Includes current date, time, and timezone in agent context automatically
+- **Config:** `timezone_identifier="Etc/UTC"` (supports all TZ Database formats)
+- **Cost:** No extra LLM calls (local operation)
+- **Pros:** Time-aware recipes, supports temporal queries, seasonal ingredient awareness
+- **Cons:** None (lightweight local operation)
+- **When:** Always for conversational recipe agents
+- **Example:** User asks "What can I cook in 30 minutes?" or "Give me summer recipes" → agent knows current time/season
+
+#### 11. **Location Context** (`ADD_LOCATION_TO_CONTEXT=false`)
+- **What:** Includes user location in agent context for geo-aware reasoning
+- **Cost:** No extra LLM calls (local operation)
+- **Pros:** Local ingredient availability, regional cuisine recommendations, seasonal ingredients by region
+- **Cons:** ⚠️ **Privacy consideration** - requires explicit user permission to enable
+- **When:** With explicit user consent; consider GDPR/privacy regulations
+- **How to Enable:** `ADD_LOCATION_TO_CONTEXT=true` (requires location permission from user)
+- **Example:** "What local vegetables are in season?" or "Traditional Tuscan recipes"
+
+#### 12. **Session Caching** (`CACHE_SESSION=false`)
+- **What:** Cache agent session in memory for faster subsequent access
+- **Cost:** Increased memory usage; may have stale data in distributed systems
+- **Pros:** Faster response times for repeated requests in same session
+- **Cons:** Not suitable for multi-server deployments (data consistency issues)
+- **When:** Single-server deployments with high request volume for same session
+- **How to Enable:** `CACHE_SESSION=true` (development/small deployments only)
+- **Example:** Same user making multiple consecutive recipe requests
+
+#### 13. **Debug Mode** (`DEBUG_MODE=false`)
+- **What:** Enable detailed logging, system message inspection, and debug output
+- **Cost:** Slightly slower responses, verbose logs
+- **Pros:** Troubleshooting, see compiled system message, understand agent reasoning
+- **Cons:** Not suitable for production, verbose output makes logs harder to read
+- **When:** Development, debugging, testing system message effectiveness
+- **How to Enable:** `DEBUG_MODE=true` (development only)
+- **Example:** View full compiled system message including instructions, history, learnings
+
+---
+
+### ⚠️ AVAILABLE BUT NOT REQUIRED
+
+These features are implemented and available but not essential for basic recipe recommendations:
+- **Location Context:** Useful for local/regional recipes but requires user permission
+- **Session Caching:** Optional performance optimization for single-server setups
+- **Debug Mode:** Optional development/troubleshooting feature
+
 ---
 
 ### ❌ DISABLED/NOT USED
@@ -146,6 +215,12 @@ Configuration table showing environment variables, defaults, and notes:
 | **Tool Compression** | `COMPRESS_TOOL_RESULTS` | `true` | Shrink API responses in context (local operation, uses AGENT_MNGT_MODEL) |
 | **Learning Machines** | `ENABLE_LEARNING` | `true` | Enable dynamic insight extraction (**extra LLM calls** with AGENT_MNGT_MODEL) |
 | **Learning Mode** | `LEARNING_MODE` | `AGENTIC` | How agent learns: `ALWAYS` (auto), `AGENTIC` (agent-controlled, recommended), `PROPOSE` (user-approved) |
+| **Learning Context Injection** | `ADD_LEARNINGS_TO_CONTEXT` | `false` | **AGENTIC mode:** false (agent uses tools); **ALWAYS mode:** true (auto-inject learnings) |
+| **Datetime Context** | `ADD_DATETIME_TO_CONTEXT` | `true` | Include current date/time for time-aware recipes (local operation) |
+| **Timezone** | `TIMEZONE_IDENTIFIER` | `Etc/UTC` | Timezone for datetime context (TZ Database format) |
+| **Location Context** | `ADD_LOCATION_TO_CONTEXT` | `false` | Include user location for geo-aware recipes (requires user permission) |
+| **Session Caching** | `CACHE_SESSION` | `false` | Cache session in memory (single-server only, not for distributed systems) |
+| **Debug Mode** | `DEBUG_MODE` | `false` | Enable detailed logging and system message inspection (development only) |
 | **Knowledge Base Search** | `SEARCH_KNOWLEDGE` | `false` | Search external docs (disabled by default - use LearnedKnowledge for dynamic learning instead) |
 
 **Models Used:**
