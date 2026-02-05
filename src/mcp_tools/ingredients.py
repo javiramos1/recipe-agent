@@ -52,6 +52,113 @@ except ImportError:
     HAS_PIL = False
 
 
+# ============================================================================
+# Error Handling Helpers
+# ============================================================================
+
+
+def _log_error(operation_name: str, exception: Exception, log_level: str = "warning") -> None:
+    """Log error with appropriate level. Helper to reduce duplication.
+
+    Args:
+        operation_name: Description for logging
+        exception: Exception that occurred
+        log_level: Logging level ("debug", "warning", "error"). Default: "warning".
+    """
+    msg = f"{operation_name}: {exception}"
+    if log_level == "debug":
+        logger.debug(msg)
+    elif log_level == "error":
+        logger.error(msg)
+    else:
+        logger.warning(msg)
+
+
+async def safe_execute_async(
+    coro,
+    operation_name: str,
+    log_level: str = "warning",
+    default_return=None,
+    reraise: bool = False,
+):
+    """Safely execute async operation with consistent error logging.
+
+    Consolidates try/except/log pattern for optional operations that should
+    degrade gracefully. Typically used for operations where failure is not critical:
+    - Image compression: Use original if compression fails
+    - JSON parsing: Try alternative parsing method
+    - Image fetching: Return None to allow retries
+
+    Args:
+        coro: Awaitable coroutine to execute.
+        operation_name: Description for logging (e.g., "Fetch image from URL").
+        log_level: Logging level ("debug", "warning", "error"). Default: "warning".
+        default_return: Value to return on exception. Default: None (graceful degradation).
+        reraise: If True, re-raise exception after logging (for critical ops). Default: False.
+
+    Returns:
+        Result of coroutine if successful.
+        default_return on exception if reraise=False (suppresses exception).
+        Raises original exception if reraise=True (preserves exception chain).
+
+    Raises:
+        Exception: Original exception if reraise=True.
+
+    Example:
+        # Graceful degradation (current default behavior):
+        result = await safe_execute_async(compress_image(), "Compress", default_return=original_bytes)
+        # Returns original_bytes if compress fails, continues execution
+
+        # Critical operation (fail fast):
+        result = await safe_execute_async(fetch_api(), "API call", reraise=True)
+        # Raises exception if fetch fails, stops execution
+    """
+    try:
+        return await coro
+    except Exception as e:
+        _log_error(operation_name, e, log_level)
+        if reraise:
+            raise  # Preserve original exception chain with 'raise' (not 'raise e')
+        return default_return
+
+
+def safe_execute_sync(
+    func,
+    operation_name: str,
+    log_level: str = "warning",
+    default_return=None,
+    reraise: bool = False,
+):
+    """Safely execute sync operation with consistent error logging.
+
+    Synchronous version of safe_execute_async. Same behavior and patterns.
+    Used for operations where exception handling should be consistent across
+    async and sync code paths.
+
+    Args:
+        func: Callable to execute (no args).
+        operation_name: Description for logging.
+        log_level: Logging level ("debug", "warning", "error"). Default: "warning".
+        default_return: Value to return on exception. Default: None (graceful degradation).
+        reraise: If True, re-raise exception after logging (for critical ops). Default: False.
+
+    Returns:
+        Result of func if successful.
+        default_return on exception if reraise=False (suppresses exception).
+        Raises original exception if reraise=True (preserves exception chain).
+
+    Raises:
+        Exception: Original exception if reraise=True.
+    """
+    try:
+        return func()
+    except Exception as e:
+        _log_error(operation_name, e, log_level)
+        if reraise:
+            raise  # Preserve original exception chain with 'raise' (not 'raise e')
+        return default_return
+
+
 def compress_image(image_bytes: bytes, max_width: int = 1024) -> bytes:
     """Compress image for API transmission using Pillow.
 
@@ -80,7 +187,7 @@ def compress_image(image_bytes: bytes, max_width: int = 1024) -> bytes:
         )
         return image_bytes
 
-    try:
+    def _compress():
         img = Image.open(BytesIO(image_bytes))
         original_size_mb = len(image_bytes) / (1024 * 1024)
 
@@ -112,19 +219,31 @@ def compress_image(image_bytes: bytes, max_width: int = 1024) -> bytes:
         )
         return compressed_bytes
 
-    except Exception as e:
-        logger.warning(f"Failed to compress image: {e}. Using original.")
-        return image_bytes
+    return safe_execute_sync(_compress, "Image compression", log_level="warning", default_return=image_bytes)
 
 
 async def fetch_image_bytes(image_source: str | bytes) -> Optional[bytes]:
     """Fetch image bytes from URL or return directly if bytes.
 
+    Handles multiple image source formats:
+    - Direct bytes: Returned as-is
+    - HTTP/HTTPS URLs: Fetched asynchronously (10s timeout)
+    - Data URLs (data:image/jpeg;base64,...): Decoded from base64
+    - Plain base64 strings: Decoded directly (see _get_image_bytes_from_source)
+
     Args:
-        image_source: Either a URL string or bytes object.
+        image_source: Either a URL string (http/https/data URI) or bytes object.
 
     Returns:
-        Image bytes if successful, None on failure.
+        Image bytes if fetch successful, None on any failure (logged as warning).
+
+    Raises:
+        None (exceptions logged, returns None for graceful degradation)
+
+    Example:
+        >>> image_bytes = await fetch_image_bytes("https://example.com/food.jpg")
+        >>> # or
+        >>> image_bytes = await fetch_image_bytes(b"\\xff\\xd8\\xff...")
     """
     if isinstance(image_source, bytes):
         return image_source
@@ -132,22 +251,30 @@ async def fetch_image_bytes(image_source: str | bytes) -> Optional[bytes]:
     if isinstance(image_source, str):
         # Handle data URLs (data:[<mediatype>][;base64],<data>)
         if image_source.startswith("data:"):
-            try:
-                # Extract the base64 part after the comma
-                header, encoded = image_source.split(",", 1)
+
+            def _decode_data_url():
+                _, encoded = image_source.split(",", 1)
                 return base64.b64decode(encoded)
-            except Exception as e:
-                logger.warning(f"Failed to decode data URL: {e}")
-                return None
+
+            return safe_execute_sync(
+                _decode_data_url,
+                "Decode data URL",
+                log_level="warning",
+                default_return=None,
+            )
 
         # Handle regular URLs
-        try:
+        async def _fetch_url():
             async with aiohttp.ClientSession() as session:
                 async with session.get(image_source, timeout=aiohttp.ClientTimeout(total=10)) as response:
                     return await response.read()
-        except Exception as e:
-            logger.warning(f"Failed to fetch image from URL: {image_source}, error: {e}")
-            return None
+
+        return await safe_execute_async(
+            _fetch_url(),
+            f"Fetch image from URL: {image_source}",
+            log_level="warning",
+            default_return=None,
+        )
 
     return None
 
@@ -155,11 +282,18 @@ async def fetch_image_bytes(image_source: str | bytes) -> Optional[bytes]:
 def validate_image_format(image_bytes: bytes) -> bool:
     """Validate image format (JPEG or PNG only).
 
+    Uses filetype library to detect actual file format from magic bytes,
+    not from extension. Supports: JPEG, JPG, PNG.
+
     Args:
         image_bytes: Raw image bytes.
 
     Returns:
         True if valid format, False otherwise.
+
+    Note:
+        Returns False on any format other than JPEG/PNG. Caller responsible
+        for checking return value and handling validation failure.
     """
     kind = filetype.guess(image_bytes)
     if kind is None or kind.extension not in ("jpg", "jpeg", "png"):
@@ -171,11 +305,17 @@ def validate_image_format(image_bytes: bytes) -> bool:
 def validate_image_size(image_bytes: bytes) -> bool:
     """Validate image size against MAX_IMAGE_SIZE_MB.
 
+    Checks raw byte length against configured size limit.
+
     Args:
         image_bytes: Raw image bytes.
 
     Returns:
         True if size valid, False if exceeds limit.
+
+    Note:
+        Returns False if exceeded. Caller responsible for checking return
+        value and handling size validation failure.
     """
     size_mb = len(image_bytes) / (1024 * 1024)
     if size_mb > config.MAX_IMAGE_SIZE_MB:
@@ -187,69 +327,118 @@ def validate_image_size(image_bytes: bytes) -> bool:
 def parse_gemini_response(response_text: str) -> Optional[IngredientDetectionOutput]:
     """Parse JSON from Gemini response into validated IngredientDetectionOutput model.
 
-    Handles text before/after JSON and validates parsed data against IngredientDetectionOutput schema.
+    Implements lenient JSON parsing to handle Gemini responses that may include
+    explanatory text before/after the JSON object. Tries multiple parsing strategies:
+    1. Direct JSON.loads() on full response
+    2. Regex extraction of JSON object from text
+    3. Returns None if both fail
 
     Args:
-        response_text: Raw response text from Gemini API.
+        response_text: Raw response text from Gemini API (may include non-JSON text).
 
     Returns:
-        Validated IngredientDetectionOutput instance, or None on parse/validation failure.
+        Validated IngredientDetectionOutput instance if parsing and validation succeed.
+        Returns None if:
+        - No valid JSON found in response
+        - JSON is malformed
+        - Validation against IngredientDetectionOutput schema fails
+
+    Note:
+        Uses regex r'{.*}' to extract JSON, which works for single objects
+        but may be fragile with nested structures or multiple objects.
     """
-    parsed_dict = None
 
-    try:
-        # Try direct JSON parse first
-        parsed_dict = json.loads(response_text)
-    except json.JSONDecodeError:
-        pass
+    def _parse_json_direct():
+        return json.loads(response_text)
 
-    # Try to extract JSON from text (Gemini might add explanatory text)
-    if not parsed_dict:
+    def _parse_json_regex():
         json_match = re.search(r"\{.*\}", response_text, re.DOTALL)
         if json_match:
-            try:
-                parsed_dict = json.loads(json_match.group())
-            except json.JSONDecodeError:
-                pass
+            return json.loads(json_match.group())
+        return None
+
+    # Try direct JSON parse first
+    parsed_dict = safe_execute_sync(
+        _parse_json_direct,
+        "Direct JSON parse",
+        log_level="debug",
+        default_return=None,
+    )
+
+    # Try regex extraction if direct parse failed
+    if not parsed_dict:
+        parsed_dict = safe_execute_sync(
+            _parse_json_regex,
+            "Regex JSON extraction",
+            log_level="debug",
+            default_return=None,
+        )
 
     if not parsed_dict:
         logger.warning("Failed to parse JSON from Gemini response")
         return None
 
     # Validate and parse into IngredientDetectionOutput model
-    try:
-        # Extract fields with defaults for missing optional fields
+    def _validate_output():
         ingredients = parsed_dict.get("ingredients", [])
         confidence_scores = parsed_dict.get("confidence_scores", {})
         image_description = parsed_dict.get("image_description", None)
 
-        # Create validated model instance
-        output = IngredientDetectionOutput(
+        return IngredientDetectionOutput(
             ingredients=ingredients,
             confidence_scores=confidence_scores,
             image_description=image_description,
         )
-        return output
-    except Exception as e:
-        logger.warning(f"Failed to validate parsed response against IngredientDetectionOutput: {e}")
-        return None
+
+    return safe_execute_sync(
+        _validate_output,
+        "Validate IngredientDetectionOutput schema",
+        log_level="warning",
+        default_return=None,
+    )
 
 
 async def extract_ingredients_from_image(image_bytes: bytes) -> Optional[IngredientDetectionOutput]:
-    """Call Gemini vision API to extract ingredients from image.
+    """Call Gemini vision API to extract ingredients from image (single attempt, no retries).
+
+    Makes a single API call to Gemini's vision model to analyze food images
+    and extract ingredient information with confidence scores. Does NOT implement
+    retry logic - that's handled by caller (extract_ingredients_with_retries).
+
+    **API Contract:**
+    - Input: Raw image bytes (JPEG or PNG, validated by caller)
+    - Output: JSON with ingredients[] and confidence_scores{} dict
+    - Format: Parsed and validated against IngredientDetectionOutput schema
 
     Args:
-        image_bytes: Raw image bytes.
+        image_bytes: Raw image bytes (must be JPEG or PNG format, validated by caller).
 
     Returns:
-        Validated IngredientDetectionOutput instance, or None on failure.
+        Validated IngredientDetectionOutput with:
+        - ingredients: List of detected ingredient names
+        - confidence_scores: Dict mapping each ingredient to 0.0-1.0 confidence score
+        - image_description: Optional human-readable description of detected items
+
+        Returns None if:
+        - Unable to determine image format (shouldn't happen if validated)
+        - API call fails
+        - Response parsing fails
+        - Response validation fails
+
+    Raises:
+        None (exceptions logged as warnings, returns None for graceful degradation)
+
+    Note:
+        - Single attempt only (no retries here)
+        - Assumes caller wraps with extract_ingredients_with_retries for retry logic
+        - Uses asyncio.to_thread to call sync Gemini client in async context
     """
-    try:
+
+    async def _call_gemini_api():
         # Determine MIME type based on image format
         kind = filetype.guess(image_bytes)
         if kind is None:
-            logger.warning("Unable to determine image format")
-            return None
+            raise ValueError("Unable to determine image format")
 
         mime_type = "image/jpeg" if kind.extension in ("jpg", "jpeg") else "image/png"
 
@@ -267,23 +456,34 @@ async def extract_ingredients_from_image(image_bytes: bytes) -> Optional[Ingredi
         )
 
         # Parse and validate response into IngredientDetectionOutput
-        result = parse_gemini_response(response.text)
-        return result
+        return parse_gemini_response(response.text)
 
-    except Exception as e:
-        logger.warning(f"Failed to extract ingredients from image: {e}")
-        return None
+    return await safe_execute_async(
+        _call_gemini_api(),
+        "Gemini vision API call",
+        log_level="warning",
+        default_return=None,
+    )
 
 
 def filter_ingredients_by_confidence(ingredients: list[str], confidence_scores: dict[str, float]) -> list[str]:
     """Filter ingredients by MIN_INGREDIENT_CONFIDENCE threshold.
 
+    Removes ingredients that scored below the confidence threshold in the
+    confidence_scores dict. Preserves order of remaining ingredients.
+
     Args:
         ingredients: List of ingredient names.
-        confidence_scores: Dict mapping ingredient name to confidence score.
+        confidence_scores: Dict mapping ingredient name to confidence score (0.0-1.0).
 
     Returns:
-        Filtered list of ingredients with confidence >= threshold.
+        Filtered list of ingredients with confidence >= MIN_INGREDIENT_CONFIDENCE threshold.
+        Empty list [] if no ingredients meet threshold.
+
+    Note:
+        - Logs debug info if any ingredients were filtered out
+        - Uses config.MIN_INGREDIENT_CONFIDENCE (default: 0.7)
+        - Handles missing confidence scores by treating them as 0.0
     """
     filtered = [
         ingredient
@@ -300,35 +500,137 @@ def filter_ingredients_by_confidence(ingredients: list[str], confidence_scores: 
     return filtered
 
 
+async def prepare_and_extract_ingredients(
+    image_bytes: bytes,
+    with_retries: bool = True,
+    image_idx: int = 0,
+) -> Optional[tuple[list[str], IngredientDetectionOutput]]:
+    """Unified pipeline: validate → compress → extract → filter ingredients.
+
+    Consolidates the full image processing workflow into a single function
+    used by both _process_single_image (no retries) and detect_ingredients_tool (with retries).
+
+    **Pipeline Steps:**
+    1. Validate image format (JPEG/PNG only)
+    2. Validate image size (MAX_IMAGE_SIZE_MB limit)
+    3. Optionally compress for API transmission
+    4. Extract ingredients from image (with or without retries)
+    5. Filter by confidence threshold (MIN_INGREDIENT_CONFIDENCE)
+
+    Args:
+        image_bytes: Raw image bytes to process.
+        with_retries: Whether to use extract_ingredients_with_retries (True) or
+                     extract_ingredients_from_image (False). Default: True.
+        image_idx: Image index in batch (0-based) for logging context. Default: 0.
+
+    Returns:
+        Tuple of (filtered_ingredients_list, raw_IngredientDetectionOutput) on success.
+        None if processing failed at any step (format/size validation, extraction).
+
+    Raises:
+        None (exceptions logged, returns None for graceful degradation)
+
+    Side Effects:
+        Logs progress and validation failures.
+    """
+    # Validate format
+    if not validate_image_format(image_bytes):
+        return None
+
+    # Validate size
+    if not validate_image_size(image_bytes):
+        return None
+
+    # Optionally compress
+    if config.COMPRESS_IMG:
+        logger.debug(f"Image {image_idx + 1}: Compressing for API transmission...")
+        image_bytes = compress_image(image_bytes)
+
+    # Extract ingredients (with or without retries)
+    if with_retries:
+        result = await extract_ingredients_with_retries(image_bytes)
+    else:
+        result = await extract_ingredients_from_image(image_bytes)
+
+    if not result:
+        logger.warning(f"Image {image_idx + 1}: Failed to extract ingredients")
+        return None
+
+    # Filter by confidence threshold
+    ingredients = filter_ingredients_by_confidence(result.ingredients, result.confidence_scores)
+
+    return (ingredients, result)
+
+
 async def _get_image_bytes_from_source(image_source) -> Optional[bytes]:
     """Extract image bytes from various source formats.
 
+    Unified source handler that abstracts away different image source types.
+    Supports: string URLs, data URIs, plain base64, bytes, objects with url/content attributes.
+
     Args:
-        image_source: String URL, bytes, or object with url/content attribute.
+        image_source: Image source in any supported format:
+            - str with URL scheme: URL or data URI (passed to fetch_image_bytes)
+            - str plain base64: Decoded as base64 string
+            - bytes: Raw image data (returned as-is)
+            - object with .url: Extracted and passed to fetch_image_bytes
+            - object with .content: Extracted and passed to fetch_image_bytes
 
     Returns:
-        Image bytes or None if extraction failed.
+        Image bytes or None if extraction/fetch failed.
+
+    Note:
+        - Used by _process_single_image and other batch processing
+        - Returns None on any failure (logged by called functions)
+        - Handles base64 decoding that was previously duplicated in detect_ingredients_tool
     """
+    if isinstance(image_source, bytes):
+        return image_source
+
     if isinstance(image_source, str):
-        return await fetch_image_bytes(image_source)
-    elif hasattr(image_source, "url"):
+        # Handle URL schemes (http, https, data) - delegate to fetch_image_bytes
+        if image_source.startswith(("http://", "https://", "data:")):
+            return await fetch_image_bytes(image_source)
+
+        # Handle plain base64 string - decode directly
+        def _decode_base64():
+            return base64.b64decode(image_source)
+
+        return safe_execute_sync(
+            _decode_base64,
+            "Decode base64 image string",
+            log_level="warning",
+            default_return=None,
+        )
+
+    # Handle objects with url or content attributes
+    if hasattr(image_source, "url"):
         return await fetch_image_bytes(image_source.url)
-    elif hasattr(image_source, "content"):
+    if hasattr(image_source, "content"):
         return await fetch_image_bytes(image_source.content)
+
     return None
 
 
 async def _process_single_image(image_source, idx: int) -> Optional[list[str]]:
-    """Process single image to extract ingredients (helper for pre-hook).
+    """Process single image through complete validation and extraction pipeline.
 
-    Validates, compresses, and extracts ingredients from one image.
+    Orchestrates the full image processing workflow for one image using the unified
+    prepare_and_extract_ingredients pipeline (without retries - used in pre-hook mode).
 
     Args:
-        image_source: Image source (URL, bytes, or object with url/content).
-        idx: Image index for logging.
+        image_source: Image source (URL, bytes, or object with url/content attribute)
+        idx: Image index in batch (0-based), used for logging context
 
     Returns:
-        List of extracted ingredient names, or None if processing failed.
+        List of extracted ingredient names (post-filtering), or None if processing failed at any step.
+        Empty list [] if extraction succeeds but no ingredients meet confidence threshold.
+
+    Raises:
+        None (all errors logged as warnings/info, returns None for graceful degradation)
+
+    Side Effects:
+        Logs progress at INFO level, warnings at WARNING/DEBUG levels
     """
     # Get image bytes from source
     image_bytes = await _get_image_bytes_from_source(image_source)
@@ -336,26 +638,12 @@ async def _process_single_image(image_source, idx: int) -> Optional[list[str]]:
         logger.warning(f"Image {idx + 1}: Failed to get image bytes")
         return None
 
-    # Validate format and size
-    if not validate_image_format(image_bytes):
+    # Use unified pipeline (without retries, since pre-hook has manual retries in extract_ingredients_pre_hook)
+    result = await prepare_and_extract_ingredients(image_bytes, with_retries=False, image_idx=idx)
+    if result is None:
         return None
 
-    if not validate_image_size(image_bytes):
-        return None
-
-    # Compress image if enabled
-    if config.COMPRESS_IMG:
-        logger.debug(f"Image {idx + 1}: Compressing for API transmission...")
-        image_bytes = compress_image(image_bytes)
-
-    # Extract ingredients from image
-    result = await extract_ingredients_from_image(image_bytes)
-    if not result:
-        logger.warning(f"Image {idx + 1}: Failed to extract ingredients")
-        return None
-
-    # Filter by confidence threshold
-    ingredients = filter_ingredients_by_confidence(result.ingredients, result.confidence_scores)
+    ingredients, _ = result
 
     if ingredients:
         logger.info(
@@ -374,25 +662,57 @@ async def extract_ingredients_pre_hook(
     user_id: str = None,
     debug_mode: bool = None,
 ) -> None:
-    """Pre-hook: Extract ingredients from images before agent processes request.
+    """Pre-hook: Extract ingredients from images BEFORE agent processes request.
 
-    Works with ChatMessage input schema. Processes multiple images in parallel
-    for optimal performance.
+    **Critical Pattern**: This pre-hook runs BEFORE Agno agent processes user input.
+    Pre-hooks do NOT have automatic retries (unlike tools or agent-level retries).
+    Therefore, manual retry logic in extract_ingredients_with_retries is REQUIRED.
 
-    The function:
-    1. Extracts message and images from RunInput
-    2. Processes images in parallel (validate, compress, extract)
-    3. Filters by confidence threshold
-    4. Appends detected ingredients to user message as text
+    **Processing Steps:**
+    1. Extracts ChatMessage from RunInput (minimal input schema: message + optional images)
+    2. Validates images are present (skips hook if no images)
+    3. Processes all images in parallel for efficiency (asyncio.gather with _process_single_image)
+    4. Deduplicates extracted ingredients while preserving order
+    5. Appends detected ingredients to user message as text block: "[Detected Ingredients] ..."
+    6. Clears images from ChatMessage (prevents large base64 data from being sent downstream to agent)
+    7. Returns modified RunInput with enriched message
+
+    **Example:**
+
+    Input:
+    ```python
+    ChatMessage(
+        message="What can I cook?",
+        images=["data:image/jpeg;base64,/9j/...", "https://example.com/food.png"]
+    )
+    ```
+
+    Output (enriched message):
+    ```python
+    ChatMessage(
+        message="What can I cook?\\n\\n[Detected Ingredients] tomato, basil, mozzarella",
+        images=[]  # Cleared
+    )
+    ```
 
     Args:
-        run_input: Agno RunInput object containing ChatMessage data
-        session: Agno AgentSession providing current session context
-        user_id: Optional contextual user ID for the current run
-        debug_mode: Optional boolean indicating if debug mode is enabled
+        run_input: Agno RunInput object containing ChatMessage data with images
+        session: Agno AgentSession providing current session context (optional)
+        user_id: User identifier for audit/logging context (optional, passed by Agno)
+        debug_mode: Enable verbose debug logging (optional, passed by Agno)
 
     Returns:
-        None (modifies run_input in-place)
+        None (modifies run_input.input_content in-place per Agno pre-hook contract)
+
+    Raises:
+        None (pre-hooks must be resilient - catches all exceptions, logs warnings, clears images as fallback)
+
+    Important:
+        - This hook is CRITICAL: prevents large image data from being sent to Agno agent
+        - Runs in parallel improves multi-image performance (asyncio.gather)
+        - Confidence filtering (MIN_INGREDIENT_CONFIDENCE) happens here, before agent sees ingredients
+        - Images are cleared REGARDLESS of extraction success (prevents data bloat)
+        - Has manual retry logic in extract_ingredients_with_retries because pre-hooks don't get Agno retries
     """
     try:
         # Log pre-hook execution context
@@ -467,15 +787,37 @@ async def extract_ingredients_with_retries(
 ) -> Optional[IngredientDetectionOutput]:
     """Call Gemini vision API with exponential backoff retry logic (async).
 
-    Retries on transient failures (network errors, rate limits, 5xx errors).
-    Does NOT retry on permanent failures (invalid API key, malformed request).
+    **CRITICAL**: This function implements MANUAL retry logic because:
+    - Used in PRE-HOOK mode where Agno retries are NOT available
+    - Pre-hooks cannot access agent-level exponential_backoff settings
+    - Without this, transient API failures would break ingredient extraction
+    - When used as tool, avoids extra LLM round-trips for retries
+
+    Distinguishes between transient errors (network, timeouts, 429/5xx) and
+    permanent errors (invalid API key, malformed request) to avoid futile retries.
+
+    **Retry Strategy:**
+    - Transient errors: Retry with exponential backoff (1s → 2s → 4s delays)
+    - Permanent errors: Fail immediately without retry
+    - No result (None from API): Treated as transient, retry
+    - Last retry failure: Log and return None
 
     Args:
         image_bytes: Raw image bytes to process.
-        max_retries: Maximum number of retry attempts (default: 3).
+        max_retries: Maximum number of retry attempts (default: 3 = 1s + 2s + 4s = 7s max)
 
     Returns:
-        Validated IngredientDetectionOutput instance, or None if all retries failed.
+        Validated IngredientDetectionOutput on success.
+        None if all retries exhausted (logged as warning).
+
+    Raises:
+        None (exceptions logged, returns None on final failure)
+
+    Note:
+        - Implements component-level retry (separate from agent-level retries)
+        - Used for both pre-hook mode AND tool mode ingredient extraction
+        - When used as tool: prevents extra LLM calls by handling retries here
+        - Transient keyword detection: "timeout", "connection", "429", "500", "503", "502", "retryable"
     """
     retry_count = 0
     delay_seconds = 1
@@ -518,43 +860,64 @@ async def extract_ingredients_with_retries(
 
 
 async def detect_ingredients_tool(image_data: str) -> IngredientDetectionOutput:
-    """Extract ingredients from image using Gemini vision API.
+    """Extract ingredients from image using Gemini vision API - @tool entry point.
 
-    This method is meant to be called by the @tool-decorated wrapper in agent.py.
+    This is the main entry point for ingredient detection when used as a tool
+    (IMAGE_DETECTION_MODE="tool"). The @tool decorator in agent.py wraps this function.
 
-    Core implementation function called by the @tool-decorated wrapper in agent.py.
-    Handles image validation, API calls, and confidence filtering.
+    **When Used:**
+    - Agent can call this tool explicitly during reasoning
+    - User asks for ingredient analysis on demand
+    - Less efficient than pre-hook mode (extra agent reasoning turn)
+    - More flexible - agent can choose when to call
+
+    **Why Manual Retries Here Too:**
+    When used as tool, includes extract_ingredients_with_retries() to avoid
+    extra LLM round-trips. Agent sees a single tool call with retries
+    handled internally, rather than agent retrying the tool call (which would
+    be extra reasoning turns).
+
+    **Processing:**
+    1. Retrieves image bytes from URL, data URL, or base64 (via _get_image_bytes_from_source)
+    2. Validates format (JPEG/PNG) and size constraints
+    3. Optionally compresses for API transmission
+    4. Extracts ingredients with exponential backoff retries
+    5. Filters by confidence threshold
+    6. Validates output against IngredientDetectionOutput schema
 
     Args:
-        image_data: Base64-encoded image string or URL.
+        image_data: Image in any supported format:
+            - "https://example.com/food.jpg" (HTTP/HTTPS URL)
+            - "data:image/jpeg;base64,/9j/4AAQ..." (data URL with base64)
+            - "iVBORw0KGgoAAAANSUhEUg..." (plain base64 string)
 
     Returns:
-        IngredientDetectionOutput with detected ingredients and confidence scores.
+        IngredientDetectionOutput with validated:
+        - ingredients: List of detected ingredient names (filtered by confidence)
+        - confidence_scores: Dict mapping ingredients to 0.0-1.0 scores
+        - image_description: Optional human-readable description of detected items
 
     Raises:
-        ValueError: If image cannot be processed.
+        ValueError: If image cannot be processed, with specific details:
+        - "Could not retrieve image bytes from provided data" (base64/URL fetch failed)
+        - "Invalid image format. Only JPEG and PNG are supported."
+        - "Image too large. Maximum size is {MAX_IMAGE_SIZE_MB}MB"
+        - "Failed to extract ingredients from image. Please try another image." (API/extraction failed after retries)
+        - "No ingredients detected with sufficient confidence. Please try another image." (all filtered out)
+
+    Important:
+        - Raises ValueError for agent handling (structured error reporting)
+        - Agno's agent-level retries will catch ValueError and decide to retry
+        - Schema validation ensures response matches RecipeResponse expectations
+        - Includes extract_ingredients_with_retries() to avoid extra LLM calls
     """
     try:
-        # Get image bytes (from base64 or URL)
-        image_bytes = None
-        if image_data.startswith(("http://", "https://")):
-            # URL-based image
-            image_bytes = await fetch_image_bytes(image_data)
-        elif image_data.startswith("data:"):
-            # Data URL
-            image_bytes = await fetch_image_bytes(image_data)
-        else:
-            # Assume base64 encoded
-            try:
-                image_bytes = base64.b64decode(image_data)
-            except Exception as e:
-                logger.warning(f"Failed to decode base64 image: {e}")
-                image_bytes = None
-
+        # Get image bytes using unified source handler (handles URL, data URI, and base64)
+        image_bytes = await _get_image_bytes_from_source(image_data)
         if not image_bytes:
             raise ValueError("Could not retrieve image bytes from provided data")
 
-        # Validate format and size using existing validation functions
+        # Explicit validation for tool mode to provide specific error messages
         if not validate_image_format(image_bytes):
             raise ValueError("Invalid image format. Only JPEG and PNG are supported.")
 
@@ -565,14 +928,13 @@ async def detect_ingredients_tool(image_data: str) -> IngredientDetectionOutput:
         if config.COMPRESS_IMG:
             image_bytes = compress_image(image_bytes)
 
-        # Extract ingredients with retry logic
+        # Extract ingredients with retries
         result = await extract_ingredients_with_retries(image_bytes)
-        if not result:
+        if result is None:
             raise ValueError("Failed to extract ingredients from image. Please try another image.")
 
-        # Filter by confidence to ensure we only return high-confidence ingredients
+        # Filter by confidence
         ingredients = filter_ingredients_by_confidence(result.ingredients, result.confidence_scores)
-
         if not ingredients:
             raise ValueError("No ingredients detected with sufficient confidence. Please try another image.")
 
