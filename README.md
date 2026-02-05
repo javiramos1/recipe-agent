@@ -2,6 +2,8 @@
 
 **Learning & Demonstration Project** showcasing comprehensive agentic application patterns.
 
+The goal of this project is to test the capabilities of agentic AI using high-level frameworks like [Agno AI](https://docs.agno.com/). To learn low-level details like implementing ReACT, tool calling, and RAG from scratch, see this repo: <https://github.com/javiramos1/hybrid-rag-system>
+
 A simple recipe recommendation problem intentionally solved with production-grade patterns to demonstrate how to build professional GenAI systems. Shows all key capabilities: memory management, knowledge bases, tool calling, structured outputs, tracing, testing, and the complete development lifecycle.
 
 ## Overview
