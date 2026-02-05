@@ -258,7 +258,7 @@ async def _initialize_managers(db, knowledge):
             "PROPOSE": LearningMode.PROPOSE,
         }
         learning_mode = mode_map.get(config.LEARNING_MODE.upper(), LearningMode.AGENTIC)
-        
+
         learning_machine = LearningMachine(
             db=db,
             knowledge=knowledge,  # Connect knowledge base for learned insights storage
@@ -274,7 +274,9 @@ async def _initialize_managers(db, knowledge):
                 namespace="global",  # Shared recipe learnings across all users
             ),
         )
-        logger.info(f"✓ Learning machine initialized with {config.LEARNING_MODE} mode (global namespace for shared recipe insights)")
+        logger.info(
+            f"✓ Learning machine initialized with {config.LEARNING_MODE} mode (global namespace for shared recipe insights)"
+        )
     else:
         logger.info("✓ Learning machine disabled (ENABLE_LEARNING=false)")
 
@@ -303,7 +305,9 @@ def _register_hooks(knowledge):
     return pre_hooks, post_hooks
 
 
-def _create_agent(db, knowledge, memory_manager, compression_manager, learning_machine, tools, pre_hooks, post_hooks) -> Agent:
+def _create_agent(
+    db, knowledge, memory_manager, compression_manager, learning_machine, tools, pre_hooks, post_hooks
+) -> Agent:
     """Create and configure the Agno Agent instance.
 
     Args:
@@ -420,7 +424,9 @@ async def initialize_recipe_agent(use_db: bool = True) -> Agent:
     knowledge = await initialize_knowledge_base(db=db)
     memory_manager, compression_manager, learning_machine = await _initialize_managers(db, knowledge)
     pre_hooks, post_hooks = _register_hooks(knowledge)
-    agent = _create_agent(db, knowledge, memory_manager, compression_manager, learning_machine, tools, pre_hooks, post_hooks)
+    agent = _create_agent(
+        db, knowledge, memory_manager, compression_manager, learning_machine, tools, pre_hooks, post_hooks
+    )
 
     logger.info("=== Agent initialization complete ===")
     return agent, tracing_db, knowledge

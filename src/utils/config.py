@@ -91,7 +91,11 @@ class Config:
         # Trade-offs: None (local operation)
         # Cost: No extra LLM API calls
         # Recommended: True for context-aware suggestions
-        self.ADD_DATETIME_TO_CONTEXT: bool = os.getenv("ADD_DATETIME_TO_CONTEXT", "true").lower() in ("true", "1", "yes")
+        self.ADD_DATETIME_TO_CONTEXT: bool = os.getenv("ADD_DATETIME_TO_CONTEXT", "true").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
         # TIMEZONE_IDENTIFIER: Timezone for datetime context (TZ Database format)
         # Examples: "Etc/UTC", "America/New_York", "Europe/London", "Asia/Tokyo"
         # Default: "Etc/UTC" for consistency
@@ -101,7 +105,11 @@ class Config:
         # Trade-offs: Privacy consideration, requires location permission
         # Cost: No extra LLM API calls (local operation)
         # Recommended: False by default (requires user permission); enable only with explicit user consent
-        self.ADD_LOCATION_TO_CONTEXT: bool = os.getenv("ADD_LOCATION_TO_CONTEXT", "false").lower() in ("true", "1", "yes")
+        self.ADD_LOCATION_TO_CONTEXT: bool = os.getenv("ADD_LOCATION_TO_CONTEXT", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
 
         # Agent Retry Configuration - handles transient API failures gracefully
         # MAX_RETRIES: Number of retry attempts for failed API calls (exponential backoff)
