@@ -21,6 +21,7 @@ We also use **Spoonacular MCP** to demonstrate how to connect to production exte
 - **Observability**: Distributed tracing with OpenTelemetry, structured logging, performance metrics
 - **Quality Assurance**: Unit tests, integration tests, and Agno Evals Framework for multi-dimensional evaluation
 - **Complete Lifecycle**: Requirements → Design → Implementation → Testing → Monitoring → Iteration
+- **Agentic RAG**: You can switch between adding history, memory, knowledge, etc to every call (classical RAG) or provide a tool to the LLM to decide if it should query the memory, history, etc. (Agentic RAG). The first option is simpler and faster (no extra roundtrips), the second option is more flexible and powerful but more expensive and slow.
 
 ### Key Capabilities
 
